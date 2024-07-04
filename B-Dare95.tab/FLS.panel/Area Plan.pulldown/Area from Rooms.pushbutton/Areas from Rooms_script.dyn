@@ -1,0 +1,300 @@
+{
+  "Uuid": "54aa2b0f-23a4-406f-85b7-0a74c4fa40d0",
+  "IsCustomNode": false,
+  "Description": null,
+  "Name": "Areas from Rooms_script",
+  "ElementResolver": {
+    "ResolutionMap": {
+      "Views": {
+        "Key": "archilab.Revit.Views.Views",
+        "Value": "archilab.dll"
+      }
+    }
+  },
+  "Inputs": [],
+  "Outputs": [],
+  "Nodes": [
+    {
+      "ConcreteType": "DSRevitNodesUI.Categories, DSRevitNodesUI",
+      "SelectedIndex": 468,
+      "SelectedString": "OST_Rooms",
+      "NodeType": "ExtensionNode",
+      "Id": "8f2f3d1b087340049c56e30fa004e318",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "02d5c7c4d5e14edd9bbad838963796bd",
+          "Name": "Category",
+          "Description": "The selected Category.",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "All built-in categories."
+    },
+    {
+      "ConcreteType": "DSRevitNodesUI.ElementsOfCategory, DSRevitNodesUI",
+      "NodeType": "ExtensionNode",
+      "Id": "22948f88b92a499697590b8e85bd9a42",
+      "Inputs": [
+        {
+          "Id": "38fa26d15a194aea9ee125bcef2d80ee",
+          "Name": "Category",
+          "Description": "The Category",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "86ca3edd8d854a5da9df448e6528221b",
+          "Name": "Elements",
+          "Description": "An element type.",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Get all elements of the specified category from the model."
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.CustomNodes.Function, DynamoCore",
+      "FunctionSignature": "ed5db21b-beda-4f54-9d13-db2c94121e40",
+      "FunctionType": "Graph",
+      "NodeType": "FunctionNode",
+      "Id": "93ca5a2a56a649c0a84dc8e3c76c2f56",
+      "Inputs": [
+        {
+          "Id": "84fa7bef4a5a4cca877655460e0b3686",
+          "Name": "rooms",
+          "Description": "Rooms to base the areas from.\n\nvar[]..[]",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "ba37bfce65ca4760a2be63fef5e94e6b",
+          "Name": "view",
+          "Description": "The view to place the areas in.\n\nvar\nDefault value : Revit.Application.Document.Current.ActiveView",
+          "UsingDefaultValue": true,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "97ee3fd41d0445c486c22a360219f3fe",
+          "Name": "areas",
+          "Description": "The areas as elements.",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "f3814984f210411cb75871dfc402b8ce",
+          "Name": "numbers",
+          "Description": "Area numbers as strings.",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "159b9b1724644bb7a1cf0ce29b2bc041",
+          "Name": "names",
+          "Description": "Area names as strings.",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Auto",
+      "Description": "Given a list of rooms, the node will create areas in the same position for an area plan view. The areas will have their name and number set to match their respective room."
+    },
+    {
+      "ConcreteType": "archilabUI.ViewTypesUi, archilabUI",
+      "SelectedIndex": 0,
+      "SelectedString": "AreaPlan",
+      "NodeType": "ExtensionNode",
+      "Id": "c2d6c419f3714ba990e6d902cee8e440",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "4e29e87606014c989d615b619c70a50f",
+          "Name": "viewType",
+          "Description": "The selected viewType",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Retrieve all available View Types."
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.ZeroTouch.DSFunction, DynamoCore",
+      "NodeType": "FunctionNode",
+      "FunctionSignature": "archilab.Revit.Views.Views.GetByType@string",
+      "Id": "8128d925ed77400bbd089ebf20c9b2f0",
+      "Inputs": [
+        {
+          "Id": "8f640a2470c44b6aaa773461d613ade1",
+          "Name": "viewType",
+          "Description": "View type to retrieve all views for. If View Template selected, 3D View Templates will be excluded from returned View Templates (currently a Dynamo limitation).\n\nstring",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "28e1c0b3dc8f491096fe7b81aa29051b",
+          "Name": "view",
+          "Description": "Views that match view type.",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Auto",
+      "Description": "Get all views by type.\n\nViews.GetByType (viewType: string): Element[]"
+    }
+  ],
+  "Connectors": [
+    {
+      "Start": "02d5c7c4d5e14edd9bbad838963796bd",
+      "End": "38fa26d15a194aea9ee125bcef2d80ee",
+      "Id": "de3fa484aa6b42848ffc886a8465bd84"
+    },
+    {
+      "Start": "86ca3edd8d854a5da9df448e6528221b",
+      "End": "84fa7bef4a5a4cca877655460e0b3686",
+      "Id": "5019e7429bd0471da048f52bd2d5bdf0"
+    },
+    {
+      "Start": "4e29e87606014c989d615b619c70a50f",
+      "End": "8f640a2470c44b6aaa773461d613ade1",
+      "Id": "0b1d0f7e56c64c888d7fe3a69b643575"
+    },
+    {
+      "Start": "28e1c0b3dc8f491096fe7b81aa29051b",
+      "End": "ba37bfce65ca4760a2be63fef5e94e6b",
+      "Id": "2572d41551a14c9aab8ce2b7d4f09acd"
+    }
+  ],
+  "Dependencies": [
+    "ed5db21b-beda-4f54-9d13-db2c94121e40"
+  ],
+  "NodeLibraryDependencies": [
+    {
+      "Name": "Crumple",
+      "Version": "2022.5.27",
+      "ReferenceType": "Package",
+      "Nodes": [
+        "93ca5a2a56a649c0a84dc8e3c76c2f56"
+      ]
+    },
+    {
+      "Name": "archi-lab.net",
+      "Version": "2019.2.25",
+      "ReferenceType": "Package",
+      "Nodes": [
+        "c2d6c419f3714ba990e6d902cee8e440",
+        "8128d925ed77400bbd089ebf20c9b2f0"
+      ]
+    }
+  ],
+  "Bindings": [],
+  "View": {
+    "Dynamo": {
+      "ScaleFactor": 1.0,
+      "HasRunWithoutCrash": true,
+      "IsVisibleInDynamoLibrary": true,
+      "Version": "2.6.2.15705",
+      "RunType": "Manual",
+      "RunPeriod": "1000"
+    },
+    "Camera": {
+      "Name": "Background Preview",
+      "EyeX": -17.0,
+      "EyeY": 24.0,
+      "EyeZ": 50.0,
+      "LookX": 12.0,
+      "LookY": -13.0,
+      "LookZ": -58.0,
+      "UpX": 0.0,
+      "UpY": 1.0,
+      "UpZ": 0.0
+    },
+    "NodeViews": [
+      {
+        "ShowGeometry": true,
+        "Name": "Categories",
+        "Id": "8f2f3d1b087340049c56e30fa004e318",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 381.52521519174411,
+        "Y": -381.99375483634219
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "All Elements of Category",
+        "Id": "22948f88b92a499697590b8e85bd9a42",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 649.52521519174411,
+        "Y": -381.99375483634219
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "© Areas.CreateByRooms",
+        "Id": "93ca5a2a56a649c0a84dc8e3c76c2f56",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 928.04582345616245,
+        "Y": -382.40642108411572
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "View Type",
+        "Id": "c2d6c419f3714ba990e6d902cee8e440",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 381.52521519174411,
+        "Y": -271.99375483634219
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Views.GetByType",
+        "Id": "8128d925ed77400bbd089ebf20c9b2f0",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 649.52521519174411,
+        "Y": -271.99375483634219
+      }
+    ],
+    "Annotations": [],
+    "X": -232.51311896368156,
+    "Y": 583.718158060209,
+    "Zoom": 0.78990258769093769
+  }
+}

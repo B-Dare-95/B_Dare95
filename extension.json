@@ -1,0 +1,14 @@
+{
+    "builtin": "False",
+    "default_enabled": "True",
+    "type": "extension",
+    "rocket_mode_compatible": "False",
+    "name": "B-Dare95",
+    "description": "Extensions for PyRevit",
+    "author": "Mohamed Bedair",
+    "author_profile": "https://github.com/B-Dare-95",
+    "url": "https://github.com/B-Dare-95/B_Dare95.git",
+    "website": "https://github.com/B-Dare-95/B_Dare95",
+    "image": "",
+    "dependencies": []
+}
