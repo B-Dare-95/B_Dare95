@@ -16,17 +16,49 @@ doc       = __revit__.ActiveUIDocument.Document
 selection = uidoc.Selection
 app       = __revit__.Application
 
+
+class CustomISelectionFilter(ISelectionFilter):
+    def AllowElement(self, elem):
+        if elem.Category.Name == "Walls":
+            return True
+
+
 #Select an Element from The UI
-selected_hosted_references = selection.PickObjects(ObjectType.Element,"Select Elements")
+custom_filter = CustomISelectionFilter()
+selected_references = selection.PickObjects(ObjectType.Element,custom_filter,"Select Wall")
 
-selected_hosted_elements = [doc.GetElement(ref.ElementId) for ref in selected_hosted_references]
+selected_elements = [doc.GetElement(ref.ElementId) for ref in selected_references]
+t=Transaction(doc,"Offseter")
 
-el_ids      = [el.Id for el in selected_hosted_elements]
-List_el_ids = List[ElementId](el_ids)
+t.Start()
 
-uidoc.Selection.SetElementIds(List_el_ids)
+for element in selected_elements:
+    base_offset = element.LookupParameter("Base Offset").AsDouble()
+    # mm_base_offset =  UnitUtils.ConvertToInternalUnits(base_offset,UnitTypeId.Millimeters)
+    # print(base_offset)
 
+    top_offset = element.LookupParameter("Top Offset").AsDouble()
+    # mm_top_offset = UnitUtils.ConvertToInternalUnits(top_offset, UnitTypeId.Millimeters)
+    # print(top_offset)
 
+    element.LookupParameter("Top Offset").Set(top_offset - UnitUtils.ConvertToInternalUnits(40, UnitTypeId.Millimeters))
+    element.LookupParameter("Base Offset").Set(base_offset - UnitUtils.ConvertToInternalUnits(40, UnitTypeId.Millimeters))
+
+t.Commit()
+
+# el_ids      = [el.Id for el in selected_hosted_elements]
+# List_el_ids = List[ElementId](el_ids)
+#
+# uidoc.Selection.SetElementIds(List_el_ids)
+
+# selected_hosted_references = selection.PickObjects(ObjectType.Element,"Select Elements")
+#
+# selected_hosted_elements = [doc.GetElement(ref.ElementId) for ref in selected_hosted_references]
+#
+# el_ids      = [el.Id for el in selected_hosted_elements]
+# List_el_ids = List[ElementId](el_ids)
+#
+# uidoc.Selection.SetElementIds(List_el_ids)
 
 
 # all_cats = doc.Settings.Categories

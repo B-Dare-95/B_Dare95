@@ -5,16 +5,12 @@ from Autodesk.Revit.UI import *
 from Autodesk.Revit.UI.Selection import *
 from pyrevit import forms,script
 from System.Collections.Generic import List
-from
 
 #Revit Variables
 uidoc     = __revit__.ActiveUIDocument
 doc       = __revit__.ActiveUIDocument.Document
 selection = uidoc.Selection
 app       = __revit__.Application
-
-
-
 
 
 # 🔴 checking the wall type names
@@ -101,9 +97,9 @@ for new_wall in new_walls:
 
 t.Commit()
 
-t_cut = Transaction(doc,"Cut to Clipboard")
+t_collect_hosted_elements = Transaction(doc,"Collect Hosted Elements")
 
-t_cut.Start()
+t_collect_hosted_elements.Start()
 
 # IMPORTANT MESSAGE
 
@@ -114,17 +110,28 @@ selected_hosted_references = selection.PickObjects(ObjectType.Element, "Select W
 
 selected_hosted_elements = [doc.GetElement(ref.ElementId) for ref in selected_hosted_references]
 
-el_ids = [el.Id for el in selected_hosted_elements]
-List_el_ids = List[ElementId](el_ids)
 
-uidoc.Selection.SetElementIds(List_el_ids)
 
-cut_to_clipboard_id = RevitCommandId.LookupPostableCommandId(PostableCommand.CutToClipboard)
+# for elem in selected_hosted_elements:
+#     all_params = elem.Parameters
+#     for param in all_params:
 
-if cut_to_clipboard_id:
-    posted_command = UIApplication(app).PostCommand(cut_to_clipboard_id)
 
-t_cut.Commit()
+
+
+# el_ids = [el.Id for el in selected_hosted_elements]
+# List_el_ids = List[ElementId](el_ids)
+#
+# uidoc.Selection.SetElementIds(List_el_ids)
+
+
+
+# cut_to_clipboard_id = RevitCommandId.LookupPostableCommandId(PostableCommand.CutToClipboard)
+#
+# if cut_to_clipboard_id:
+#     posted_command = UIApplication(app).PostCommand(cut_to_clipboard_id)
+
+t_collect_hosted_elements.Commit()
 
 t_delete = Transaction(doc,"Delete Original Wall")
 
