@@ -25,9 +25,22 @@ class CustomISelectionFilter(ISelectionFilter):
 
 #Select an Element from The UI
 custom_filter = CustomISelectionFilter()
-selected_references = selection.PickObjects(ObjectType.Element,custom_filter,"Select Wall")
+selected_references = selection.PickObjects(ObjectType.Element,custom_filter,"Select Elements")
 
 selected_elements = [doc.GetElement(ref.ElementId) for ref in selected_references]
+# t=Transaction(doc,"Unpin & Delete")
+#
+# t.Start()
+#
+# for element in selected_elements:
+#     if element.Pinned :
+#         element.Pinned = False
+#         deleted_elements = doc.Delete(element.Id)
+#         if not deleted_elements:
+#             pass
+#
+# t.Commit()
+
 t=Transaction(doc,"Offseter")
 
 t.Start()
@@ -41,8 +54,8 @@ for element in selected_elements:
     # mm_top_offset = UnitUtils.ConvertToInternalUnits(top_offset, UnitTypeId.Millimeters)
     # print(top_offset)
 
-    element.LookupParameter("Top Offset").Set(top_offset - UnitUtils.ConvertToInternalUnits(40, UnitTypeId.Millimeters))
-    element.LookupParameter("Base Offset").Set(base_offset - UnitUtils.ConvertToInternalUnits(40, UnitTypeId.Millimeters))
+    element.LookupParameter("Top Offset").Set(top_offset + UnitUtils.ConvertToInternalUnits(60, UnitTypeId.Millimeters))
+    element.LookupParameter("Base Offset").Set(base_offset + UnitUtils.ConvertToInternalUnits(60, UnitTypeId.Millimeters))
 
 t.Commit()
 
