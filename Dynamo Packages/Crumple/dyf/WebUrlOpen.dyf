@@ -1,0 +1,222 @@
+{
+  "Uuid": "414f0861-30d5-4602-96fd-20dec50e5004",
+  "IsCustomNode": true,
+  "Category": "Crumple.Application.Actions",
+  "Description": "Given a URL, will attempt to open in the default web browser used by Windows.",
+  "Name": "© Web.UrlOpen",
+  "ElementResolver": {
+    "ResolutionMap": {
+      "DSCore.List": {
+        "Key": "DSCore.List",
+        "Value": "DSCoreNodes.dll"
+      }
+    }
+  },
+  "Inputs": [],
+  "Outputs": [],
+  "Nodes": [
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "# Made by Gavin Crump\r\n# Free for use\r\n# BIM Guru, www.bimguru.com.au\r\n\r\n# Boilerplate text\r\nimport os\r\n\r\n# Define list/unwrap list functions\r\ndef tolist(input):\r\n    result = input if isinstance(input, list) else [input]\r\n    return result\r\n\r\ndef objOrList(input, initial = IN[0]):\r\n\tif isinstance(initial, list):\r\n\t\treturn input\r\n\telse:\r\n\t\treturn input[0]\r\n\r\ndef openUrl(url):\r\n\ttry:\r\n\t\tos.system(\"start \\\"\\\" \" + url)\r\n\t\treturn True\r\n\texcept:\r\n\t\treturn False\r\n\r\n# Open URL\r\nurls = tolist(IN[0])\r\n\r\nif IN[1]:\r\n\tOUT = objOrList([openUrl(u) for u in urls])\r\nelse:\r\n\tOUT = \"Set runMe to True!\"",
+      "Engine": "CPython3",
+      "VariableInputPorts": true,
+      "Id": "8c004e38924f47369f400231a86e2685",
+      "Inputs": [
+        {
+          "Id": "f92a0667576f484482758a9ab6a9fbbf",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "8ada562d447f4e16a0db14d32faa5a14",
+          "Name": "IN[1]",
+          "Description": "Input #1",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "34269ed725c640eaaa429716a1e39459",
+          "Name": "OUT",
+          "Description": "Result of the python script",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Runs an embedded Python script."
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.CustomNodes.Symbol, DynamoCore",
+      "NodeType": "InputNode",
+      "Parameter": {
+        "Name": "url",
+        "TypeName": "var",
+        "TypeRank": -1,
+        "DefaultValue": null,
+        "Description": ""
+      },
+      "Id": "64c0c99851f5442eac1be1dc5da68006",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "0e3686a9e2884d328744d806d77f7fa1",
+          "Name": "",
+          "Description": "Symbol",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "A function parameter, use with custom nodes.\r\n\r\nYou can specify the type and default value for parameter. E.g.,\r\n\r\ninput : var[]..[]\r\nvalue : bool = false"
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.CustomNodes.Symbol, DynamoCore",
+      "NodeType": "InputNode",
+      "Parameter": {
+        "Name": "runMe",
+        "TypeName": "bool",
+        "TypeRank": 0,
+        "DefaultValue": "false",
+        "Description": ""
+      },
+      "Id": "ec81ace8c2c6410192347abbaeecd0c5",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "ca29ec4929b04affbf79f368c662cf95",
+          "Name": "",
+          "Description": "Symbol",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "A function parameter, use with custom nodes.\r\n\r\nYou can specify the type and default value for parameter. E.g.,\r\n\r\ninput : var[]..[]\r\nvalue : bool = false"
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.CustomNodes.Output, DynamoCore",
+      "NodeType": "OutputNode",
+      "ElementResolver": null,
+      "Symbol": "result",
+      "Id": "e040db4aaf834604ad08ce84321f9e26",
+      "Inputs": [
+        {
+          "Id": "365a18a2cd844f4991abdc6f82ccd65e",
+          "Name": "",
+          "Description": "",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [],
+      "Replication": "Disabled",
+      "Description": "A function output, use with custom nodes"
+    }
+  ],
+  "Connectors": [
+    {
+      "Start": "34269ed725c640eaaa429716a1e39459",
+      "End": "365a18a2cd844f4991abdc6f82ccd65e",
+      "Id": "4052d9da09154c38a43967c79f8bc737"
+    },
+    {
+      "Start": "0e3686a9e2884d328744d806d77f7fa1",
+      "End": "f92a0667576f484482758a9ab6a9fbbf",
+      "Id": "9b6b722c52af4a0dadd78485bbdcead7"
+    },
+    {
+      "Start": "ca29ec4929b04affbf79f368c662cf95",
+      "End": "8ada562d447f4e16a0db14d32faa5a14",
+      "Id": "520bcbca475142b4b63efe0a401d0ba9"
+    }
+  ],
+  "Dependencies": [],
+  "NodeLibraryDependencies": [],
+  "Author": "None provided",
+  "Bindings": [],
+  "View": {
+    "Dynamo": {
+      "ScaleFactor": 1.0,
+      "HasRunWithoutCrash": false,
+      "IsVisibleInDynamoLibrary": true,
+      "Version": "2.12.1.8246",
+      "RunType": "Manual",
+      "RunPeriod": "1000"
+    },
+    "Camera": {
+      "Name": "Background Preview",
+      "EyeX": -17.0,
+      "EyeY": 24.0,
+      "EyeZ": 50.0,
+      "LookX": 12.0,
+      "LookY": -13.0,
+      "LookZ": -58.0,
+      "UpX": 0.0,
+      "UpY": 1.0,
+      "UpZ": 0.0
+    },
+    "NodeViews": [
+      {
+        "ShowGeometry": true,
+        "Name": "Python Script",
+        "Id": "8c004e38924f47369f400231a86e2685",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 209.97392870065573,
+        "Y": 14.129482726153782
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Input",
+        "Id": "64c0c99851f5442eac1be1dc5da68006",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": -45.929772783606268,
+        "Y": -14.967626236313038
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Input",
+        "Id": "ec81ace8c2c6410192347abbaeecd0c5",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": -83.413033585044445,
+        "Y": 75.415348344396477
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Output",
+        "Id": "e040db4aaf834604ad08ce84321f9e26",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 366.9196172355272,
+        "Y": 14.776472133309596
+      }
+    ],
+    "Annotations": [],
+    "X": 130.10061671438214,
+    "Y": 312.3483861508679,
+    "Zoom": 0.948840568048759
+  }
+}

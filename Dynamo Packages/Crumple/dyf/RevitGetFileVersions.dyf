@@ -1,0 +1,167 @@
+{
+  "Uuid": "b9b02990-edbb-44b9-926a-5a946727d0a6",
+  "IsCustomNode": true,
+  "Category": "Crumple.Application.Query",
+  "Description": "Given a file path or list of file paths, attempts to return their version as an integer.",
+  "Name": "© Revit.GetFileVersions",
+  "ElementResolver": {
+    "ResolutionMap": {}
+  },
+  "Inputs": [],
+  "Outputs": [],
+  "Nodes": [
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "# Made by Gavin Crump\r\n# Free for use\r\n# BIM Guru, www.bimguru.com.au\r\n\r\n# Boilerplate text\r\nimport clr\r\nimport os\r\n\r\nclr.AddReference(\"RevitAPI\")\r\nimport Autodesk \r\nfrom Autodesk.Revit.DB import BasicFileInfo\r\n\r\n# Define list/unwrap list functions\r\ndef tolist(input):\r\n    result = input if isinstance(input, list) else [input]\r\n    return result\r\n\r\ndef objOrList(input, initial = IN[0]):\r\n\tif isinstance(initial, list):\r\n\t\treturn input\r\n\telse:\r\n\t\treturn input[0]\r\n\r\ndef getVersion(filePath):\r\n\tif os.path.exists(filePath):\r\n\t\ttry:\r\n\t\t\tinfo_file = BasicFileInfo.Extract(filePath)\r\n\t\t\treturn int(info_file.Format)\r\n\t\texcept:\r\n\t\t\treturn None\t\r\n\r\nfile_paths = tolist(IN[0])\r\n\t\r\nOUT = objOrList([getVersion(fp) for fp in file_paths])",
+      "Engine": "CPython3",
+      "VariableInputPorts": true,
+      "Id": "f2c67bc66f3d4d478a2470bc366a10f2",
+      "Inputs": [
+        {
+          "Id": "c390bcfa8f6c462995e46178c8b605eb",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "c8388cefee7b4712af2fc255bf971f43",
+          "Name": "OUT",
+          "Description": "Result of the python script",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Runs an embedded Python script."
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.CustomNodes.Output, DynamoCore",
+      "NodeType": "OutputNode",
+      "ElementResolver": null,
+      "Symbol": "versions",
+      "Id": "239765f968364910950ffb0142c7db30",
+      "Inputs": [
+        {
+          "Id": "09c64b2fe23543b0a4e0854e17645cf1",
+          "Name": "",
+          "Description": "",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [],
+      "Replication": "Disabled",
+      "Description": "A function output, use with custom nodes"
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.CustomNodes.Symbol, DynamoCore",
+      "NodeType": "InputNode",
+      "Parameter": {
+        "Name": "filePaths",
+        "TypeName": "var",
+        "TypeRank": -1,
+        "DefaultValue": null,
+        "Description": ""
+      },
+      "Id": "ede4ce46c36b4c38a9ecc24ebabef560",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "015bc985fe5a47c8a208807fb790e57d",
+          "Name": "",
+          "Description": "Symbol",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "A function parameter, use with custom nodes.\r\n\r\nYou can specify the type and default value for parameter. E.g.,\r\n\r\ninput : var[]..[]\r\nvalue : bool = false"
+    }
+  ],
+  "Connectors": [
+    {
+      "Start": "c8388cefee7b4712af2fc255bf971f43",
+      "End": "09c64b2fe23543b0a4e0854e17645cf1",
+      "Id": "78d6e60010a84bdfa262e666c2359ab5"
+    },
+    {
+      "Start": "015bc985fe5a47c8a208807fb790e57d",
+      "End": "c390bcfa8f6c462995e46178c8b605eb",
+      "Id": "566516a1d299462ea619c0e36c7387ae"
+    }
+  ],
+  "Dependencies": [],
+  "NodeLibraryDependencies": [],
+  "Author": "None provided",
+  "Bindings": [],
+  "View": {
+    "Dynamo": {
+      "ScaleFactor": 1.0,
+      "HasRunWithoutCrash": false,
+      "IsVisibleInDynamoLibrary": true,
+      "Version": "2.12.1.8246",
+      "RunType": "Manual",
+      "RunPeriod": "1000"
+    },
+    "Camera": {
+      "Name": "Background Preview",
+      "EyeX": -17.0,
+      "EyeY": 24.0,
+      "EyeZ": 50.0,
+      "LookX": 12.0,
+      "LookY": -13.0,
+      "LookZ": -58.0,
+      "UpX": 0.0,
+      "UpY": 1.0,
+      "UpZ": 0.0
+    },
+    "NodeViews": [
+      {
+        "ShowGeometry": true,
+        "Name": "Python Script",
+        "Id": "f2c67bc66f3d4d478a2470bc366a10f2",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 250.0,
+        "Y": 0.0
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Output",
+        "Id": "239765f968364910950ffb0142c7db30",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 449.0,
+        "Y": 0.0
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Input",
+        "Id": "ede4ce46c36b4c38a9ecc24ebabef560",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": -36.0,
+        "Y": 0.0
+      }
+    ],
+    "Annotations": [],
+    "X": 71.339881249999962,
+    "Y": 266.1260532937365,
+    "Zoom": 1.33823125
+  }
+}

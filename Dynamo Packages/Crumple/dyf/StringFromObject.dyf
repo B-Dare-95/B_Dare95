@@ -1,0 +1,167 @@
+{
+  "Uuid": "f09a2499-0abc-4cba-acf7-86dd5bcae5ac",
+  "IsCustomNode": true,
+  "Category": "Crumple.Data.Create",
+  "Description": "Uses the python str() function to convert data types to strings. Unlike 'string from object' this will trim trailing 0's from numbers.",
+  "Name": "© String.FromObject",
+  "ElementResolver": {
+    "ResolutionMap": {}
+  },
+  "Inputs": [],
+  "Outputs": [],
+  "Nodes": [
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "# Made by Gavin Crump\r\n# Free for use\r\n# BIM Guru, www.bimguru.com.au\r\n\r\n# Define list/unwrap list functions\r\ndef tolist(input):\r\n    result = input if isinstance(input, list) else [input]\r\n    return result\r\n\r\ndef objOrList(input, initial = IN[0]):\r\n\tif isinstance(initial, list):\r\n\t\treturn input\r\n\telse:\r\n\t\treturn input[0]\r\n\r\ndef toString(obj):\r\n\tobj = str(obj)\r\n\tif obj[-1] == \"0\" or obj[-1] == \".\":\r\n\t\ttry:\r\n\t\t\tnewObj = obj.rstrip('0').rstrip('.')\r\n\t\t\tnumObj = float(newObj)\r\n\t\t\treturn newObj\r\n\t\texcept:\r\n\t\t\treturn obj\r\n\telse:\r\n\t\treturn obj\r\n\r\n# Get inputs\r\nobjects = tolist(IN[0])\r\n\r\n# Define outputs\r\nOUT = objOrList([toString(o) for o in objects])",
+      "Engine": "CPython3",
+      "VariableInputPorts": true,
+      "Id": "3754d6e9934745b193c4bbf02cb70564",
+      "Inputs": [
+        {
+          "Id": "3682dd5e3a15498fa90b8d875b7398b3",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "2be442f25c7545208b847dd6ed2f4bff",
+          "Name": "OUT",
+          "Description": "Result of the python script",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Runs an embedded Python script."
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.CustomNodes.Symbol, DynamoCore",
+      "NodeType": "InputNode",
+      "Parameter": {
+        "Name": "obj",
+        "TypeName": "var",
+        "TypeRank": -1,
+        "DefaultValue": null,
+        "Description": "Data for conversion."
+      },
+      "Id": "10277fbb452444308d14c38c21f0d4f6",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "f11ed2c5fdef42c3bbc52ce7d87dcebb",
+          "Name": "",
+          "Description": "Symbol",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "A function parameter, use with custom nodes.\r\n\r\nYou can specify the type and default value for parameter. E.g.,\r\n\r\ninput : var[]..[]\r\nvalue : bool = false"
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.CustomNodes.Output, DynamoCore",
+      "NodeType": "OutputNode",
+      "ElementResolver": null,
+      "Symbol": "//Data returned as strings.\r\nstr",
+      "Id": "4828e1f503a8498f8c96e868b2ea532e",
+      "Inputs": [
+        {
+          "Id": "90fd98f881a8494999a6fcf3243059ce",
+          "Name": "",
+          "Description": "",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [],
+      "Replication": "Disabled",
+      "Description": "A function output, use with custom nodes"
+    }
+  ],
+  "Connectors": [
+    {
+      "Start": "2be442f25c7545208b847dd6ed2f4bff",
+      "End": "90fd98f881a8494999a6fcf3243059ce",
+      "Id": "7bb1d98848184d5a94863fd4af8f3d0c"
+    },
+    {
+      "Start": "f11ed2c5fdef42c3bbc52ce7d87dcebb",
+      "End": "3682dd5e3a15498fa90b8d875b7398b3",
+      "Id": "6365a7dc0b9a4a81876812450ef4386a"
+    }
+  ],
+  "Dependencies": [],
+  "NodeLibraryDependencies": [],
+  "Author": "None provided",
+  "Bindings": [],
+  "View": {
+    "Dynamo": {
+      "ScaleFactor": 1.0,
+      "HasRunWithoutCrash": false,
+      "IsVisibleInDynamoLibrary": true,
+      "Version": "2.12.1.8246",
+      "RunType": "Manual",
+      "RunPeriod": "1000"
+    },
+    "Camera": {
+      "Name": "Background Preview",
+      "EyeX": -17.0,
+      "EyeY": 24.0,
+      "EyeZ": 50.0,
+      "LookX": 12.0,
+      "LookY": -13.0,
+      "LookZ": -58.0,
+      "UpX": 0.0,
+      "UpY": 1.0,
+      "UpZ": 0.0
+    },
+    "NodeViews": [
+      {
+        "ShowGeometry": true,
+        "Name": "Python Script",
+        "Id": "3754d6e9934745b193c4bbf02cb70564",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 268.11570340036303,
+        "Y": 0.0
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Input",
+        "Id": "10277fbb452444308d14c38c21f0d4f6",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": -61.694629770866584,
+        "Y": -1.3863961746262135
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Output",
+        "Id": "4828e1f503a8498f8c96e868b2ea532e",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 449.0,
+        "Y": 0.0
+      }
+    ],
+    "Annotations": [],
+    "X": -71.424824570647331,
+    "Y": 322.229563055902,
+    "Zoom": 1.4425890929331342
+  }
+}

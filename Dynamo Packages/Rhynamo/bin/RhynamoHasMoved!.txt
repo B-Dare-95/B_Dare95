@@ -1,0 +1,3 @@
+Rhynamo has moved! 
+
+You can get Rhynamo for Dynamo 2.0+ at the Proving Ground website: https://provingground.io/tools/rhynamo/

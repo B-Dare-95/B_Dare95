@@ -1,0 +1,217 @@
+{
+  "Uuid": "17fb90e6-6909-4d73-8f0e-bd084827d94c",
+  "IsCustomNode": true,
+  "Category": "Crumple.Application.Actions",
+  "Description": "ChatGPT for dummies.",
+  "Name": "© Web.LMGTFY",
+  "ElementResolver": {
+    "ResolutionMap": {}
+  },
+  "Inputs": [],
+  "Outputs": [],
+  "Nodes": [
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "# Made by Gavin Crump\r\n# Free for use\r\n# BIM Guru, www.bimguru.com.au\r\n\r\n# Boilerplate text\r\nimport os\r\nimport webbrowser\r\n\r\n# Open URL\r\nif IN[1]:\r\n    try:\r\n        no_spaces = IN[0].replace(\"+\", \" \")\r\n        new_path  = 'https://www.google.com/search?q='\r\n        webbrowser.open(new_path + no_spaces)\r\n        OUT = \"URL Opened.\"\r\n    except:\r\n        OUT = \"Invalid query.\"\r\nelse:\r\n\tOUT = \"Set runMe to True!\"",
+      "Engine": "CPython3",
+      "VariableInputPorts": true,
+      "Id": "99be887a0a7f4d34a8a5e5adf3c8706c",
+      "Inputs": [
+        {
+          "Id": "e2ac9da27121455b8e09a4538fe689ee",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "4d27f83fd96f45f2b5dc536d74085a12",
+          "Name": "IN[1]",
+          "Description": "Input #1",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "d029f20da80c44bfb2b252389d319185",
+          "Name": "OUT",
+          "Description": "Result of the python script",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Runs an embedded Python script."
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.CustomNodes.Symbol, DynamoCore",
+      "NodeType": "InputNode",
+      "Parameter": {
+        "Name": "query",
+        "TypeName": "string",
+        "TypeRank": 0,
+        "DefaultValue": null,
+        "Description": ""
+      },
+      "Id": "d956a0042d1e41a39ae4aa1ddbf308a6",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "e702661e9bc4408db5de3da321af8a9b",
+          "Name": "",
+          "Description": "Symbol",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "A function parameter, use with custom nodes.\r\n\r\nYou can specify the type and default value for parameter. E.g.,\r\n\r\ninput : var[]..[]\r\nvalue : bool = false"
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.CustomNodes.Symbol, DynamoCore",
+      "NodeType": "InputNode",
+      "Parameter": {
+        "Name": "runMe",
+        "TypeName": "bool",
+        "TypeRank": 0,
+        "DefaultValue": "false",
+        "Description": ""
+      },
+      "Id": "9383ee8fbd264c38ae0bf314821fda5a",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "c5b7fb5971674c9a8b8e9e27793221ec",
+          "Name": "",
+          "Description": "Symbol",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "A function parameter, use with custom nodes.\r\n\r\nYou can specify the type and default value for parameter. E.g.,\r\n\r\ninput : var[]..[]\r\nvalue : bool = false"
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.CustomNodes.Output, DynamoCore",
+      "NodeType": "OutputNode",
+      "ElementResolver": null,
+      "Symbol": "result",
+      "Id": "ed5b7c952170467a87842e0c235cd22b",
+      "Inputs": [
+        {
+          "Id": "c122f767451545bd89b14f804d2268ea",
+          "Name": "",
+          "Description": "",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [],
+      "Replication": "Disabled",
+      "Description": "A function output, use with custom nodes"
+    }
+  ],
+  "Connectors": [
+    {
+      "Start": "d029f20da80c44bfb2b252389d319185",
+      "End": "c122f767451545bd89b14f804d2268ea",
+      "Id": "08300c39359345c5bcee7f780036e020"
+    },
+    {
+      "Start": "e702661e9bc4408db5de3da321af8a9b",
+      "End": "e2ac9da27121455b8e09a4538fe689ee",
+      "Id": "a50e1c5a56ef42909f2fd04901c62a34"
+    },
+    {
+      "Start": "c5b7fb5971674c9a8b8e9e27793221ec",
+      "End": "4d27f83fd96f45f2b5dc536d74085a12",
+      "Id": "c4f3bc34dc4c4a90ae3d09b05c534799"
+    }
+  ],
+  "Dependencies": [],
+  "NodeLibraryDependencies": [],
+  "Author": "None provided",
+  "Bindings": [],
+  "View": {
+    "Dynamo": {
+      "ScaleFactor": 1.0,
+      "HasRunWithoutCrash": false,
+      "IsVisibleInDynamoLibrary": true,
+      "Version": "2.12.1.8246",
+      "RunType": "Manual",
+      "RunPeriod": "1000"
+    },
+    "Camera": {
+      "Name": "Background Preview",
+      "EyeX": -17.0,
+      "EyeY": 24.0,
+      "EyeZ": 50.0,
+      "LookX": 12.0,
+      "LookY": -13.0,
+      "LookZ": -58.0,
+      "UpX": 0.0,
+      "UpY": 1.0,
+      "UpZ": 0.0
+    },
+    "NodeViews": [
+      {
+        "ShowGeometry": true,
+        "Name": "Python Script",
+        "Id": "99be887a0a7f4d34a8a5e5adf3c8706c",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 250.0,
+        "Y": 0.0
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Input",
+        "Id": "d956a0042d1e41a39ae4aa1ddbf308a6",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": -9.5,
+        "Y": -22.5
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Input",
+        "Id": "9383ee8fbd264c38ae0bf314821fda5a",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": -56.532466085143767,
+        "Y": 77.244387662587314
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Output",
+        "Id": "ed5b7c952170467a87842e0c235cd22b",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 450.23966734918315,
+        "Y": -0.47225422826028307
+      }
+    ],
+    "Annotations": [],
+    "X": -31.268329441144715,
+    "Y": 296.4117,
+    "Zoom": 1.33823125
+  }
+}

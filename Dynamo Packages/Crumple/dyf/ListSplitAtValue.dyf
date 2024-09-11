@@ -1,0 +1,217 @@
+{
+  "Uuid": "01089133-2ddf-4816-9f9d-58723d2f574b",
+  "IsCustomNode": true,
+  "Category": "Crumple.Data.Actions",
+  "Description": "Given a list (or list of lists), split the lists into sublists wherever a specified value occurs. Typically used for processing lists of booleans or 1's and 0's in Ladybug sun hour results to isolate continuous periods.",
+  "Name": "© List.SplitAtValue",
+  "ElementResolver": {
+    "ResolutionMap": {}
+  },
+  "Inputs": [],
+  "Outputs": [],
+  "Nodes": [
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "# Made by Gavin Crump\r\n# Free for use\r\n# BIM Guru, www.bimguru.com.au\r\n\r\n# Define list function\r\ndef tolist(input):\r\n    result = input if isinstance(input, list) else [input]\r\n    return result\r\n\r\n# Create a lazy iterator to break list at value\r\ndef splitter(seq, splitval = 0):\r\n    # Add one instance of the splitter to the end\r\n    seq.append(splitval)\r\n    group = []\r\n    # Iterate across all values\r\n    for num in seq:\r\n        if num != splitval:\r\n            group.append(num)\r\n        # If a splitval is found, yield to group\r\n        elif group:\r\n            yield group\r\n            group = []\r\n\r\n# Preparing input from dynamo to revit\r\nvalues = tolist(IN[0])\r\nresult = []\r\n\r\n# Iterate across all sublists\r\nfor n in values:\r\n    result.append(list(splitter(n)))\r\n\r\n# Preparing output to Dynamo\r\nOUT = result",
+      "Engine": "CPython3",
+      "VariableInputPorts": true,
+      "Id": "df5ce72f639448f383462fecc4031467",
+      "Inputs": [
+        {
+          "Id": "f30ffe76fd0b4d35bdbf8de852c78a95",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "8bb02f4d47d644d89c34a2b67fc775ee",
+          "Name": "IN[1]",
+          "Description": "Input #1",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "97494a9d67814e6396a3a4cc36078057",
+          "Name": "OUT",
+          "Description": "Result of the python script",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Runs an embedded Python script."
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.CustomNodes.Symbol, DynamoCore",
+      "NodeType": "InputNode",
+      "Parameter": {
+        "Name": "lsts",
+        "TypeName": "var",
+        "TypeRank": -1,
+        "DefaultValue": null,
+        "Description": "List or list of lists"
+      },
+      "Id": "7bd846d871094174a75f9e99014373c6",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "f456b4bd2362454da2dd7741128aa75c",
+          "Name": "",
+          "Description": "Symbol",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "A function parameter, use with custom nodes.\r\n\r\nYou can specify the type and default value for parameter. E.g.,\r\n\r\ninput : var[]..[]\r\nvalue : bool = false"
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.CustomNodes.Output, DynamoCore",
+      "NodeType": "OutputNode",
+      "ElementResolver": null,
+      "Symbol": "//The new lists.\r\nlsts",
+      "Id": "36196a58ee9343eca079ec534eb69697",
+      "Inputs": [
+        {
+          "Id": "fd02fadea24440b08baa0b123317da49",
+          "Name": "",
+          "Description": "",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [],
+      "Replication": "Disabled",
+      "Description": "A function output, use with custom nodes"
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.CustomNodes.Symbol, DynamoCore",
+      "NodeType": "InputNode",
+      "Parameter": {
+        "Name": "splitValue",
+        "TypeName": "int",
+        "TypeRank": 0,
+        "DefaultValue": "0",
+        "Description": "Item to split at"
+      },
+      "Id": "0884880d11aa435da7efab1b253030ef",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "bfac9b46cd52433b8823d3c72f35c8f7",
+          "Name": "",
+          "Description": "Symbol",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "A function parameter, use with custom nodes.\r\n\r\nYou can specify the type and default value for parameter. E.g.,\r\n\r\ninput : var[]..[]\r\nvalue : bool = false"
+    }
+  ],
+  "Connectors": [
+    {
+      "Start": "97494a9d67814e6396a3a4cc36078057",
+      "End": "fd02fadea24440b08baa0b123317da49",
+      "Id": "57e6d520cf6d4d08a3a77ff8d7fbedae"
+    },
+    {
+      "Start": "f456b4bd2362454da2dd7741128aa75c",
+      "End": "f30ffe76fd0b4d35bdbf8de852c78a95",
+      "Id": "730ddaa035a945959a5275defdf256fb"
+    },
+    {
+      "Start": "bfac9b46cd52433b8823d3c72f35c8f7",
+      "End": "8bb02f4d47d644d89c34a2b67fc775ee",
+      "Id": "d6261ab171694cdfb28041965cb68270"
+    }
+  ],
+  "Dependencies": [],
+  "NodeLibraryDependencies": [],
+  "Author": "None provided",
+  "Bindings": [],
+  "View": {
+    "Dynamo": {
+      "ScaleFactor": 1.0,
+      "HasRunWithoutCrash": false,
+      "IsVisibleInDynamoLibrary": true,
+      "Version": "2.12.1.8246",
+      "RunType": "Manual",
+      "RunPeriod": "1000"
+    },
+    "Camera": {
+      "Name": "Background Preview",
+      "EyeX": -17.0,
+      "EyeY": 24.0,
+      "EyeZ": 50.0,
+      "LookX": 12.0,
+      "LookY": -13.0,
+      "LookZ": -58.0,
+      "UpX": 0.0,
+      "UpY": 1.0,
+      "UpZ": 0.0
+    },
+    "NodeViews": [
+      {
+        "ShowGeometry": true,
+        "Name": "Python Script",
+        "Id": "df5ce72f639448f383462fecc4031467",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 106.0,
+        "Y": 20.0
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Input",
+        "Id": "7bd846d871094174a75f9e99014373c6",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": -229.45178000898463,
+        "Y": -12.559706986539339
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Output",
+        "Id": "36196a58ee9343eca079ec534eb69697",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 298.82290466440236,
+        "Y": 20.293978814311657
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Input",
+        "Id": "0884880d11aa435da7efab1b253030ef",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": -191.61562851150921,
+        "Y": 92.6088349671027
+      }
+    ],
+    "Annotations": [],
+    "X": 2.5778253738801027,
+    "Y": 256.27088070728439,
+    "Zoom": 1.3076413563671876
+  }
+}

@@ -1,0 +1,238 @@
+{
+  "Uuid": "e109db67-07be-4942-a22b-48fd306dfbcb",
+  "IsCustomNode": true,
+  "Category": "Crumple.Revit.Query",
+  "Description": "Returns all design options in a document.",
+  "Name": "© Collect.DesignOptions",
+  "ElementResolver": {
+    "ResolutionMap": {
+      "DSCore.List": {
+        "Key": "DSCore.List",
+        "Value": "DSCoreNodes.dll"
+      }
+    }
+  },
+  "Inputs": [],
+  "Outputs": [],
+  "Nodes": [
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "# Made by Gavin Crump\r\n# Free for use\r\n# BIM Guru, www.bimguru.com.au\r\n\r\n# Boilerplate text\r\nimport clr\r\n\r\nclr.AddReference(\"RevitAPI\")\r\nimport Autodesk \r\nfrom Autodesk.Revit.DB import FilteredElementCollector, DesignOption\r\n\r\n\r\n# Current doc/app/ui\r\ndoc = IN[0]\r\n\r\n# Preparing output to Dynamo\r\nOUT = FilteredElementCollector(doc).OfClass(DesignOption).ToElements()",
+      "Engine": "CPython3",
+      "VariableInputPorts": true,
+      "Id": "a4b56056724646d4abb2b55d6bbbf414",
+      "Inputs": [
+        {
+          "Id": "45ed763b9c8e4287a7484d3001a1023e",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "23079ec47a64427ba7acecd95be372d4",
+          "Name": "OUT",
+          "Description": "Result of the python script",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Runs an embedded Python script."
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.CustomNodes.Output, DynamoCore",
+      "NodeType": "OutputNode",
+      "ElementResolver": null,
+      "Symbol": "designOptions",
+      "Id": "df72830d124e4ab5b5441347f1cc79aa",
+      "Inputs": [
+        {
+          "Id": "3bba4657ef6f45f0a316ff358333a222",
+          "Name": "",
+          "Description": "",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [],
+      "Replication": "Disabled",
+      "Description": "A function output, use with custom nodes"
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.CustomNodes.Symbol, DynamoCore",
+      "NodeType": "InputNode",
+      "Parameter": {
+        "Name": "docOrLink",
+        "TypeName": "var",
+        "TypeRank": -1,
+        "DefaultValue": "null",
+        "Description": "Uses current if none provided.\nAccepts document or link instance."
+      },
+      "Id": "1216ab466d6a4f23b8eaa1780a08d3a3",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "1f3d8c2ee5864403b46691125b8f9ba3",
+          "Name": "",
+          "Description": "Symbol",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "A function parameter, use with custom nodes.\r\n\r\nYou can specify the type and default value for parameter. E.g.,\r\n\r\ninput : var[]..[]\r\nvalue : bool = false"
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.CustomNodes.Function, DynamoCore",
+      "FunctionSignature": "4a8a580b-b56f-4e35-a1c0-dacf9b9c62bc",
+      "FunctionType": "Graph",
+      "NodeType": "FunctionNode",
+      "Id": "83b9fa10db4a4664965627f575fcd6e2",
+      "Inputs": [
+        {
+          "Id": "4094b3646fd841529ab588dc6a6b8580",
+          "Name": "docOrLink",
+          "Description": "var[]..[]\nDefault value : null",
+          "UsingDefaultValue": true,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "6855d76410c84b6f96d1e5d0de586464",
+          "Name": "document",
+          "Description": "return value",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "8cf4de399b104bf6a34c9c7731b940d8",
+          "Name": "outcome",
+          "Description": "return value",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Auto",
+      "Description": "If no input is specified or an invalid one is, returns current document. If a link instance is provided, it returns the linked document. If a document is provided it will pass it through."
+    }
+  ],
+  "Connectors": [
+    {
+      "Start": "23079ec47a64427ba7acecd95be372d4",
+      "End": "3bba4657ef6f45f0a316ff358333a222",
+      "Id": "d8ccc9d05961481c9f8bf10c7a6fc768"
+    },
+    {
+      "Start": "1f3d8c2ee5864403b46691125b8f9ba3",
+      "End": "4094b3646fd841529ab588dc6a6b8580",
+      "Id": "95eb9c7f73234278ad761e5ecb7d5649"
+    },
+    {
+      "Start": "6855d76410c84b6f96d1e5d0de586464",
+      "End": "45ed763b9c8e4287a7484d3001a1023e",
+      "Id": "7d674c5009f1411fb5efb8b6dc0631d4"
+    }
+  ],
+  "Dependencies": [
+    "4a8a580b-b56f-4e35-a1c0-dacf9b9c62bc"
+  ],
+  "NodeLibraryDependencies": [
+    {
+      "Name": "Crumple",
+      "Version": "2022.2.13",
+      "ReferenceType": "Package",
+      "Nodes": [
+        "83b9fa10db4a4664965627f575fcd6e2"
+      ]
+    }
+  ],
+  "Author": "None provided",
+  "Bindings": [],
+  "View": {
+    "Dynamo": {
+      "ScaleFactor": 1.0,
+      "HasRunWithoutCrash": false,
+      "IsVisibleInDynamoLibrary": true,
+      "Version": "2.12.1.8246",
+      "RunType": "Manual",
+      "RunPeriod": "1000"
+    },
+    "Camera": {
+      "Name": "Background Preview",
+      "EyeX": -17.0,
+      "EyeY": 24.0,
+      "EyeZ": 50.0,
+      "LookX": 12.0,
+      "LookY": -13.0,
+      "LookZ": -58.0,
+      "UpX": 0.0,
+      "UpY": 1.0,
+      "UpZ": 0.0
+    },
+    "NodeViews": [
+      {
+        "ShowGeometry": true,
+        "Name": "Python Script",
+        "Id": "a4b56056724646d4abb2b55d6bbbf414",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 271.67039515778754,
+        "Y": 7.47255005440951
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Output",
+        "Id": "df72830d124e4ab5b5441347f1cc79aa",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 454.69415325713953,
+        "Y": 8.9628308319473433
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Input",
+        "Id": "1216ab466d6a4f23b8eaa1780a08d3a3",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": -425.73905744251533,
+        "Y": 5.7068308691950165
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "© Revit.GetDocument",
+        "Id": "83b9fa10db4a4664965627f575fcd6e2",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": -25.739669250890984,
+        "Y": 7.397880863868636
+      }
+    ],
+    "Annotations": [],
+    "X": 360.07910150323346,
+    "Y": 307.65420896010414,
+    "Zoom": 0.85778497338186455
+  }
+}

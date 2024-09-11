@@ -1,0 +1,217 @@
+{
+  "Uuid": "33adfd91-c16a-4107-8628-99db69f27b22",
+  "IsCustomNode": true,
+  "Category": "Crumple.Data.Create",
+  "Description": "Deconstructs a string (or list of strings) into their characters. There is the option to replace spaces with a special character which can be helpful for delimiting or visual ergonomics.",
+  "Name": "© String.Explode",
+  "ElementResolver": {
+    "ResolutionMap": {}
+  },
+  "Inputs": [],
+  "Outputs": [],
+  "Nodes": [
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "# Made by Gavin Crump\r\n# Free for use\r\n# BIM Guru, www.bimguru.com.au\r\n# Similar to Clockwork, but also allows sub of spaces\r\n# I often found this was my next step to exploding strings\r\n\r\n# Define list/unwrap list functions\r\ndef tolist(input):\r\n    result = input if isinstance(input, list) else [input]\r\n    return result\r\n\r\ndef objOrList(input, initial = IN[0]):\r\n\tif isinstance(initial, list):\r\n\t\treturn input\r\n\telse:\r\n\t\treturn input[0]\r\n\r\n#Declare Input\r\nstrings = tolist(IN[0])\r\nsub  = IN[1]\r\n\r\n# Function to split strings\r\ndef splitChars(string, subStr = sub):\r\n\tchars = []\r\n\tfor c in string:\r\n\t\tif c == \"\":\r\n\t\t\tchars.append(subStr)\r\n\t\telse:\r\n\t\t\tchars.append(c)\r\n\treturn chars\r\n\r\n#Declare Output\r\nOUT = objOrList([splitChars(s) for s in strings])",
+      "Engine": "CPython3",
+      "VariableInputPorts": true,
+      "Id": "35f18aa224c3467581164ae163a8b92f",
+      "Inputs": [
+        {
+          "Id": "6328400d74ca4a5a871456ec76ce94fe",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "aca24eb7021347aa942267c5bbcd56bb",
+          "Name": "IN[1]",
+          "Description": "Input #1",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "2ebc1d474f8b4c07ac36f3eaac210d02",
+          "Name": "OUT",
+          "Description": "Result of the python script",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Runs an embedded Python script."
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.CustomNodes.Symbol, DynamoCore",
+      "NodeType": "InputNode",
+      "Parameter": {
+        "Name": "strings",
+        "TypeName": "var",
+        "TypeRank": -1,
+        "DefaultValue": null,
+        "Description": "Strings for exploding."
+      },
+      "Id": "1d6315c6014f4b80b7dc672d9b5e3296",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "ff08c446c49a4ad9900b07e34682dc78",
+          "Name": "",
+          "Description": "Symbol",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "A function parameter, use with custom nodes.\r\n\r\nYou can specify the type and default value for parameter. E.g.,\r\n\r\ninput : var[]..[]\r\nvalue : bool = false"
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.CustomNodes.Symbol, DynamoCore",
+      "NodeType": "InputNode",
+      "Parameter": {
+        "Name": "charReplace",
+        "TypeName": "string",
+        "TypeRank": 0,
+        "DefaultValue": "\" \"",
+        "Description": "Optional replacement for\nspaces once exploded."
+      },
+      "Id": "16a745b7470644c4a9f5b8110cb4cafe",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "43783f2d3b894903bb9e6924b85abbc6",
+          "Name": "",
+          "Description": "Symbol",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "A function parameter, use with custom nodes.\r\n\r\nYou can specify the type and default value for parameter. E.g.,\r\n\r\ninput : var[]..[]\r\nvalue : bool = false"
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.CustomNodes.Output, DynamoCore",
+      "NodeType": "OutputNode",
+      "ElementResolver": null,
+      "Symbol": "//Sublists of the exploded\r\n//characters per string.\r\nstringsOut",
+      "Id": "60d03a76b3554d1592b3ccfa7dc179df",
+      "Inputs": [
+        {
+          "Id": "05282044aaf64509ac483d210631f55b",
+          "Name": "",
+          "Description": "",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [],
+      "Replication": "Disabled",
+      "Description": "A function output, use with custom nodes"
+    }
+  ],
+  "Connectors": [
+    {
+      "Start": "2ebc1d474f8b4c07ac36f3eaac210d02",
+      "End": "05282044aaf64509ac483d210631f55b",
+      "Id": "d8ff34defdd34cafa1eb94996bd83cf1"
+    },
+    {
+      "Start": "ff08c446c49a4ad9900b07e34682dc78",
+      "End": "6328400d74ca4a5a871456ec76ce94fe",
+      "Id": "d0580582cbc44c44b5a46862ab9d14c3"
+    },
+    {
+      "Start": "43783f2d3b894903bb9e6924b85abbc6",
+      "End": "aca24eb7021347aa942267c5bbcd56bb",
+      "Id": "722267d5954f49c99fc5871f4816501a"
+    }
+  ],
+  "Dependencies": [],
+  "NodeLibraryDependencies": [],
+  "Author": "None provided",
+  "Bindings": [],
+  "View": {
+    "Dynamo": {
+      "ScaleFactor": 1.0,
+      "HasRunWithoutCrash": false,
+      "IsVisibleInDynamoLibrary": true,
+      "Version": "2.12.1.8246",
+      "RunType": "Manual",
+      "RunPeriod": "1000"
+    },
+    "Camera": {
+      "Name": "Background Preview",
+      "EyeX": -17.0,
+      "EyeY": 24.0,
+      "EyeZ": 50.0,
+      "LookX": 12.0,
+      "LookY": -13.0,
+      "LookZ": -58.0,
+      "UpX": 0.0,
+      "UpY": 1.0,
+      "UpZ": 0.0
+    },
+    "NodeViews": [
+      {
+        "ShowGeometry": true,
+        "Name": "Python Script",
+        "Id": "35f18aa224c3467581164ae163a8b92f",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 202.76977327762495,
+        "Y": 30.408502136323648
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Input",
+        "Id": "1d6315c6014f4b80b7dc672d9b5e3296",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": -155.34432696687202,
+        "Y": -23.349876707647354
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Input",
+        "Id": "16a745b7470644c4a9f5b8110cb4cafe",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": -154.697337559716,
+        "Y": 102.71151522758728
+      },
+      {
+        "ShowGeometry": true,
+        "Name": "Output",
+        "Id": "60d03a76b3554d1592b3ccfa7dc179df",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 412.76859319927394,
+        "Y": 30.408502136323619
+      }
+    ],
+    "Annotations": [],
+    "X": 83.188088044122935,
+    "Y": 220.3419151685101,
+    "Zoom": 1.3076413563671876
+  }
+}
