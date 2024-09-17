@@ -22,6 +22,8 @@ snapshot_view = doc.GetElement(snapshot_view_id)
 
 new_main_folder = snapshot_view.LookupParameter("SDC_Main-Folder").Set("DRAFTING")
 
+new_view_series = snapshot_view.LookupParameter("SDC_View-Series").Set("3D Views")
+
 new_sub_discipline = snapshot_view.LookupParameter("SDC_Sub-Discipline").Set("ARCHITECTURAL")
 
 new_view_group = snapshot_view.LookupParameter("SDC_View-Group").Set("INSPECTION")
