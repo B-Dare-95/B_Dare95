@@ -1,4 +1,5 @@
-__title__     = "Get Linked Element ID"
+# -*- coding: utf-8 -*-
+__title__     = "Linked Element"
 __author__    = "Mohamed Bedair"
 __version__   = 'Version = 1.0'
 __doc__       = """Version = 1.0
@@ -6,16 +7,16 @@ Date    = 21.12.2023
 _____________________________________________________________________
 Description:
 
-Gets Element ID.
+Gets Linked Element ID.
 _____________________________________________________________________
 How-to:
 
 -> Run the script
--> select an element
+-> select an element from a link(no tab required)
 -> copy and paste the resulting IDs
 _____________________________________________________________________
 Last update:
-- [19.9.2024] - 1.0 RELEASE
+- [21.12.2023] - 1.0 RELEASE
 _____________________________________________________________________
 Author: Mohamed Bedair"""
 
@@ -24,6 +25,7 @@ Author: Mohamed Bedair"""
 import clr
 clr.AddReference('RevitAPI')
 clr.AddReference('RevitAPIUI')
+from System.Collections.Generic import List
 from Autodesk.Revit.DB import *
 from Autodesk.Revit.UI.Selection import *
 
@@ -34,9 +36,9 @@ uidoc       =  __revit__.ActiveUIDocument
 selection   =  uidoc.Selection
 
 #Prompt user to Select a Linked Element
-ref_selected_element=selection.PickObjects(ObjectType.Element,"Select Linked Element") #type: Reference
+ref_selected_element=selection.PickObjects(ObjectType.LinkedElement,"Select Linked Element") #type: Reference
 
 #Get Linked Element ID from Resulting Reference
-for element in ref_selected_element:
-    element_id = element.Id
-    print("Element ID: " + str(element_id.IntegerValue))
+for lnk_elem in ref_selected_element:
+    lnk_id=lnk_elem.LinkedElementId
+    print("Element ID: "+ str(lnk_id.IntegerValue))
