@@ -39,4 +39,5 @@ ref_selected_element=selection.PickObjects(ObjectType.Element,"Select Linked Ele
 #Get Linked Element ID from Resulting Reference
 for ref_element in ref_selected_element:
     element_id = doc.GetElement(ref_element).Id
-    print("Element ID: " + str(element_id.IntegerValue))
+    element_name = doc.GetElement(ref_element).Name
+    print("Element Name : " + element_name + ">>ID: " + str(element_id.IntegerValue))

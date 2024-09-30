@@ -36,9 +36,16 @@ uidoc       =  __revit__.ActiveUIDocument
 selection   =  uidoc.Selection
 
 #Prompt user to Select a Linked Element
-ref_selected_element=selection.PickObjects(ObjectType.LinkedElement,"Select Linked Element") #type: Reference
+ref_selected_elements=selection.PickObjects(ObjectType.LinkedElement,"Select Linked Element") #type: Reference
 
-#Get Linked Element ID from Resulting Reference
-for lnk_elem in ref_selected_element:
-    lnk_id=lnk_elem.LinkedElementId
-    print("Element ID: "+ str(lnk_id.IntegerValue))
+
+for lnk_elem in ref_selected_elements:
+    ref_lnk_id=lnk_elem.LinkedElementId
+
+    selected_element = doc.GetElement(lnk_elem.ElementId)
+
+    linked_doc = selected_element.GetLinkDocument()
+
+    lnkd_selected_element = linked_doc.GetElement(ref_lnk_id)
+
+    print("Element Name : " + lnkd_selected_element.Name + " >> ID: " + str(ref_lnk_id.IntegerValue))
