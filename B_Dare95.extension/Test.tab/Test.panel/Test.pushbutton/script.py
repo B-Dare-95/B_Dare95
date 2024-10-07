@@ -15,19 +15,17 @@ app         = __revit__.Application
 active_view = doc.ActiveView
 output = script.get_output()
 
-unknown_id = int(forms.ask_for_string(
-    default='ID',
-    prompt='Enter ID to search:',
-    title="What's This ID?"))
+#Select Element
 
-all_elements=FilteredElementCollector(doc).WhereElementIsNotElementType().ToElements()
+element_reference = selection.PickObject(ObjectType.Element,"Select Element")
+selected_element = doc.GetElement(element_reference.ElementId)
 
-unknown_element = [element for element in all_elements if element.Id.IntegerValue == unknown_id]
+element_geometry = (selected_element.get_Geometry(Options()))
 
-if not unknown_element:
-    TaskDialog.Show("What's This ID?","Element not found, Please Try Again")
+enum = element_geometry.GetEnumerator()
 
-else: print(unknown_element)
+for e in enum:
+    print(e)
 
 
 
