@@ -22,10 +22,15 @@ selected_element = doc.GetElement(element_reference.ElementId)
 
 element_geometry = (selected_element.get_Geometry(Options()))
 
+print(element_geometry)
 enum = element_geometry.GetEnumerator()
+print (enum)
 
 for e in enum:
     print(e)
+#     element_faces = e.Faces
+    # for face in element_faces:
+    #     # print(face)
 
 
 
