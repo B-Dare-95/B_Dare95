@@ -11,7 +11,6 @@ from pyrevit import forms, revit
 uidoc       = __revit__.ActiveUIDocument
 doc         = __revit__.ActiveUIDocument.Document
 selection   = uidoc.Selection
-app         = __revit__.Application
 active_view = doc.ActiveView
 
 
