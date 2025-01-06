@@ -16,50 +16,75 @@ app         = __revit__.Application
 active_view = doc.ActiveView
 output      = script.get_output()
 
-########################################################################################################################
+#Special Variables
 
+#Special Functions
+
+def create_text_by_point(point,text):
+    text_type_id = FilteredElementCollector(doc).OfClass(TextNoteType).FirstElementId()
+    pt = point
+    TextNote.Create(doc, active_view.Id, pt, text, text_type_id)
+
+########################################################################################################################
+#Get All Rooms
 all_rooms = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Rooms).WhereElementIsNotElementType().ToElements()
 
+#Get Only Bounded Rooms
+only_bound_rooms = [room for room in all_rooms
+                    if not room.LookupParameter("Area").AsDouble() == 0
+                    or not room.LookupParameter("Volume").AsDouble() == 0]
+
+#Empty Lists
 room_dictionary = {}
 
-for room in all_rooms:
+room_bounds     = []
+room_centers    = []
 
-#Get Room Location Point
-    room_location = room.Location
-    room_location_point = room_location.Point
+for room in only_bound_rooms:
 
-#Get Room Boundaries
-    room_bounds_list = room.GetBoundarySegments(SpatialElementBoundaryOptions())
+    # Create Solids from Rooms to Get Centroids
+    room_bounds_list = room.GetBoundarySegments(SpatialElementBoundaryOptions()) #List of List of Boundary Segments, Each Segment in a List
 
+    profile = CurveLoop()
     for bound_list in room_bounds_list:
-        room_dictionary.update({room_location_point:bound_list})
+
+        room_bounds.append(bound_list)
+
+        for bound in bound_list:
+            profile.Append(bound.GetCurve().CreateTransformed(Transform.CreateTranslation(XYZ(0, 0, 0))))
+            if profile.IsOpen():
+                continue
+            room_solid = GeometryCreationUtilities.CreateExtrusionGeometry([profile], XYZ.BasisZ, 0.00001)
+            room_center = room_solid.ComputeCentroid()
+
+            room_centers.append(room_center)
+
+for center,bound_list in zip(room_centers,room_bounds):
+    room_dictionary[center] = bound_list
+
+# for center,lst in room_dictionary.items():
+#     for bound in bound_list:
+        #Get Room Boundary as Curve
+        # bound_curve = bound.GetCurve().CreateTransformed(Transform.CreateTranslation(XYZ(0, 0, 0)))
+#
+#         #Get The Midpoint of Each Room Boundary
+#         bound_midpoint = bound_curve.Evaluate(0.5, True)
+#
+#         #Create Vector from Boundary Midpoint to Room Location Point
+#         vektor = bound_midpoint.Subtract(center)
+#         opposite_vektor = vektor.Negate()
+#
+#         inspection_point = bound_midpoint.Add(vektor)
 
 
+# t=Transaction(doc,"Test Point")
+# t.Start()
+#
+# create_text_by_point(center,"O")
+#
+# t.Commit()
 
-for k,v in room_dictionary.items():
-    #Get Lines from Boundary Segment Lists
-    for bound in v:
-        #Get The Bounding Element
-        bounding_element = doc.GetElement(bound.ElementId)
 
-        #Get The Midpoint of Bounding Element
-        if isinstance(bounding_element,Wall):
-            location_curve = bounding_element.Location
-            bound_midpoint = location_curve.Curve.Evaluate(0.5,True)
-
-            #Create Vector from Boundary Midpoint to Room Location Point
-            vektor =  bound_midpoint.Add(k)
-            #Negate The Vector
-            opposite_vektor = vektor.Negate()
-
-            inspection_point = bound_midpoint.Move(opposite_vektor)
-            print(inspection_point)
-
-            moved_curve = location_curve.Move(opposite_vektor)
-
-            new_inspection_point = moved_curve.Curve.Evaluate(0.5,True)
-
-            print(new_inspection_point)
 
 
 
