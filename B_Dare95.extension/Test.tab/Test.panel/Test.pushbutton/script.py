@@ -20,10 +20,10 @@ output      = script.get_output()
 
 #Special Functions
 
-def create_text_by_point(point,text):
+def create_text_by_point(point_list,text):
     text_type_id = FilteredElementCollector(doc).OfClass(TextNoteType).FirstElementId()
-    pt = point
-    TextNote.Create(doc, active_view.Id, pt, text, text_type_id)
+    for pt in point_list:
+        TextNote.Create(doc, active_view.Id, pt, text, text_type_id)
 
 ########################################################################################################################
 #Get All Rooms
@@ -62,30 +62,29 @@ for room in only_bound_rooms:
 for center,bound_list in zip(room_centers,room_bounds):
     room_dictionary[center] = bound_list
 
-# for center,lst in room_dictionary.items():
-#     for bound in bound_list:
-        #Get Room Boundary as Curve
-        # bound_curve = bound.GetCurve().CreateTransformed(Transform.CreateTranslation(XYZ(0, 0, 0)))
-#
-#         #Get The Midpoint of Each Room Boundary
-#         bound_midpoint = bound_curve.Evaluate(0.5, True)
-#
-#         #Create Vector from Boundary Midpoint to Room Location Point
-#         vektor = bound_midpoint.Subtract(center)
-#         opposite_vektor = vektor.Negate()
-#
-#         inspection_point = bound_midpoint.Add(vektor)
 
+for center,bound_list in room_dictionary.items():
+    for bound in bound_list:
+        points = []
+        # Get Room Boundary as Curve
+        bound_curve = bound.GetCurve().CreateTransformed(Transform.CreateTranslation(XYZ(0, 0, 0)))
+
+        #Get The Midpoint of Each Room Boundary
+        bound_midpoint = bound_curve.Evaluate(0.5, True)
+
+        #Create Vector from Boundary Midpoint to Room Location Point
+        vektor = bound_midpoint.Subtract(center)
+        opposite_vektor = vektor.Negate()
+
+        inspection_point = bound_midpoint.Add(vektor)
+        points.append(inspection_point)
 
 # t=Transaction(doc,"Test Point")
 # t.Start()
 #
-# create_text_by_point(center,"O")
+# create_text_by_point(points,"O")
 #
 # t.Commit()
-
-
-
 
 
 
