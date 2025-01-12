@@ -37,6 +37,7 @@
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col3.stack/Color Walls.pulldown/INT vs EXT.pushbutton/INTvsEXT_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/Test.tab/Test.panel/Python Test.pushbutton/PTest_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/Test.tab/Test.panel/Test 2.pushbutton/script.py" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/Test.tab/Tools.panel/Get Origin.pushbutton/script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/Test.tab/Tools.panel/Get Point.pushbutton/script.py" root0="SKIP_INSPECTION" />
   </component>
   <component name="ProjectColorInfo">{
