@@ -9,10 +9,14 @@ selection   = uidoc.Selection
 origin_point = XYZ(0,0,0)
 all_txt_note_types=FilteredElementCollector(doc).OfClass(TextNoteType).ToElements()
 
-t=Transaction(doc,"Origin Point Placer")
+t=Transaction(doc,"Place Origin Point")
 
 t.Start()
 
 text_note = TextNote.Create(doc,doc.ActiveView.Id,origin_point,"(0,0,0)",all_txt_note_types[2].Id)
+
+arc = Arc.Create(origin_point,10,0,359,XYZ.BasisX,XYZ.BasisY)
+
+drawn_arc = DirectShape.CreateElement(doc,ElementId(BuiltInCategory.OST_GenericModel)).SetShape([arc])
 
 t.Commit()
