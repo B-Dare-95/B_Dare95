@@ -39,6 +39,7 @@ room_dictionary = {}
 
 room_bounds     = []
 room_centers    = []
+room_inspection_points = []
 
 for room in only_bound_rooms:
 
@@ -78,16 +79,9 @@ for center,bound_list in room_dictionary.items():
 
         inspection_point = bound_midpoint.Add(vektor)
         points.append(inspection_point)
+        room_inspection_points.append(points)
 
-t=Transaction(doc,"Test Point")
-t.Start()
-
-create_text_by_point(points,"O")
-
-t.Commit()
-
-
-
+print(room_inspection_points)
 
 
 
