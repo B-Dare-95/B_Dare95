@@ -15,3 +15,4 @@ selection   = uidoc.Selection
 app         = __revit__.Application
 active_view = doc.ActiveView
 output      = script.get_output()
+
