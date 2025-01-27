@@ -1,4 +1,12 @@
 # -*- coding: utf-8 -*-
+__title__   = "Highlight MEP"
+__doc__     = """Version = 1.0
+________________________________________________________________
+Description:
+- Press the Button to Highlight all MEP Elements
+- Press+Shift to Reset The Highlight
+________________________________________________________________
+Author: Mohamed Bedair"""
 
 #Imports
 from Autodesk.Revit.DB import *

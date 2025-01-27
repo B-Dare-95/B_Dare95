@@ -25,7 +25,7 @@ for room in only_bound_rooms:
     room_solids.append(room_solid)
     if profile.IsOpen():
         continue
-
+#Collecting Solid patterns
 all_patterns  = FilteredElementCollector(doc).OfClass(FillPatternElement).ToElements()
 solid_pattern = [i for i in all_patterns if i.GetFillPattern().IsSolidFill][0]
 
