@@ -34,137 +34,55 @@ only_bound_rooms = [room for room in all_rooms
                     if not room.LookupParameter("Area").AsDouble() == 0
                     or not room.LookupParameter("Volume").AsDouble() == 0]
 
-#Empty Lists
-room_dictionary = {}
+# wall_type_dictionary = {wall_type.LookupParameter("Type Name").AsString() : wall_type for wall_type in all_wall_types
+#                         if "FIN" in wall_type.LookupParameter("Type Name").AsString() }
 
-room_bounds     = []
-room_centers    = []
-room_inspection_points = []
+#Empty Lists
 
 for room in only_bound_rooms:
 
     # Create Solids from Rooms to Get Centroids
     room_bounds_list = room.GetBoundarySegments(SpatialElementBoundaryOptions()) #List of List of Boundary Segments, Each Segment in a List
 
+    # Create Solid from Room
     profile = CurveLoop()
+
     for bound_list in room_bounds_list:
 
-        room_bounds.append(bound_list)
-
         for bound in bound_list:
-            profile.Append(bound.GetCurve().CreateTransformed(Transform.CreateTranslation(XYZ(0, 0, 0))))
+
+            bound_curve = bound.GetCurve().CreateTransformed(Transform.CreateTranslation(XYZ(0, 0, 0)))
+
+            profile.Append(bound_curve)
+
             if profile.IsOpen():
                 continue
+
+            #Create a Provisional Solid to compute the room center
             room_solid = GeometryCreationUtilities.CreateExtrusionGeometry([profile], XYZ.BasisZ, 0.00001)
+
             room_center = room_solid.ComputeCentroid()
 
-            room_centers.append(room_center)
-
-for center,bound_list in zip(room_centers,room_bounds):
-    room_dictionary[center] = bound_list
-
-
-for center,bound_list in room_dictionary.items():
-    for bound in bound_list:
-        points = []
-        # Get Room Boundary as Curve
-        bound_curve = bound.GetCurve().CreateTransformed(Transform.CreateTranslation(XYZ(0, 0, 0)))
-
-        #Get The Midpoint of Each Room Boundary
-        bound_midpoint = bound_curve.Evaluate(0.5, True)
-
-        #Create Vector from Boundary Midpoint to Room Location Point
-        vektor = bound_midpoint.Subtract(center)
-        opposite_vektor = vektor.Negate()
-
-        inspection_point = bound_midpoint.Add(vektor)
-        points.append(inspection_point)
-        room_inspection_points.append(points)
-
-print(room_inspection_points)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# element_reference = selection.PickObject(ObjectType.Element,"Select Element")
-# selected_element = doc.GetElement(element_reference.ElementId)
+            # with Transaction(doc,"Room Center") as t:
+            #
+            #     text_type_id = FilteredElementCollector(doc).OfClass(TextNoteType).FirstElementId()
+            #
+            #     t.Start()
+            #
+            #     TextNote.Create(doc, active_view.Id, room_center,"C",text_type_id)
+            #
+            #     t.Commit()
+
+            # Get The Midpoint of Each Room Boundary
+            bound_midpoint = bound_curve.Evaluate(0.5, True)
+
+            # Create Vector from Boundary Midpoint to Room Location Point
+            vektor = bound_midpoint.Subtract(room_center)
+
+            opposite_vektor = vektor.Negate()
+
+            inspection_point = bound_midpoint.Add(vektor)
+
+            print(inspection_point)
 #
-# element_geometry = (selected_element.get_Geometry(Options()))
-#
-# print(element_geometry)
-# enum = element_geometry.GetEnumerator()
-# print (enum)
-#
-# for e in enum:
-#     print(e)
-
-
-
-
-
-
-
-
-
-
+# # print(room_inspection_points)
