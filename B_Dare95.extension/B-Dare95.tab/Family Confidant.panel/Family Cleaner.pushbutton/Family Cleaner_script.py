@@ -26,6 +26,7 @@ clr.AddReference("RevitAPIUI")
 
 from pyrevit import forms,script
 from Autodesk.Revit.DB import *
+from Autodesk.Revit.UI import *
 
 # Variables
 doc = __revit__.ActiveUIDocument.Document
@@ -61,6 +62,6 @@ if doc.IsFamilyDocument:
     t.Commit()
 
 else:
-    print("Please Run this Tool in a Family Document")
+    TaskDialog.Show("Family Cleaner","Please, Use this Tool in a Family Document Only")
     pass
     script.exit()
