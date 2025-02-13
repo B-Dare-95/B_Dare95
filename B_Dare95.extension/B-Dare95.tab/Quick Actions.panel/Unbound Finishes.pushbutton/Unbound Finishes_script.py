@@ -8,7 +8,7 @@ all_walls=FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Walls).Wh
 
 finish_walls=[wall for wall in all_walls if "_FIN_" in wall.Name]
 
-t=Transaction(doc,"Unbound Finishes")
+t=Transaction(doc,"Unbound Finishes.panel")
 
 t.Start()
 

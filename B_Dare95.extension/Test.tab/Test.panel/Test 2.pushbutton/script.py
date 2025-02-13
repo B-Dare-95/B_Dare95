@@ -61,7 +61,7 @@ selected_wall_type = wall_type_dictionary[selected_type_name]
 wall_type_id = selected_wall_type.Id
 wall_width = selected_wall_type.Width
 
-with Transaction(doc,"Create Wall Finishes") as t:
+with Transaction(doc,"Create Wall Finishes.panel") as t:
 
     t.Start()
     for bound in profile:
