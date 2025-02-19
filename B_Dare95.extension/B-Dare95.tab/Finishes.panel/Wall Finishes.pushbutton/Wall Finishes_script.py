@@ -18,13 +18,34 @@ from pyrevit import EXEC_PARAMS
 uidoc = __revit__.ActiveUIDocument
 doc = __revit__.ActiveUIDocument.Document
 
+#CLASSES
+class SupressWarnings(IFailuresPreprocessor):
+    def PreprocessFailures(self, failuresAccessor):
+        try:
+            failures = failuresAccessor.GetFailureMessages()
+
+            for fail in failures: #type: FailureMessageAccessor
+                severity    = fail.GetSeverity()
+                description = fail.GetDescriptionText()
+                fail_id     = fail.GetFailureDefinitionId()
+
+                if severity == FailureSeverity.Warning:
+
+                    if fail_id == BuiltInFailures.JoinElementsFailures.JoiningDisjointWarn:
+                        failuresAccessor.DeleteWarning(fail)
+                    else:
+                        pass
+        except:
+            import traceback
+            print(traceback.format_exc())
+
+        return FailureProcessingResult.Continue
 
 # Override ISelectionFilter to Select Rooms
 class RoomFilter(ISelectionFilter):
     def AllowElement(self, elem):
         if elem.Category.Name == "Rooms":
             return True
-
 
 try:
     reference_room = uidoc.Selection.PickObject(ObjectType.Element, RoomFilter(), "Select Room")
@@ -98,5 +119,11 @@ for wall1 in new_walls:
             JoinGeometryUtils.JoinGeometry(doc, wall1, wall2)
         except:
             pass
+
+#💡 Assign Error Handler
+
+fail_hand_opts = t.GetFailureHandlingOptions()
+fail_hand_opts.SetFailuresPreprocessor(SupressWarnings())
+t.SetFailureHandlingOptions(fail_hand_opts)
 
 t.Commit()

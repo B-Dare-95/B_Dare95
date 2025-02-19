@@ -14,9 +14,11 @@ How-to:
 -> Run the script
 -> select desired categories from the menu
 -> the selection box will only highlight selected categories
+
 _____________________________________________________________________
 Last update:
-- [24.11.2023] - 1.0 RELEASE
+- [19.02.2025] - 1.1.0 RELEASE
+Added Feature to Negate Selection with SHIFT Click
 _____________________________________________________________________
 Author: Mohamed Bedair"""
 
@@ -27,6 +29,7 @@ from System.Collections.Generic import List
 from Autodesk.Revit.DB import *
 from Autodesk.Revit.UI.Selection import *
 from pyrevit import forms,script
+from pyrevit import EXEC_PARAMS
 
 #Variables
 doc         =__revit__.ActiveUIDocument.Document
@@ -42,6 +45,7 @@ class CustomISelectionFilter(ISelectionFilter):
             return True
         else:
             return False
+
 # 👆 This part compares the given category name to its actual Category name in Revit DB
 
 #List of Category Names
@@ -54,21 +58,42 @@ all_cats=get_all_cats(doc)
 
 names_choose=sorted(all_cats)
 
-names_chosen=forms.SelectFromList.show(names_choose,title="Choose Categories"\
-                                       ,width=300\
-                                       ,button_name="Make A Selection"\
-                                       ,multiselect=True)
-if not names_chosen:
-    script.exit()
+if EXEC_PARAMS.config_mode:
+
+    names_chosen = forms.SelectFromList.show(names_choose, title="Choose Categories" \
+                                             , width=300 \
+                                             , button_name="Make A Selection" \
+                                             , multiselect=True)
+    if not names_chosen:
+        script.exit()
+
+    try:
+        negate_selected_elements = selection.PickElementsByRectangle("Select Elements")
+
+        el_ids = [el.Id for el in negate_selected_elements if not el.Category.Name in names_chosen]
+        List_el_ids = List[ElementId](el_ids)
+
+        uidoc.Selection.SetElementIds(List_el_ids)
+    except:
+        script.exit()
+
 else:
-    sel_elems=[]
+    names_chosen=forms.SelectFromList.show(names_choose,title="Choose Categories"\
+                                           ,width=300\
+                                           ,button_name="Make A Selection"\
+                                           ,multiselect=True)
+    if not names_chosen:
+        script.exit()
+
     try:
         sel_filter=CustomISelectionFilter(names_chosen)
         selected_elements =selection.PickElementsByRectangle(sel_filter,"Select Elements")
+        el_ids = [el.Id for el in selected_elements]
+        List_el_ids = List[ElementId](el_ids)
+
+        uidoc.Selection.SetElementIds(List_el_ids)
     except:
-        sel_elems=[]
+        script.exit()
 
-el_ids      = [el.Id for el in selected_elements]
-List_el_ids = List[ElementId](el_ids)
 
-uidoc.Selection.SetElementIds(List_el_ids)
+
