@@ -7,8 +7,15 @@
     <list default="true" id="97e5514c-6192-402f-877a-0503c0f802f5" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Finishes.panel/Wall Finishes.pushbutton/Wall Finishes_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Finishes.panel/Wall Finishes.pushbutton/Wall Finishes_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Pre-Filter Selection.pushbutton/Button_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Pre-Filter Selection.pushbutton/Button_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/hooks/failure-processing.py" beforeDir="false" afterPath="$PROJECT_DIR$/hooks/failure-processing.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Links.panel/Bulk Copy From Link.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Links.panel/Bulk Copy From Link.pushbutton/script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Links.panel/Link Inspector.pushbutton/Link Inspector_script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Links.panel/Link Inspector.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Links.panel/Link Workset Inspector.pushbutton/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Openings Generator.panel/Auto Doors.pushbutton/Auto Doors_script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Openings Generator.panel/Auto Doors.pushbutton/icon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Openings Generator.panel/Auto Windows.pushbutton/Auto Windows_script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Openings Generator.panel/Auto Windows.pushbutton/icon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/bundle.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/bundle.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test 3.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Test 3.pushbutton/script.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -26,6 +33,9 @@
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />
   </component>
   <component name="HighlightingSettingsPerFile">
+    <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Finishes.panel/Wall Finishes.pushbutton/Wall Finishes_script.py" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Links.panel/Bulk Copy From Link.pushbutton/script.py" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Links.panel/Link Workset Inspector.pushbutton/Link Workset Inspector_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Pre-Filter Selection.pushbutton/Button_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Wall Peeler.pushbutton/Wall Splitter_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col2.stack/Master Selection.pushbutton/Master Selection_script.py" root0="SKIP_INSPECTION" />
@@ -89,5 +99,16 @@
       <updated>1727900284756</updated>
     </task>
     <servers />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/B-Dare95.tab/Openings Generator.panel/Auto Windows.pushbutton/Auto Windows_script.py</url>
+          <line>4</line>
+          <option name="timeStamp" value="1" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
   </component>
 </project>

@@ -29,13 +29,14 @@ clr.AddReference('RevitAPIUI')
 from System.Collections.Generic import List
 from Autodesk.Revit.DB import *
 from Autodesk.Revit.UI.Selection import *
-from pyrevit import script
+from pyrevit import script,EXEC_PARAMS
 
 #VARIABLES
 
-doc         =__revit__.ActiveUIDocument.Document
-uidoc       =__revit__.ActiveUIDocument
-selection   =uidoc.Selection
+doc         = __revit__.ActiveUIDocument.Document
+uidoc       = __revit__.ActiveUIDocument
+selection   = uidoc.Selection
+active_view = doc.ActiveView
 
 #Prompt user to Select a Linked Element
 

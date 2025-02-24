@@ -1,5 +1,29 @@
 # -*- coding: utf-8 -*-
+
+__title__     = "Wall Finish Generator"
+__author__    = "Mohamed Bedair"
+__version__   = 'Version = 1.0'
+__doc__       = """Version = 1.0
+Date    = 20.02.2025
+_____________________________________________________________________
+Description:
+
+Creates Wall Finishes from selected Rooms.
+_____________________________________________________________________
+How-to:
+
+-> Run the script
+-> Select a Room
+-> Select The Wall Type for Finish
+-> Done!
+_____________________________________________________________________
+Last update:
+- [20.02.2025] - 1.0.0 RELEASE
+_____________________________________________________________________
+Author: Mohamed Bedair"""
+
 # Imports
+
 from Autodesk.Revit.DB import *
 from Autodesk.Revit.UI import *
 from Autodesk.Revit.UI.Selection import *
@@ -83,6 +107,13 @@ room_level = element_room.Level
 level_id = room_level.Id
 room_bounds_list = element_room.GetBoundarySegments(SpatialElementBoundaryOptions())
 
+room_volume = element_room.get_Parameter(BuiltInParameter.ROOM_VOLUME).AsDouble()
+
+room_area = element_room.get_Parameter(BuiltInParameter.ROOM_AREA).AsDouble()
+
+room_height = room_volume / room_area
+
+offset = UnitUtils.ConvertToInternalUnits(100, UnitTypeId.Millimeters)
 
 t = Transaction(doc, "Create Wall Finishes.panel")
 
@@ -108,7 +139,11 @@ for bound_list in room_bounds_list:
 
         new_wall = Wall.Create(doc, new_curve, wall_type_id, level_id, height, 0, False, False)
 
-        new_wall.get_Parameter(BuiltInParameter.WALL_USER_HEIGHT_PARAM).Set(bounding_wall_height)
+        if room_volume == 0:
+            new_wall.get_Parameter(BuiltInParameter.WALL_USER_HEIGHT_PARAM).Set(bounding_wall_height)
+
+        else:
+            new_wall.get_Parameter(BuiltInParameter.WALL_USER_HEIGHT_PARAM).Set(room_height+offset)
 
         new_walls.append(new_wall)
 
