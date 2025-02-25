@@ -58,23 +58,7 @@ categories_to_hide = [category for category in all_categories
                       if any(keyword.lower() in category.Name.lower() for keyword in category_names_to_hide)]
 
 
-override_settings = OverrideGraphicSettings()
-override_settings.SetSurfaceTransparency(95)
 
-t=Transaction(doc,"MEP Highlight")
-t.Start()
-
-doc.ActiveView.DisplayStyle = DisplayStyle.Shading
-
-doc.ActiveView.SetCategoryHidden(line_category.Id, True)
-
-for category in categories_to_hide:
-    try:
-        doc.ActiveView.SetCategoryOverrides(category.Id, override_settings)
-
-    except:
-        continue
-t.Commit()
 
 reset_override = OverrideGraphicSettings()
 
@@ -86,6 +70,25 @@ if EXEC_PARAMS.config_mode:
     for category in all_categories:
         try:
             doc.ActiveView.SetCategoryOverrides(category.Id, reset_override)
+        except:
+            pass
+    t.Commit()
+
+else:    
+    override_settings = OverrideGraphicSettings()
+    override_settings.SetSurfaceTransparency(95)
+
+    t=Transaction(doc,"MEP Highlight")
+    t.Start()
+
+    doc.ActiveView.DisplayStyle = DisplayStyle.Shading
+
+    doc.ActiveView.SetCategoryHidden(line_category.Id, True)
+
+    for category in categories_to_hide:
+        try:
+            doc.ActiveView.SetCategoryOverrides(category.Id, override_settings)
+
         except:
             continue
     t.Commit()

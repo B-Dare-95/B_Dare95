@@ -38,7 +38,6 @@ interior_walls_color = Color(102,175,253)
 exterior_walls_color = Color(250, 214, 112)
 
 
-reset_override = OverrideGraphicSettings()
 
 
 #Create Interior Graphic Settings
@@ -59,17 +58,7 @@ override_settings_exterior.SetSurfaceForegroundPatternColor(exterior_walls_color
 override_settings_exterior.SetCutForegroundPatternId(solid_pattern.Id)
 override_settings_exterior.SetCutForegroundPatternColor(exterior_walls_color)
 
-t = Transaction(doc,"Colorize Walls (INT.vs.EXT)")
-
-t.Start()
-
-for wall in interior_walls:
-    doc.ActiveView.SetElementOverrides(wall.Id, override_settings_interior)
-
-for wall in exterior_walls:
-    doc.ActiveView.SetElementOverrides(wall.Id, override_settings_exterior)
-
-t.Commit()
+reset_override = OverrideGraphicSettings()
 
 if EXEC_PARAMS.config_mode:
     t = Transaction(doc, "Reset Colorize")
@@ -81,5 +70,18 @@ if EXEC_PARAMS.config_mode:
 
     for wall in exterior_walls:
         doc.ActiveView.SetElementOverrides(wall.Id, reset_override)
+
+    t.Commit()
+
+else:
+    t = Transaction(doc, "Colorize Walls (INT.vs.EXT)")
+
+    t.Start()
+
+    for wall in interior_walls:
+        doc.ActiveView.SetElementOverrides(wall.Id, override_settings_interior)
+
+    for wall in exterior_walls:
+        doc.ActiveView.SetElementOverrides(wall.Id, override_settings_exterior)
 
     t.Commit()
