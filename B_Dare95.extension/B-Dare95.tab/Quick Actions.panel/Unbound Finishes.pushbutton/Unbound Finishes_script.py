@@ -1,8 +1,15 @@
 # -*- coding: utf-8 -*-
+__title__   = "Unbound Finish Walls"
+__doc__     = """Version = 1.0
+________________________________________________________________
+Description:
+- Press the Button to remove Room Bounding from Finish Walls
+________________________________________________________________
+Author: Mohamed Bedair"""
 
 from Autodesk.Revit.DB import *
 
-doc         =__revit__.ActiveUIDocument.Document
+doc =__revit__.ActiveUIDocument.Document
 
 all_walls=FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Walls).WhereElementIsNotElementType().ToElements()
 
