@@ -5,17 +5,16 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="97e5514c-6192-402f-877a-0503c0f802f5" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Test 3.pushbutton/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/.name" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.name" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Diyar.panel/User Guide.urlbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Diyar.panel/User Guide.urlbutton/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Finishes.panel/Wall Finishes.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Finishes.panel/Wall Finishes.pushbutton/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/Add Issue VIew.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/Add Issue VIew.pushbutton/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Unbound Finishes.pushbutton/Unbound Finishes_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Unbound Finishes.pushbutton/Unbound Finishes_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col3.stack/Color Walls.pulldown/Fire Rated Walls.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col3.stack/Color Walls.pulldown/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col3.stack/Color Walls.pulldown/INT vs EXT.pushbutton/icon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/3D Rooms.pushbutton/3D Rooms_script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/3D Rooms.pushbutton/icon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Unbound Finishes.pushbutton/Unbound Finishes_script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Unbound Finishes.pushbutton/icon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col3.stack/Highlight MEP.pushbutton/Highlight MEP_script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col3.stack/Highlight MEP.pushbutton/icon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/bundle.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/bundle.yaml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test 1.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Test 1.pushbutton/script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test 2.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Test 2.pushbutton/script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test 3.pushbutton/New Text Document.txt" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -66,24 +65,24 @@
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
     "git-widget-placeholder": "main",
-    "last_opened_file_path": "C:/Users/mohamed.bedair/Documents/GitHub/B_Dare95/B_Dare95.extension/B-Dare95.tab/Quick Actions.panel/col3.stack/Color Walls.pulldown",
+    "last_opened_file_path": "C:/Users/mohamed.bedair/Documents/GitHub/B_Dare95/B_Dare95.extension/B-Dare95.tab/Toggles.panel/Unbound Finishes.pushbutton",
     "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable"
   }
 }]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Toggles.panel\Unbound Finishes.pushbutton" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Quick Actions.panel\col3.stack\Color Walls.pulldown" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\Test.tab\Test.panel\Test 3.pushbutton" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\Test.tab\Test.panel\Test 1.pushbutton" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Quick Actions.panel\col3.stack\Color Walls.pulldown\Fire Rated Walls.pushbutton" />
-      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Quick Actions.panel\col2.stack" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Toggles.panel" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Diyar.panel\User Guide.urlbutton" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Finishes.panel\Wall Finishes.pushbutton" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Inspection.panel\Add Issue VIew.pushbutton" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\Test.tab\Test.panel\Test 1.pushbutton" />
-      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\Test.tab\Test.panel\Test 3.pushbutton" />
     </key>
   </component>
   <component name="SharedIndexes">

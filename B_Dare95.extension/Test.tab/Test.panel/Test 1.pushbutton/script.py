@@ -26,8 +26,18 @@ output      = script.get_output()
 #         TextNote.Create(doc, active_view.Id, pt, text, text_type_id)
 #
 # ########################################################################################################################
-# #Get All Rooms
-# all_rooms = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Rooms).WhereElementIsNotElementType().ToElements()
+#Get All Rooms
+all_rooms = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Rooms).WhereElementIsNotElementType().ToElements()
+
+areas = []
+
+for room in all_rooms:
+    room_area = UnitUtils.ConvertToInternalUnits(room.get_Parameter(BuiltInParameter.ROOM_AREA).AsDouble(), UnitTypeId.SquareMeters)
+    if not room_area:
+        continue
+    areas.append(room_area)
+
+print(sum(areas))
 #
 # #Get Only Bounded Rooms
 # only_bound_rooms = [room for room in all_rooms
