@@ -2,7 +2,7 @@
 import System.Diagnostics
 
 # Specify the file path
-pdf_file_path = r'Y:\Architectural Public\Mohamed Bedair_AR\اعتماد دليل تصميم مواقف السيارات.pdf'
+pdf_file_path = r"I:\CODE-Practice\اعتماد دليل تصميم مواقف السيارات.pdf"
 
 try:
     # Open the PDF file using the default PDF viewer on Windows

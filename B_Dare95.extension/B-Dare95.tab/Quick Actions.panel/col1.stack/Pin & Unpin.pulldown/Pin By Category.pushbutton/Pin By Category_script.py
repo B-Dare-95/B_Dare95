@@ -18,6 +18,9 @@ cats_chosen = forms.SelectFromList.show(all_cats, title="Choose Category" \
                                                 , button_name="Done" \
                                                 , multiselect=True)
 
+if not cats_chosen:
+    script.exit()
+
 for chosen_cat in cats_chosen:
     for cat in doc.Settings.Categories:
         if cat.Name == chosen_cat:

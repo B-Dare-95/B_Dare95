@@ -1,7 +1,7 @@
 import System.Diagnostics
 
 # Specify the file path
-pdf_file_path = r'Y:\Architectural Public\Mohamed Bedair_AR\SBC_Code_201_2018.pdf'
+pdf_file_path = r"I:\CODES & DETAILS\SBC_2018\SBC_Code_201_2018.pdf"
 
 try:
     # Open the PDF file using the default PDF viewer on Windows

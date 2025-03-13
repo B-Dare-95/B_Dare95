@@ -65,14 +65,23 @@ bounded_rooms = check_room_area(all_rooms)
 
 room_dictionary = get_rooms_bounds(bounded_rooms)
 
-#Get Plan Views
-plan_views = [view
-              for view in all_views
-              if view.LookupParameter("SDC_VIEW_SERIES").AsString() == "A100_FLOOR_PLANS"
-              and
-              view.LookupParameter("SDC_GROUPS").AsString() == "PARTIAL_PLANS"
-              and
-              not view.IsTemplate]
+plan_views_names = [view.Name for view in all_views if not view.IsTemplate and view.ViewType == ViewType.FloorPlan]
+
+selected_view_names = forms.SelectFromList.show(plan_views_names, title="Choose Views"
+                                                , width=300
+                                                , button_name="Done"
+                                                , multiselect=True)
+
+if not selected_view_names:
+    pass
+    script.exit()
+
+plan_views = [view for view in all_views if view.Name in selected_view_names]
+
+#Failsafe if no views are found
+if len(plan_views) == 0:
+    TaskDialog.Show("Error","Couldn't find Plan Views")
+    script.exit()
 
 t=Transaction(doc,"Create Area Views")
 
@@ -99,8 +108,9 @@ for view in plan_views:
 
     area_views.append(new_area_view)
 
-for view,area in zip(plan_views,area_views):
+for plan_view,area_view in zip(plan_views,area_views):
 
-    area.Name = view.Name
+    area_view.Name = plan_view.Name
+
 
 t.Commit()

@@ -1,7 +1,7 @@
 import System.Diagnostics
 
 # Specify the file path
-pdf_file_path = r'Y:\Architectural Public\Mohamed Bedair_AR\MasterFormat 2016 Edition_ Numbers and Titles.pdf'
+pdf_file_path = r"I:\CODE-Practice\MasterFormat 2016 Edition_ Numbers and Titles.pdf"
 
 try:
     # Open the PDF file using the default PDF viewer on Windows
