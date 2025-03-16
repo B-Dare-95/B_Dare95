@@ -2,7 +2,7 @@ from Autodesk.Revit.DB import *
 
 doc = __revit__.ActiveUIDocument.Document
 
-t=Transaction(doc,"Quick Pin")
+t=Transaction(doc,"Pin Levels, Grids & Links")
 
 t.Start()
 

@@ -1,5 +1,4 @@
 from Autodesk.Revit.DB import *
-from pyrevit import script
 
 doc = __revit__.ActiveUIDocument.Document
 
