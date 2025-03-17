@@ -3,8 +3,6 @@ import json, os, codecs
 from Autodesk.Revit.DB import *
 
 from pyrevit.script import toggle_icon
-from pyrevit.coreutils.ribbon import ICON_MEDIUM
-
 
 PATH_SCRIPT = os.path.dirname(__file__)
 
