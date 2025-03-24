@@ -1,20 +1,25 @@
 import clr
+
 clr.AddReference("RevitAPI")
 clr.AddReference("RevitServices")
 from Autodesk.Revit.DB import *
-from pyrevit import forms,script,revit
+from Autodesk.Revit.UI import *
+from Autodesk.Revit.UI.Selection import *
+from pyrevit import forms, script, revit
 
 # Get the current Revit document
 doc = __revit__.ActiveUIDocument.Document
+uidoc = __revit__.ActiveUIDocument
 
-#Get Loaded Families
-all_loaded_families=FilteredElementCollector(doc).OfClass(Family).ToElements()
+# Get Loaded Families
+all_loaded_families = FilteredElementCollector(doc).OfClass(Family).ToElements()
 
 editable_families=[]
 
 for family in all_loaded_families:
     if family.IsEditable:
         editable_families.append(family)
+
 
 print("This Project has " +str(len(editable_families))+(" Editable Families"))
 print("-"*100)
