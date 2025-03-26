@@ -14,12 +14,17 @@ selection = uidoc.Selection
 app = __revit__.Application
 active_view = doc.ActiveView
 
-
 # FUNCTIONS
 
 # Filter out Unbounded Rooms
 def check_room_area(rooms):
     return [room for room in rooms if room.Area > 0]
+
+#Check for FLS Area Scheme
+def check_fls_area_scheme(area_schemes):
+    for scheme in area_schemes:
+        if scheme.Name == "FLS":
+            return scheme
 
 
 # Associate every room with its boundaries as curves
@@ -42,34 +47,30 @@ all_rooms        = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_
 
 all_levels       = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Levels).WhereElementIsNotElementType().ToElements()
 
-all_area_schemes = FilteredElementCollector(doc).OfClass(AreaScheme).WhereElementIsNotElementType().ToElements()
+all_area_schemes = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_AreaSchemes).WhereElementIsNotElementType().ToElements()
 
-tgrp = TransactionGroup(doc,"Create Area Views")
+# Check if "FLS" area scheme exists
+fls_area_scheme = check_fls_area_scheme(all_area_schemes)
+
+tgrp=TransactionGroup(doc,"Create FLS Area Views")
 
 tgrp.Start()
 
-# Check if "FLS" area scheme exists
-fls_area_scheme = None
-for area_scheme in all_area_schemes:
-    if area_scheme.Name == "FLS":
-        fls_area_scheme = area_scheme
-        break
+#Create FLS Area Scheme if not found
+if not fls_area_scheme:
 
+    t_scheme = Transaction(doc, 'Create FLS Area Scheme')
 
-# If "FLS" does not exist, create a new AreaScheme inside a transaction
-    elif not fls_area_scheme:
-        area_scheme_id = FilteredElementCollector(doc).OfClass(AreaScheme).WhereElementIsNotElementType().FirstElementId()
+    t_scheme.Start()
 
-        t = Transaction(doc, "Create Area Scheme")
-        t.Start()
-        # try:
-        fls_area_scheme_id = ElementTransformUtils.CopyElement(doc, area_scheme_id, XYZ.Zero)
-        fls_area_scheme = doc.GetElement(fls_area_scheme_id[0])
-        fls_area_scheme.Name = "FLS"  # Renaming inside transaction
+    try:
+        fls_area_scheme_id = ElementTransformUtils.CopyElement(doc,all_area_schemes[0].Id,XYZ.Zero)
+    except Exception as e:
+        print(e)
+    fls_area_scheme = doc.GetElement(fls_area_scheme_id[0])
+    fls_area_scheme.Name = "FLS"
 
-        t.Commit()
-    # except:
-    #     pass
+    t_scheme.Commit()
 
 # Get Plan Views
 plan_views_names = [view.Name for view in all_views if not view.IsTemplate and view.ViewType == ViewType.FloorPlan]
@@ -87,24 +88,17 @@ if not plan_views:
     TaskDialog.Show("Error", "Couldn't find Plan Views")
     script.exit()
 
+t_area_views = Transaction(doc,"Create Area Views")
+
+t_area_views.Start()
 # Create Area Views inside a transaction
-
-
 area_views = []
 
-# try:
 for view in plan_views:
     view_level = view.GenLevel
     new_area_view = ViewPlan.CreateAreaPlan(doc, fls_area_scheme.Id, view_level.Id)
-    new_area_view.Name = view.Name  # Assign the same name as the plan view
     area_views.append(new_area_view)
 
-# except Exception as e:
-#     script.exit()
+t_area_views.Commit()
 
 tgrp.Assimilate()
-# for plan_view,area_view in zip(plan_views,area_views):
-#     if area_view:
-#         pass
-#     else:
-#         area_view.Name = plan_view.Name
