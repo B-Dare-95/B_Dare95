@@ -24,9 +24,9 @@ two_hour_rated_walls=[]
 for wall in all_walls_in_view:
 
     if "FPR" in wall.Name:
-        if "60MINS" in wall.Name:
+        if "1HR" in wall.Name:
             one_hour_rated_walls.append(wall)
-        elif "120MINS" in wall.Name:
+        elif "2HR" in wall.Name:
             two_hour_rated_walls.append(wall)
 
 # Create Filtering Colors
