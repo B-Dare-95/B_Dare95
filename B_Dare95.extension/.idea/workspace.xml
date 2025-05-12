@@ -5,10 +5,16 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="97e5514c-6192-402f-877a-0503c0f802f5" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Toggles.panel/col2.stack/Ghost Mode.pushbutton/Ghost Model_script.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Toggles.panel/col2.stack/Ghost Mode.pushbutton/icon.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Toggles.panel/col2.stack/Ghost Mode.pushbutton/off.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Toggles.panel/col2.stack/Ghost Mode.pushbutton/on.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Toggles.panel/col2.stack/Ghost Mode.pushbutton/toggle_state.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/.name" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.name" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Diyar.panel/User Guide.urlbutton/bundle.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Diyar.panel/User Guide.urlbutton/bundle.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col3.stack/Color Walls.pulldown/Fire Rated Walls.pushbutton/Fire Rated Walls_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col3.stack/Color Walls.pulldown/Fire Rated Walls.pushbutton/Fire Rated Walls_script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Toggles.panel/col1.stack/3D Rooms.pushbutton/3D Rooms_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Toggles.panel/col1.stack/3D Rooms.pushbutton/3D Rooms_script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Toggles.panel/col1.stack/3D Rooms.pushbutton/toggle_state.json" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Toggles.panel/col1.stack/3D Rooms.pushbutton/toggle_state.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Toggles.panel/col1.stack/Highlight MEP.pushbutton/toggle_state.json" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Toggles.panel/col1.stack/Highlight MEP.pushbutton/toggle_state.json" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -61,24 +67,24 @@
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
     &quot;git-widget-placeholder&quot;: &quot;main&quot;,
     &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;D:/Projects/B_Dare95/B_Dare95.extension/B-Dare95.tab/Links.panel&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/mohamed.bedair/Documents/GitHub/B_Dare95/B_Dare95.extension/B-Dare95.tab/Toggles.panel/col1.stack/Ghost Mode.pushbutton&quot;,
     &quot;settings.editor.selected.configurable&quot;: &quot;ml.llm.LLMConfigurable&quot;
   }
 }</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Toggles.panel\col1.stack\Ghost Mode.pushbutton" />
       <recent name="D:\Projects\B_Dare95\B_Dare95.extension\B-Dare95.tab\Links.panel" />
       <recent name="D:\Projects\B_Dare95\B_Dare95.extension\B-Dare95.tab\Family Confidant.panel\Family Tree.splitpushbutton" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Toggles.panel\col2.stack\Convert Units.pushbutton" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Toggles.panel\Unbound Finishes.pushbutton" />
-      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Quick Actions.panel\col3.stack\Color Walls.pulldown" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Toggles.panel\col2.stack" />
+      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Toggles.panel\col1.stack\Ghost Mode.pushbutton" />
       <recent name="D:\Projects\B_Dare95\B_Dare95.extension\B-Dare95.tab\Links.panel\col1.stack" />
       <recent name="D:\Projects\B_Dare95\B_Dare95.extension\Archved Code" />
       <recent name="D:\Projects\B_Dare95\B_Dare95.extension\B-Dare95.tab\Family Confidant.panel\Family Tree.splitpushbutton" />
-      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Toggles.panel" />
-      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Diyar.panel\User Guide.urlbutton" />
     </key>
   </component>
   <component name="SharedIndexes">

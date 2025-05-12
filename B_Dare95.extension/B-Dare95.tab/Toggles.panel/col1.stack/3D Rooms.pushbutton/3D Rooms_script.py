@@ -42,9 +42,11 @@ icon_on  = os.path.join(PATH_SCRIPT, 'on.png')
 icon_off = os.path.join(PATH_SCRIPT, 'off.png')
 toggle_icon(TOGGLE, icon_on, icon_off) #Change icon
 
+room_names = []
 
 for room in only_bound_rooms:
     try:
+
         height = room.LookupParameter("Unbounded Height").AsDouble()
         bottom = room.LookupParameter("Base Offset").AsDouble()
 
@@ -57,6 +59,9 @@ for room in only_bound_rooms:
             for bound in bound_list:
 
                 profile.Append(bound.GetCurve().CreateTransformed(Transform.CreateTranslation(XYZ(0,0,bottom))))
+
+
+
     except:
         continue
 
@@ -64,6 +69,9 @@ for room in only_bound_rooms:
     room_solids.append(room_solid)
     if profile.IsOpen():
         pass
+
+    room_names.append(room.get_Parameter(BuiltInParameter.ROOM_NAME).AsString())
+
 #Collecting Solid patterns
 all_patterns  = FilteredElementCollector(doc).OfClass(FillPatternElement).ToElements()
 solid_pattern = [i for i in all_patterns if i.GetFillPattern().IsSolidFill][0]
@@ -80,11 +88,15 @@ override_settings.SetCutForegroundPatternColor(color)
 
 override_settings.SetSurfaceTransparency(25)
 
+tgrp = TransactionGroup(doc,"Create 3D Rooms")
+
+tgrp.Start()
+
+t1 = Transaction(doc,"3D Rooms")
+
+t1.Start()
+
 shapes = []
-
-t = Transaction(doc,"Create 3D Rooms")
-
-t.Start()
 
 for solid in room_solids:
 
@@ -94,8 +106,27 @@ for solid in room_solids:
         shapes.append(shape)
         doc.ActiveView.SetElementOverrides(shape.Id, override_settings)
 
+t1.Commit()
 
-t.Commit()
+t2 = Transaction(doc,"Assign Room Names")
+
+t2.Start()
+
+for shape in shapes:
+
+    shape_location = shape.Location
+    for room in only_bound_rooms:
+
+        if room.IsPointInRoom(shape_location):
+            room_name = room.get_Parameter(BuiltInParameter.ROOM_NAME).AsString()
+            shape.LookupParameter("Comments").Set(room_name)
+
+        else:
+            pass
+
+t2.Commit()
+
+tgrp.Assimilate()
 
 if not TOGGLE:
 
