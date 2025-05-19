@@ -16,9 +16,13 @@ app         = __revit__.Application
 active_view = doc.ActiveView
 output      = script.get_output()
 
-selected_elements = selection.PickObjects(ObjectType.Element,"Select Lines")
-
+try:
+    selected_elements = selection.PickObjects(ObjectType.Element,"Select Lines")
+except:
+    script.exit()
+    
 for ref_element in selected_elements:
-    element_id = doc.GetElement(ref_element).Id
-    element_name = doc.GetElement(ref_element).Name
-    print("Element Name : " + element_name + ">>ID: " + str(element_id.IntegerValue))
+    element = doc.GetElement(ref_element)
+    element_params = element.Parameters
+    for param in element_params:
+        print(param.Definition.Name + ">>" + str(param.AsValueString()))

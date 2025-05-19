@@ -33,7 +33,7 @@ all_rooms = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Rooms).
 
 only_bound_rooms = [room for room in all_rooms if not room.LookupParameter("Area").AsDouble() == 0 or not room.LookupParameter("Volume").AsDouble() == 0]
 
-room_solids = []
+
 
 TOGGLE = read_toggle_config()
 
@@ -42,7 +42,7 @@ icon_on  = os.path.join(PATH_SCRIPT, 'on.png')
 icon_off = os.path.join(PATH_SCRIPT, 'off.png')
 toggle_icon(TOGGLE, icon_on, icon_off) #Change icon
 
-room_names = []
+room_solids = []
 
 for room in only_bound_rooms:
     try:
@@ -70,8 +70,6 @@ for room in only_bound_rooms:
     if profile.IsOpen():
         pass
 
-    room_names.append(room.get_Parameter(BuiltInParameter.ROOM_NAME).AsString())
-
 #Collecting Solid patterns
 all_patterns  = FilteredElementCollector(doc).OfClass(FillPatternElement).ToElements()
 solid_pattern = [i for i in all_patterns if i.GetFillPattern().IsSolidFill][0]
@@ -88,11 +86,11 @@ override_settings.SetCutForegroundPatternColor(color)
 
 override_settings.SetSurfaceTransparency(25)
 
-tgrp = TransactionGroup(doc,"Create 3D Rooms")
+tgrp = TransactionGroup(doc,"3D Rooms")
 
 tgrp.Start()
 
-t1 = Transaction(doc,"3D Rooms")
+t1 = Transaction(doc,"create 3D Rooms")
 
 t1.Start()
 
@@ -108,23 +106,23 @@ for solid in room_solids:
 
 t1.Commit()
 
-t2 = Transaction(doc,"Assign Room Names")
-
-t2.Start()
-
-for shape in shapes:
-
-    shape_location = shape.Location
-    for room in only_bound_rooms:
-
-        if room.IsPointInRoom(shape_location):
-            room_name = room.get_Parameter(BuiltInParameter.ROOM_NAME).AsString()
-            shape.LookupParameter("Comments").Set(room_name)
-
-        else:
-            pass
-
-t2.Commit()
+# t2 = Transaction(doc,"3D Room Names")
+#
+# t2.Start()
+#
+#
+# for shape,solid in shapes,room_solids:
+#     for room in only_bound_rooms:
+#         try:
+#             solid_center = solid.ComputeCentroid()
+#
+#             if room.IsPointInRoom(solid_center):
+#                 shape.LookupParameter("Comments").Set(room.Name)
+#
+#         except:
+#             continue
+#
+# t2.Commit()
 
 tgrp.Assimilate()
 
