@@ -26,3 +26,4 @@ for ref_element in selected_elements:
     element_params = element.Parameters
     for param in element_params:
         print(param.Definition.Name + ">>" + str(param.AsValueString()))
+        

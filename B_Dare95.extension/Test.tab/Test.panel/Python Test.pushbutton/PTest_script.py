@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+import hashlib
+
 #Imports
 from Autodesk.Revit.DB import *
 from Autodesk.Revit.UI import *
@@ -16,9 +18,49 @@ app         = __revit__.Application
 active_view = doc.ActiveView
 output      = script.get_output()
 
-selected_elements = selection.PickObjects(ObjectType.Element,"Select Lines")
+# ===================================
 
-for ref_element in selected_elements:
-    element_id = doc.GetElement(ref_element).Id
-    element_name = doc.GetElement(ref_element).Name
-    print("Element Name : " + element_name + ">>ID: " + str(element_id.IntegerValue))
+def get_location_point(element):
+    loc = element.Location
+    if isinstance(loc, LocationPoint):
+        pt = loc.Point
+        return (round(pt.X, 4), round(pt.Y, 4), round(pt.Z, 4))
+    else:
+        return None
+
+
+# Filter elements by category
+elements = FilteredElementCollector(doc,active_view.Id).OfCategory(BuiltInCategory.OST_Furniture).WhereElementIsNotElementType().ToElements()
+
+# Group elements by type name + location + geometry hash
+element_groups = {}
+
+for el in elements:
+    type_name = el.Name
+    loc_point = get_location_point(el)
+    if not loc_point:
+        continue  # skip elements with no point-based location
+
+    key = (type_name, loc_point)
+    if key not in element_groups:
+        element_groups[key] = []
+    element_groups[key].append(el)
+print(element_groups)
+
+# # Delete duplicates (keep lowest ID)
+# to_delete = []
+# for group in element_groups.values():
+#     if len(group) > 1:
+#         group.sort(key=lambda x: x.Id.IntegerValue)
+#         to_keep = group[0]
+#         duplicates = group[1:]
+#         to_delete.extend(duplicates)
+#
+# # Start Transaction and Delete
+# t=Transaction(doc,"Delete Duplicate Elements")
+# t.Start()
+#
+# for el in to_delete:
+#     doc.Delete(el.Id)
+#
+# t.Commit()
