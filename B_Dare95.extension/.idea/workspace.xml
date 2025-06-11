@@ -5,7 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="97e5514c-6192-402f-877a-0503c0f802f5" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/Duplicate Walls,Floors &amp; Ceilings.pushbutton/Duplicate Walls,Floors &amp; Ceilings_script.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/Duplicate Family Instances.pushbutton/Duplicate Family Instances_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/Duplicate Family Instances.pushbutton/Duplicate Family Instances_script.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Python Test.pushbutton/PTest_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Python Test.pushbutton/PTest_script.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -28,6 +30,7 @@
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/Add Issue VIew.pushbutton/Add Issue View_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Pre-Filter Selection.pushbutton/Button_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Wall Peeler.pushbutton/Wall Splitter_script.py" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/Duplicate Walls,Floors &amp; Ceilings.pushbutton/Duplicate Walls,Floors &amp; Ceilings_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col2.stack/Master Selection.pushbutton/Master Selection_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col3.stack/Color Walls.pulldown/Fire Rated Walls.pushbutton/Fire Rated Walls_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col3.stack/Color Walls.pulldown/INT vs EXT.pushbutton/INTvsEXT_script.py" root0="SKIP_INSPECTION" />

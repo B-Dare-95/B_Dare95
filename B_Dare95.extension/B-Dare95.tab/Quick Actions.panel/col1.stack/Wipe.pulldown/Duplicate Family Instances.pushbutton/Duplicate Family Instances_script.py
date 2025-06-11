@@ -26,22 +26,6 @@ def get_location_point(element):
     else:
         return None
 
-def get_location_curve(element):
-    loc = element.Location
-    if isinstance(loc, LocationCurve):
-        curve = loc.Curve
-        return curve
-    else:
-        return None
-
-def get_centroid(element):
-    el_bound_box = element.BoundingBox
-    if isinstance(el_bound_box,BoundingBoxXYZ):
-        centroid = (el_bound_box.Min + el_bound_box.Max)/2
-        return (round(centroid.X, 4), round(centroid.Y, 4), round(centroid.Z, 4))
-    else:
-        return None
-
 # Filter elements by category
 elements_in_active_view = FilteredElementCollector(doc,active_view.Id).WhereElementIsNotElementType().ToElements()
 

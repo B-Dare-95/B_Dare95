@@ -6,16 +6,10 @@ from Autodesk.Revit.DB import *
 from Autodesk.Revit.UI import *
 from Autodesk.Revit.UI.Selection import *
 from System.Collections.Generic import List
-from pyrevit import forms, revit,script
-from pyrevit import EXEC_PARAMS
 
 #Revit Variables
 uidoc       = __revit__.ActiveUIDocument
 doc         = __revit__.ActiveUIDocument.Document
-selection   = uidoc.Selection
-app         = __revit__.Application
-active_view = doc.ActiveView
-output      = script.get_output()
 
 # ===================================
 
@@ -26,19 +20,19 @@ def get_location_key(elements):
     el_by_location = {}
 
     for el in elements:
-        # Skip if floor is not valid
+        # Skip if element is not valid
         if el is None or not el.IsValidObject:
             continue
 
         try:
-            # Get floor geometry
+            # Get element geometry
             geo_elem = el.get_Geometry(Options())
 
             # Skip if no geometry
             if geo_elem is None:
                 continue
 
-            # Calculate a location key for the floor
+            # Calculate a location key for the element
             location_key = ""
             for geo_obj in geo_elem:
                 if isinstance(geo_obj, Solid) and geo_obj.Volume > 0:
@@ -143,7 +137,18 @@ def get_items_to_delete(locations):
 
         return element_ids
 
-#COLLECTORS
+def get_location_point(element):
+    loc = element.Location
+    if isinstance(loc, LocationPoint):
+        pt = loc.Point
+        return (round(pt.X, 4), round(pt.Y, 4), round(pt.Z, 4))
+    else:
+        return None
+
+# COLLECTORS
+
+# Collect all Elements
+all_elements = FilteredElementCollector(doc).WhereElementIsNotElementType().ToElements()
 
 # Collect all floors in the document
 all_floors   = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Floors).WhereElementIsNotElementType().ToElements()
@@ -152,43 +157,125 @@ all_walls    = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Wall
 # Collect all ceilings in the document
 all_ceilings = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Ceilings).WhereElementIsNotElementType().ToElements()
 
+#Collect all Other Elements
+model_elements = []
+for el in all_elements:
+    category = el.Category
+    if category and category.CategoryType == CategoryType.Model:
+        if category.Name not in ["Walls","Floors","Ceilings"]:
+            model_elements.append(el)
 
-floors_by_location = get_location_key(all_floors)
+#Collect Locations
+floors_by_location   = get_location_key(all_floors)
 
 ceilings_by_location = get_location_key(all_ceilings)
 
-walls_by_location = get_location_key_walls(all_walls)
+walls_by_location    = get_location_key_walls(all_walls)
 
-# Collect duplicates to delete
+others_by_location   = {}
+
+for el in model_elements:
+    type_name = el.Name
+    loc_point = get_location_point(el)
+    if not loc_point:
+        continue  # skip elements with no point-based location
+
+    key = (type_name, loc_point)
+    if key not in others_by_location:
+        others_by_location[key] = []
+        others_by_location[key].append(el)
+
+# Collect Duplicates to delete
 floors_to_delete = get_items_to_delete(floors_by_location)
 
 walls_to_delete = get_items_to_delete(walls_by_location)
 
 ceilings_to_delete = get_items_to_delete(ceilings_by_location)
 
-# Start a transaction to delete elements
-t = Transaction(doc, "Delete Duplicates")
+#Delete Other Duplicate Elements
+els_to_delete = []
 
-t.Start()
+for group in others_by_location.values():
+    if len(group) > 1:
+        group.sort(key=lambda x: x.Id.IntegerValue)
+        to_keep = group[0]
+        duplicates = group[1:]
+        els_to_delete.extend(duplicates)
+
+# Start a transaction to delete elements
+
+tgrp = TransactionGroup(doc,"Delete Duplicates")
+
+tgrp.Start()
+
+t1 = Transaction(doc, "Delete Duplicate Floors")
+
+t1.Start()
+
 try:
     # Delete the elements
     if not floors_to_delete:
         print("No Dupicate Floors Found")
-        pass
+
+
     else:
         doc.Delete(floors_to_delete)
+        print("Deleted {0} duplicate floors".format(len(floors_to_delete)))
 
-
-    doc.Delete(walls_to_delete)
-    doc.Delete(ceilings_to_delete)
-
-    t.Commit()
-    print("Deleted {0} duplicate floors".format(len(floors_to_delete)))
-    print("Deleted {0} duplicate walls" .format(len(walls_to_delete)))
-    print("Deleted {0} duplicate ceilings" .format(len(ceilings_to_delete)))
+    t1.Commit()
 
 except Exception as e:
-    t.RollBack()
+    t1.RollBack()
     print("Error deleting floors: {0}".format(e))
+
+t2 = Transaction(doc,"Delete Duplicate Walls")
+
+t2.Start()
+try:
+
+    if not walls_to_delete:
+        print("No Duplicate Walls Found")
+
+    else:
+        doc.Delete(walls_to_delete)
+        print("Deleted {0} duplicate walls".format(len(walls_to_delete)))
+
+    t2.Commit()
+
+except Exception as e:
+    t2.RollBack()
     print("Error deleting walls: {0}".format(e))
+
+t3 =Transaction(doc,"Delete Duplicate Ceilings")
+
+t3.Start()
+try:
+
+    if not ceilings_to_delete:
+        print("No Duplicate Ceilings Found")
+
+    else:
+        doc.Delete(ceilings_to_delete)
+        print("Deleted {0} duplicate ceilings".format(len(ceilings_to_delete)))
+
+    t3.Commit()
+
+except Exception as e:
+    t3.RollBack()
     print("Error deleting ceilings: {0}".format(e))
+
+t4=Transaction(doc,"Delete Duplicate Elements")
+t4.Start()
+
+for el in els_to_delete:
+
+    try:
+        doc.Delete(el.Id)
+        print("Deleted {0} other duplicates".format(len(els_to_delete)))
+    except Exception as e:
+        t4.RollBack()
+        print("Error deleting other duplicates: {0}".format(e))
+
+t4.Commit()
+
+tgrp.Assimilate()
