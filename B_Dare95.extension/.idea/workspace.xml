@@ -5,10 +5,15 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="97e5514c-6192-402f-877a-0503c0f802f5" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/Duplicate Walls,Floors &amp; Ceilings.pushbutton/Duplicate Walls,Floors &amp; Ceilings_script.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.splitpushbutton/Walls,Floors &amp; Ceilings.pushbutton/icon.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.splitpushbutton/bundle.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/.name" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.name" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/Duplicate Family Instances.pushbutton/Duplicate Family Instances_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/Duplicate Family Instances.pushbutton/Duplicate Family Instances_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Python Test.pushbutton/PTest_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Python Test.pushbutton/PTest_script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/Duplicate Family Instances.pushbutton/Duplicate Family Instances_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.splitpushbutton/Family Instances.pushbutton/Duplicate Family Instances_script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/Duplicate Family Instances.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.splitpushbutton/Family Instances.pushbutton/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/Duplicate Walls,Floors &amp; Ceilings.pushbutton/Duplicate Walls,Floors &amp; Ceilings_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.splitpushbutton/Walls,Floors &amp; Ceilings.pushbutton/Duplicate Walls,Floors &amp; Ceilings_script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/Duplicate Walls,Floors &amp; Ceilings.pushbutton/icon.png" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -59,30 +64,30 @@
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
     &quot;git-widget-placeholder&quot;: &quot;main&quot;,
     &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;C:/Users/mohamed.bedair/Documents/GitHub/B_Dare95/B_Dare95.extension/B-Dare95.tab/Toggles.panel/col1.stack/Ghost Mode.pushbutton&quot;,
+    &quot;last_opened_file_path&quot;: &quot;D:/Projects/B_Dare95/B_Dare95.extension/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.splitpushbutton&quot;,
     &quot;settings.editor.selected.configurable&quot;: &quot;ml.llm.LLMConfigurable&quot;
   }
 }</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="D:\Projects\B_Dare95\B_Dare95.extension\B-Dare95.tab\Quick Actions.panel\Remove Duplicates.splitpushbutton" />
+      <recent name="D:\Projects\B_Dare95\B_Dare95.extension\B-Dare95.tab\Quick Actions.panel\col1.stack\Wipe.pulldown\Duplicate Walls,Floors &amp; Ceilings.pushbutton" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Toggles.panel\col1.stack\Ghost Mode.pushbutton" />
       <recent name="D:\Projects\B_Dare95\B_Dare95.extension\B-Dare95.tab\Links.panel" />
       <recent name="D:\Projects\B_Dare95\B_Dare95.extension\B-Dare95.tab\Family Confidant.panel\Family Tree.splitpushbutton" />
-      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Toggles.panel\col2.stack\Convert Units.pushbutton" />
-      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Toggles.panel\Unbound Finishes.pushbutton" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="D:\Projects\B_Dare95\B_Dare95.extension\B-Dare95.tab\Quick Actions.panel\Remove Duplicates.splitpushbutton" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\lib" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Toggles.panel\col2.stack" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Toggles.panel\col1.stack\Ghost Mode.pushbutton" />
       <recent name="D:\Projects\B_Dare95\B_Dare95.extension\B-Dare95.tab\Links.panel\col1.stack" />
-      <recent name="D:\Projects\B_Dare95\B_Dare95.extension\Archved Code" />
     </key>
   </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-python-sdk-348a24fa61fa-5312c7369657-com.jetbrains.pycharm.community.sharedIndexes.bundled-PC-251.23774.444" />
+        <option value="bundled-python-sdk-f78a9d071105-aa17d162503b-com.jetbrains.pycharm.community.sharedIndexes.bundled-PC-243.26574.90" />
       </set>
     </attachedChunks>
   </component>

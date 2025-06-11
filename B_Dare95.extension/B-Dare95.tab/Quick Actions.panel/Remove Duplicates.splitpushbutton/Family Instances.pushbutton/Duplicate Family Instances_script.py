@@ -49,7 +49,7 @@ els_to_delete = []
 
 for group in element_groups.values():
     if len(group) > 1:
-        group.sort(key=lambda x: x.Id.IntegerValue)
+        group.sort(key=lambda x: x.Id.Value)
         to_keep = group[0]
         duplicates = group[1:]
         els_to_delete.extend(duplicates)

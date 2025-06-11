@@ -59,6 +59,14 @@ def get_location_key(elements):
 
     return el_by_location
 
+def get_location_point(element):
+    loc = element.Location
+    if isinstance(loc, LocationPoint):
+        pt = loc.Point
+        return (round(pt.X, 4), round(pt.Y, 4), round(pt.Z, 4))
+    else:
+        return None
+
 def get_location_key_walls(walls):
     walls_by_location = {}
 
@@ -118,32 +126,24 @@ def get_location_key_walls(walls):
     return walls_by_location
 
 def get_items_to_delete(locations):
-    # Collect duplicate floors to delete
+    # Collect duplicate elements to delete
     elements_to_delete = []
 
     for loc in locations:
         items_list = locations[loc]
         if len(items_list) > 1:
-            # Sort floors by ID (ascending)
-            sorted_items = sorted(items_list, key=lambda f: f.Id.IntegerValue)
+            # Sort elements by ID (ascending)
+            sorted_items = sorted(items_list, key=lambda f: f.Id)
 
-            # Keep the first floor (lowest ID), delete the rest
+            # Keep the first element (lowest ID), delete the rest
             elements_to_delete.extend(sorted_items[1:])
 
-    # Delete the duplicate floors
+    # Delete the duplicate elements
     if elements_to_delete:
         # Convert to ElementId list
         element_ids = List[ElementId]([i.Id for i in elements_to_delete])
 
         return element_ids
-
-def get_location_point(element):
-    loc = element.Location
-    if isinstance(loc, LocationPoint):
-        pt = loc.Point
-        return (round(pt.X, 4), round(pt.Y, 4), round(pt.Z, 4))
-    else:
-        return None
 
 # COLLECTORS
 
@@ -157,14 +157,6 @@ all_walls    = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Wall
 # Collect all ceilings in the document
 all_ceilings = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Ceilings).WhereElementIsNotElementType().ToElements()
 
-#Collect all Other Elements
-model_elements = []
-for el in all_elements:
-    category = el.Category
-    if category and category.CategoryType == CategoryType.Model:
-        if category.Name not in ["Walls","Floors","Ceilings"]:
-            model_elements.append(el)
-
 #Collect Locations
 floors_by_location   = get_location_key(all_floors)
 
@@ -172,35 +164,12 @@ ceilings_by_location = get_location_key(all_ceilings)
 
 walls_by_location    = get_location_key_walls(all_walls)
 
-others_by_location   = {}
-
-for el in model_elements:
-    type_name = el.Name
-    loc_point = get_location_point(el)
-    if not loc_point:
-        continue  # skip elements with no point-based location
-
-    key = (type_name, loc_point)
-    if key not in others_by_location:
-        others_by_location[key] = []
-        others_by_location[key].append(el)
-
 # Collect Duplicates to delete
 floors_to_delete = get_items_to_delete(floors_by_location)
 
 walls_to_delete = get_items_to_delete(walls_by_location)
 
 ceilings_to_delete = get_items_to_delete(ceilings_by_location)
-
-#Delete Other Duplicate Elements
-els_to_delete = []
-
-for group in others_by_location.values():
-    if len(group) > 1:
-        group.sort(key=lambda x: x.Id.IntegerValue)
-        to_keep = group[0]
-        duplicates = group[1:]
-        els_to_delete.extend(duplicates)
 
 # Start a transaction to delete elements
 
@@ -264,18 +233,5 @@ except Exception as e:
     t3.RollBack()
     print("Error deleting ceilings: {0}".format(e))
 
-t4=Transaction(doc,"Delete Duplicate Elements")
-t4.Start()
-
-for el in els_to_delete:
-
-    try:
-        doc.Delete(el.Id)
-        print("Deleted {0} other duplicates".format(len(els_to_delete)))
-    except Exception as e:
-        t4.RollBack()
-        print("Error deleting other duplicates: {0}".format(e))
-
-t4.Commit()
-
 tgrp.Assimilate()
+
