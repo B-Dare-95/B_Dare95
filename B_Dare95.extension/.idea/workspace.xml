@@ -5,11 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="97e5514c-6192-402f-877a-0503c0f802f5" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/Duplicate Family Instances.pushbutton/Duplicate Family Instances_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/.name" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.name" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/Duplicates By Category.pushbutton/Remove Duplicate Walls_script.dyn" beforeDir="false" afterPath="$PROJECT_DIR$/lib/Remove Duplicate Walls_script.dyn" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/Duplicates By Category.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/Duplicate Family Instances.pushbutton/icon.png" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Python Test.pushbutton/PTest_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Python Test.pushbutton/PTest_script.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
