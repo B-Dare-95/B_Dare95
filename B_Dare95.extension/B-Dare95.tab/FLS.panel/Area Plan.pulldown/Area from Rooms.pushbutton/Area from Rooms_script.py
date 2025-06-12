@@ -47,6 +47,7 @@ def create_areas_from_rooms(doc,views):
 fls_area_views = []
 
 all_views = FilteredElementCollector(doc).OfClass(View).WhereElementIsNotElementType().ToElements()
+
 for view in all_views:
     if view.ViewType == ViewType.AreaPlan:
         if view.AreaScheme.Name == "FLS":
