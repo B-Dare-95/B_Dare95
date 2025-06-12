@@ -1,13 +1,10 @@
 # -*- coding: utf-8 -*-
 
 #Imports
-import clr
+
 from Autodesk.Revit.DB import *
-from Autodesk.Revit.UI import *
-from Autodesk.Revit.UI.Selection import *
 from System.Collections.Generic import List
 from pyrevit import forms, revit,script
-from pyrevit import EXEC_PARAMS
 
 #Revit Variables
 uidoc       = __revit__.ActiveUIDocument
@@ -15,7 +12,6 @@ doc         = __revit__.ActiveUIDocument.Document
 selection   = uidoc.Selection
 app         = __revit__.Application
 active_view = doc.ActiveView
-output      = script.get_output()
 
 # ===================================
 def create_areas_from_rooms(doc,views):
@@ -26,7 +22,6 @@ def create_areas_from_rooms(doc,views):
 
         all_rooms_in_view = (FilteredElementCollector(doc,view.Id).OfCategory(BuiltInCategory.OST_Rooms)
                              .WhereElementIsNotElementType().ToElements())
-        areas = []
 
         for room in all_rooms_in_view:
 
@@ -77,7 +72,5 @@ t=Transaction(doc,"Create Areas")
 t.Start()
 
 new_areas = create_areas_from_rooms(doc,selected_area_views)
-
-print(new_areas)
 
 t.Commit()

@@ -5,15 +5,15 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="97e5514c-6192-402f-877a-0503c0f802f5" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.splitpushbutton/Walls,Floors &amp; Ceilings.pushbutton/icon.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.splitpushbutton/bundle.yaml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/FLS.panel/Area Plan.pulldown/Area from Rooms.pushbutton/Area from Rooms_script.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/.name" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.name" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/Duplicate Family Instances.pushbutton/Duplicate Family Instances_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.splitpushbutton/Family Instances.pushbutton/Duplicate Family Instances_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/Duplicate Family Instances.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.splitpushbutton/Family Instances.pushbutton/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/Duplicate Walls,Floors &amp; Ceilings.pushbutton/Duplicate Walls,Floors &amp; Ceilings_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.splitpushbutton/Walls,Floors &amp; Ceilings.pushbutton/Duplicate Walls,Floors &amp; Ceilings_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/Duplicate Walls,Floors &amp; Ceilings.pushbutton/icon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/FLS.panel/Area Plan.pulldown/Area from Rooms.pushbutton/Areas from Rooms_script.dyn" beforeDir="false" afterPath="$PROJECT_DIR$/Archved Code/Areas from Rooms_script.dyn" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/FLS.panel/Area Plan.pulldown/Area from Rooms.pushbutton/Logos for B-Dare95.png" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/FLS.panel/Area Plan.pulldown/Area from Rooms.pushbutton/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.splitpushbutton/Family Instances.pushbutton/Duplicate Family Instances_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.splitpushbutton/Family Instances.pushbutton/Duplicate Family Instances_script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.splitpushbutton/Walls,Floors &amp; Ceilings.pushbutton/Duplicate Walls,Floors &amp; Ceilings_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.splitpushbutton/Walls,Floors &amp; Ceilings.pushbutton/Duplicate Walls,Floors &amp; Ceilings_script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Python Test.pushbutton/PTest_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Python Test.pushbutton/PTest_script.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -34,8 +34,8 @@
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Finishes.panel/Wall Finishes.pushbutton/Wall Finishes_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/Add Issue VIew.pushbutton/Add Issue View_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Pre-Filter Selection.pushbutton/Button_script.py" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.splitpushbutton/Family Instances.pushbutton/Duplicate Family Instances_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Wall Peeler.pushbutton/Wall Splitter_script.py" root0="SKIP_INSPECTION" />
-    <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/Duplicate Walls,Floors &amp; Ceilings.pushbutton/Duplicate Walls,Floors &amp; Ceilings_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col2.stack/Master Selection.pushbutton/Master Selection_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col3.stack/Color Walls.pulldown/Fire Rated Walls.pushbutton/Fire Rated Walls_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col3.stack/Color Walls.pulldown/INT vs EXT.pushbutton/INTvsEXT_script.py" root0="SKIP_INSPECTION" />
@@ -77,17 +77,17 @@
       <recent name="D:\Projects\B_Dare95\B_Dare95.extension\B-Dare95.tab\Family Confidant.panel\Family Tree.splitpushbutton" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\Archved Code" />
       <recent name="D:\Projects\B_Dare95\B_Dare95.extension\B-Dare95.tab\Quick Actions.panel\Remove Duplicates.splitpushbutton" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\lib" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Toggles.panel\col2.stack" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Toggles.panel\col1.stack\Ghost Mode.pushbutton" />
-      <recent name="D:\Projects\B_Dare95\B_Dare95.extension\B-Dare95.tab\Links.panel\col1.stack" />
     </key>
   </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-python-sdk-f78a9d071105-aa17d162503b-com.jetbrains.pycharm.community.sharedIndexes.bundled-PC-243.26574.90" />
+        <option value="bundled-python-sdk-348a24fa61fa-5312c7369657-com.jetbrains.pycharm.community.sharedIndexes.bundled-PC-251.23774.444" />
       </set>
     </attachedChunks>
   </component>

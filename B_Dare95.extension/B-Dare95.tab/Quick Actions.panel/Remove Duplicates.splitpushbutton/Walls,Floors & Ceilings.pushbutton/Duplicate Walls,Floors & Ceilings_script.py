@@ -147,9 +147,6 @@ def get_items_to_delete(locations):
 
 # COLLECTORS
 
-# Collect all Elements
-all_elements = FilteredElementCollector(doc).WhereElementIsNotElementType().ToElements()
-
 # Collect all floors in the document
 all_floors   = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Floors).WhereElementIsNotElementType().ToElements()
 # Collect all walls in the document
