@@ -5,9 +5,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="97e5514c-6192-402f-877a-0503c0f802f5" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/FLS.panel/Area Plan.pulldown/Create Area Boundary.pushbutton/Create Area Bounds_script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/.name" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.name" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/FLS.panel/Area Plan.pulldown/Area from Rooms.pushbutton/Area from Rooms_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/FLS.panel/Area Plan.pulldown/Area from Rooms.pushbutton/Area from Rooms_script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Links.panel/col1.stack/Levels &amp; Grids Check.pushbutton/Lvls &amp; Grids_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Links.panel/col1.stack/Levels &amp; Grids Check.pushbutton/Lvls &amp; Grids_script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Python Test.pushbutton/PTest_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Python Test.pushbutton/PTest_script.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -28,6 +29,7 @@
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/FLS.panel/Area Plan.pulldown/Area from Rooms.pushbutton/Area from Rooms_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Finishes.panel/Wall Finishes.pushbutton/Wall Finishes_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/Add Issue VIew.pushbutton/Add Issue View_script.py" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Links.panel/col1.stack/Levels &amp; Grids Check.pushbutton/Lvls &amp; Grids_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Pre-Filter Selection.pushbutton/Button_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.splitpushbutton/Family Instances.pushbutton/Duplicate Family Instances_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Wall Peeler.pushbutton/Wall Splitter_script.py" root0="SKIP_INSPECTION" />
@@ -52,17 +54,17 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;D:/Projects/B_Dare95/B_Dare95.extension/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.splitpushbutton&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;ml.llm.LLMConfigurable&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "git-widget-placeholder": "main",
+    "ignore.virus.scanning.warn.message": "true",
+    "last_opened_file_path": "D:/Projects/B_Dare95/B_Dare95.extension/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.splitpushbutton",
+    "settings.editor.selected.configurable": "ml.llm.mcp"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="D:\Projects\B_Dare95\B_Dare95.extension\B-Dare95.tab\Quick Actions.panel\Remove Duplicates.splitpushbutton" />

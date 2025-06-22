@@ -19,22 +19,34 @@ if not all_links:
 
 else :
     for link in all_links:
-        link_doc=link.GetLinkDocument()
+        try:
+            link_doc=link.GetLinkDocument()
+            all_linked_grids = FilteredElementCollector(link_doc).OfCategory(
+                BuiltInCategory.OST_Grids).WhereElementIsNotElementType().ToElements()
+            bad_grids = [grid for grid in all_linked_grids if
+                         grid.LookupParameter("Workset").AsValueString not in ["Shared Levels and Grids",
+                                                                               "Shared Views, Levels, Grids"]]
 
-        all_linked_grids  = FilteredElementCollector(link_doc).OfCategory(BuiltInCategory.OST_Grids).WhereElementIsNotElementType().ToElements()
-        bad_grids = [grid for grid in all_linked_grids if grid.LookupParameter("Workset").AsValueString != "Shared Levels and Grids"]
-        if len(bad_grids) == 0:
+            if len(bad_grids) == 0:
+                pass
+            else:
+                grid_counter = len(bad_grids)
+                print("Link Name : {0} >>> {1} Grids are on a wrong workset, Please Fix!! ".format(link_doc.Title,
+                                                                                                   grid_counter))
+
+            all_linked_levels = FilteredElementCollector(link_doc).OfCategory(
+                BuiltInCategory.OST_Levels).WhereElementIsNotElementType().ToElements()
+            bad_levels = [level for level in all_linked_levels if
+                          level.LookupParameter("Workset").AsValueString not in ["Shared Levels and Grids",
+                                                                                 "Shared Views, Levels, Grids"]]
+
+            if len(bad_levels) == 0:
+                pass
+            else:
+                level_counter = len(bad_levels)
+                print("Link Name : {0} >>> {1} Levels are on a wrong workset, Please Fix!! ".format(link_doc.Title,
+                                                                                                    level_counter))
+
+            print("-" * 100)
+        except:
             pass
-        else:
-            grid_counter = len(bad_grids)
-            print("Link Name : {0} >>> {1} Grids are on a wrong workset, Please Fix!! ".format(link_doc.Title,grid_counter))
-
-        all_linked_levels = FilteredElementCollector(link_doc).OfCategory(BuiltInCategory.OST_Levels).WhereElementIsNotElementType().ToElements()
-        bad_levels = [level for level in all_linked_levels if level.LookupParameter("Workset").AsValueString != "Shared Levels and Grids"]
-        level_counter = len(bad_levels)
-        if level_counter == 0:
-            pass
-        else:
-            print("Link Name : {0} >>> {1} Levels are on a wrong workset, Please Fix!! ".format(link_doc.Title,level_counter))
-
-        print("-" * 100)
