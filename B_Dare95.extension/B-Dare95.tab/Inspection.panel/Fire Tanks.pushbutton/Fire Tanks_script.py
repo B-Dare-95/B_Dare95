@@ -2,7 +2,9 @@
 import json, os, codecs
 
 from Autodesk.Revit.DB import *
+from Autodesk.Revit.UI import TaskDialog
 
+from pyrevit import script
 from pyrevit.script import toggle_icon
 
 PATH_SCRIPT = os.path.dirname(__file__)
@@ -10,6 +12,20 @@ PATH_SCRIPT = os.path.dirname(__file__)
 #Revit Variables
 app = __revit__.Application
 doc = __revit__.ActiveUIDocument.Document
+
+all_rooms = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Rooms).WhereElementIsNotElementType().ToElements()
+
+non_bound_rooms = [room for room in all_rooms if room.LookupParameter("Area").AsDouble() == 0 or room.LookupParameter("Volume").AsDouble() == 0]
+
+only_bound_rooms = [room for room in all_rooms if room not in non_bound_rooms ]
+
+fire_water_tanks = [room for room in all_rooms if room.get_Parameter(BuiltInParameter.ROOM_NAME).AsString() == "FIRE WATER TANK"]
+
+fire_pump_rooms = [room for room in all_rooms if room.get_Parameter(BuiltInParameter.ROOM_NAME).AsString() == "FIRE PUMP ROOM"]
+
+if len(fire_water_tanks) == 0:
+    TaskDialog.Show("Error", "No Fire Water Tanks Found")
+    script.exit()
 
 def read_toggle_config():
     """Function to read toggle_state.json config located in the script's folder.
@@ -30,12 +46,6 @@ def read_toggle_config():
         json.dump(new_data, f)
     return TOGGLE
 
-all_rooms        = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Rooms).WhereElementIsNotElementType().ToElements()
-
-non_bound_rooms  = [room for room in all_rooms if room.get_Parameter(BuiltInParameter.ROOM_AREA).AsDouble() == 0]
-
-only_bound_rooms = [room for room in all_rooms if room not in non_bound_rooms]
-
 TOGGLE = read_toggle_config()
 
 # ACTIVATE/DEACTIVATE ICON
@@ -43,9 +53,11 @@ icon_on  = os.path.join(PATH_SCRIPT, 'on.png')
 icon_off = os.path.join(PATH_SCRIPT, 'off.png')
 toggle_icon(TOGGLE, icon_on, icon_off) #Change icon
 
-room_solids = []
+room_solids_tanks = []
 
-for room in only_bound_rooms:
+room_solids_pumps = []
+
+for room in fire_water_tanks:
 
     calculator = SpatialElementGeometryCalculator(doc)
 
@@ -53,46 +65,55 @@ for room in only_bound_rooms:
 
     room_solid = results.GetGeometry()
 
-    room_solids.append(room_solid)
+    room_solids_tanks.append(room_solid)
+
+for room in fire_pump_rooms:
+
+    calculator = SpatialElementGeometryCalculator(doc)
+
+    results = calculator.CalculateSpatialElementGeometry(room)
+
+    room_solid = results.GetGeometry()
+
+    room_solids_pumps.append(room_solid)
 
 #Collecting Solid patterns
 all_patterns  = FilteredElementCollector(doc).OfClass(FillPatternElement).ToElements()
 solid_pattern = [i for i in all_patterns if i.GetFillPattern().IsSolidFill][0]
 
-color = Color(89,42,250)
+color_tanks = Color(255,0,0)
 
+#Override Color Settings
 override_settings = OverrideGraphicSettings()
 
 override_settings.SetSurfaceForegroundPatternId(solid_pattern.Id)
-override_settings.SetSurfaceForegroundPatternColor(color)
+override_settings.SetSurfaceForegroundPatternColor(color_tanks)
 
 override_settings.SetCutForegroundPatternId(solid_pattern.Id)
-override_settings.SetCutForegroundPatternColor(color)
+override_settings.SetCutForegroundPatternColor(color_tanks)
 
 override_settings.SetSurfaceTransparency(25)
 
-tgrp = TransactionGroup(doc,"3D Rooms")
+
+tgrp = TransactionGroup(doc,"3D Fire Water Tanks")
 
 tgrp.Start()
 
-t1 = Transaction(doc,"create 3D Rooms")
+t1 = Transaction(doc,"Create 3D Fire Water Tanks")
 
 t1.Start()
 
 shapes = []
 
-for solid in room_solids:
-    try:
-        direct_shape = DirectShape.CreateElement(doc, ElementId(BuiltInCategory.OST_Rooms)).SetShape([solid])
-    except:
-        continue
+for solid in room_solids_tanks:
+
+    direct_shape = DirectShape.CreateElement(doc, ElementId(BuiltInCategory.OST_GenericModel)).SetShape([solid])
     created_shapes = FilteredElementCollector(doc).OfClass(DirectShape).WhereElementIsNotElementType().ToElements()
+
     for shape in created_shapes:
-        try:
-            shapes.append(shape)
-            doc.ActiveView.SetElementOverrides(shape.Id, override_settings)
-        except:
-            continue
+
+        shapes.append(shape)
+        doc.ActiveView.SetElementOverrides(shape.Id, override_settings)
 
 t1.Commit()
 
@@ -100,7 +121,7 @@ tgrp.Assimilate()
 
 if not TOGGLE:
     try:
-        t = Transaction(doc, "Delete 3D Rooms")
+        t = Transaction(doc, "Delete 3D Fire Water Tanks")
 
         t.Start()
 
