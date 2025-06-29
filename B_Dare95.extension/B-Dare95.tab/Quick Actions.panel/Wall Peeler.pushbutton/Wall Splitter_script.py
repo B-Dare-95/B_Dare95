@@ -12,7 +12,7 @@ To-Do:
 - Supress Join walls Warning
 - Keep same Mark Parameter (+Supress Mark Parameter Warning)
 ________________________________________________________________
-Authors: Erik Frits / Mohamed Bedair"""
+Authors: Erik Frits / Mohamed Bedair/Joven Mark Gumana"""
 
 # ╦╔╦╗╔═╗╔═╗╦═╗╔╦╗╔═╗
 # ║║║║╠═╝║ ║╠╦╝ ║ ╚═╗
@@ -34,7 +34,6 @@ from System.Collections.Generic import List
 doc      = __revit__.ActiveUIDocument.Document
 uidoc    = __revit__.ActiveUIDocument
 app      = __revit__.Application
-
 
 # ╔═╗╦ ╦╔╗╔╔═╗╔╦╗╦╔═╗╔╗╔╔═╗
 # ╠╣ ║ ║║║║║   ║ ║║ ║║║║╚═╗
