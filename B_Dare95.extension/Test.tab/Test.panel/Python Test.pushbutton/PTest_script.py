@@ -18,3 +18,10 @@ selection   = uidoc.Selection
 app         = __revit__.Application
 active_view = doc.ActiveView
 output      = script.get_output()
+
+all_parameter_filters = FilteredElementCollector(doc).OfClass(ParameterFilterElement).ToElements()
+all_parameter_filters_names = [f.Name for f in all_parameter_filters]
+
+wall_types = FilteredElementCollector(doc).OfClass(WallType).ToElements()
+wall_types_names = [Element.Name.GetValue(typ) for typ in wall_types]
+

@@ -15,16 +15,12 @@ doc = __revit__.ActiveUIDocument.Document
 
 all_rooms = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Rooms).WhereElementIsNotElementType().ToElements()
 
-non_bound_rooms = [room for room in all_rooms if room.LookupParameter("Area").AsDouble() == 0 or room.LookupParameter("Volume").AsDouble() == 0]
+water_tanks = [room for room in all_rooms
+                    if "WATER" in room.get_Parameter(BuiltInParameter.ROOM_NAME).AsString()
+                    and not "FIRE" in room.get_Parameter(BuiltInParameter.ROOM_NAME).AsString()]
 
-only_bound_rooms = [room for room in all_rooms if room not in non_bound_rooms ]
-
-fire_water_tanks = [room for room in all_rooms if room.get_Parameter(BuiltInParameter.ROOM_NAME).AsString() == "FIRE WATER TANK"]
-
-fire_pump_rooms = [room for room in all_rooms if room.get_Parameter(BuiltInParameter.ROOM_NAME).AsString() == "FIRE PUMP ROOM"]
-
-if len(fire_water_tanks) == 0:
-    TaskDialog.Show("Error", "No Fire Water Tanks Found")
+if len(water_tanks) == 0:
+    TaskDialog.Show("Error", "No Water Tanks Found")
     script.exit()
 
 def read_toggle_config():
@@ -57,7 +53,7 @@ room_solids_tanks = []
 
 room_solids_pumps = []
 
-for room in fire_water_tanks:
+for room in water_tanks:
 
     calculator = SpatialElementGeometryCalculator(doc)
 
@@ -67,21 +63,11 @@ for room in fire_water_tanks:
 
     room_solids_tanks.append(room_solid)
 
-for room in fire_pump_rooms:
-
-    calculator = SpatialElementGeometryCalculator(doc)
-
-    results = calculator.CalculateSpatialElementGeometry(room)
-
-    room_solid = results.GetGeometry()
-
-    room_solids_pumps.append(room_solid)
-
 #Collecting Solid patterns
 all_patterns  = FilteredElementCollector(doc).OfClass(FillPatternElement).ToElements()
 solid_pattern = [i for i in all_patterns if i.GetFillPattern().IsSolidFill][0]
 
-color_tanks = Color(255,0,0)
+color_tanks = Color(0,0,255)
 
 #Override Color Settings
 override_settings = OverrideGraphicSettings()
@@ -89,10 +75,13 @@ override_settings = OverrideGraphicSettings()
 override_settings.SetSurfaceForegroundPatternId(solid_pattern.Id)
 override_settings.SetSurfaceForegroundPatternColor(color_tanks)
 
+override_settings.SetSurfaceBackgroundPatternId(solid_pattern.Id)
+override_settings.SetSurfaceBackgroundPatternColor(color_tanks)
+
 override_settings.SetCutForegroundPatternId(solid_pattern.Id)
 override_settings.SetCutForegroundPatternColor(color_tanks)
 
-override_settings.SetSurfaceTransparency(25)
+override_settings.SetSurfaceTransparency(0)
 
 
 tgrp = TransactionGroup(doc,"3D Fire Water Tanks")
