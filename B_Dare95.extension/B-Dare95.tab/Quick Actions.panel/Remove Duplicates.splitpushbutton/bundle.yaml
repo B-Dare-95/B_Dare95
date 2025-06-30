@@ -1,5 +1,0 @@
-splitpushbutton:
-  name: "Remove Duplicates"
-  buttons:
-    - name: "Family Instances"
-    - name: "Walls,Floors & Ceilings"

@@ -1,27 +1,66 @@
-# -*- coding: utf-8 -*-
-
-#Imports
 import clr
-from Autodesk.Revit.DB import *
-from Autodesk.Revit.UI import *
-from Autodesk.Revit.UI.Selection import *
-from System.Collections.Generic import List
-from pyrevit import forms, revit,script
-from pyrevit import EXEC_PARAMS
-from rpw.ui.forms import *
-import xlsxwriter
+from Autodesk.Revit.DB import FilteredElementCollector, BuiltInCategory, Element, ElementId, ParameterValueProvider, \
+    FilterStringRule, ElementParameterFilter, ParameterValueProvider, FilterElementIdRule, ElementId, BuiltInParameter
 
-#Revit Variables
-uidoc       = __revit__.ActiveUIDocument
-doc         = __revit__.ActiveUIDocument.Document
-selection   = uidoc.Selection
-app         = __revit__.Application
-active_view = doc.ActiveView
-output      = script.get_output()
+# Get current Revit document
+doc = __revit__.ActiveUIDocument.Document
 
-all_parameter_filters = FilteredElementCollector(doc).OfClass(ParameterFilterElement).ToElements()
-all_parameter_filters_names = [f.Name for f in all_parameter_filters]
+# Collect all walls in the model
+walls = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Walls).WhereElementIsNotElementType().ToElements()
 
-wall_types = FilteredElementCollector(doc).OfClass(WallType).ToElements()
-wall_types_names = [Element.Name.GetValue(typ) for typ in wall_types]
+# Process each wall
+for wall in walls:
+    # Get wall type
+    wall_type_id = wall.GetTypeId()
+    wall_type = doc.GetElement(wall_type_id)
+
+    # Get wall type parameters
+    type_params = wall_type.Parameters
+
+    # Get the wall's name
+    wall_name = wall.Name if hasattr(wall, "Name") and wall.Name else "Unnamed Wall"
+    type_name = wall_type.Name if hasattr(wall_type, "Name") and wall_type.Name else "Unnamed Type"
+
+    print("Wall: {} (Type: {})".format(wall_name, type_name))
+
+    # Get Fire Rating parameter
+    fire_rating_param = None
+
+    # Try to get fire rating parameter from wall
+    fire_rating_param = wall.get_Parameter()
+
+    # If not found on wall, try to get it from the wall type
+    if fire_rating_param is None or not fire_rating_param.HasValue:
+        fire_rating_param = wall_type.LookupParameter("Fire Rating")
+
+    # Print fire rating if found
+    if fire_rating_param is not None and fire_rating_param.HasValue:
+        fire_rating_value = fire_rating_param.AsString()
+        print("  Fire Rating: {}".format(fire_rating_value))
+    else:
+        print("  Fire Rating: Not specified")
+
+    print("  Type Parameters:")
+    for param in type_params:
+        # Skip non-valued parameters
+        if not param.HasValue:
+            continue
+
+        param_name = param.Definition.Name
+
+        # Get parameter value based on its storage type
+        if param.StorageType.ToString() == "String":
+            param_value = param.AsString()
+        elif param.StorageType.ToString() == "Integer":
+            param_value = param.AsInteger()
+        elif param.StorageType.ToString() == "Double":
+            param_value = param.AsDouble()
+        elif param.StorageType.ToString() == "ElementId":
+            param_value = param.AsElementId().IntegerValue
+        else:
+            param_value = "Unknown value type"
+
+        print("    {}: {}".format(param_name, param_value))
+
+    print("")
 
