@@ -1,4 +1,16 @@
 # -*- coding: utf-8 -*-
+__title__  = "Delete Duplicate Family Instances"
+__author__ = "Mohamed Bedair"
+__doc__ = """
+
+Description:
+Deletes all duplicate family instances in the model.
+
+How-to:
+-> Run the script
+-> a report will be printed with the number of duplicates deleted
+
+Author: Mohamed Bedair"""
 
 #Imports
 from Autodesk.Revit.DB import *
@@ -19,13 +31,32 @@ def get_location_point(element):
     else:
         return None
 
-# Filter elements by category
-elements_in_active_view = FilteredElementCollector(doc).WhereElementIsNotElementType().ToElements()
+# Get all warning descriptions
+failure_messages = doc.GetWarnings()
+
+# Find warnings about identical instances
+duplicate_warnings = [warning for warning in failure_messages
+                     if "identical instances in the same place" in warning.GetDescriptionText()]
+
+# Get element IDs from these warnings
+duplicate_element_ids = []
+for warning in duplicate_warnings:
+    duplicate_element_ids.extend(warning.GetFailingElements())
+
+# Convert to set for faster lookup
+duplicate_element_id_set = set(duplicate_element_ids)
+
+# Get all model elements with warnings
+problematic_elements = []
+for elem_id in duplicate_element_ids:
+    elem = doc.GetElement(elem_id)
+    if elem and elem.Category and elem.Category.CategoryType == CategoryType.Model:
+        problematic_elements.append(elem)
 
 # Group elements by type + location
 element_groups   = {}
 
-for el in elements_in_active_view:
+for el in problematic_elements:
     el_type = el.GetTypeId()
     loc_point = get_location_point(el)
     if not loc_point:
@@ -51,7 +82,7 @@ for group in element_groups.values():
 
 
 # Start Transaction and Delete
-t = Transaction(doc,"Delete Duplicate Elements")
+t = Transaction(doc,__title__)
 t.Start()
 
 for el in els_to_delete:
