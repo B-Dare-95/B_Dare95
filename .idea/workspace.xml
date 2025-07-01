@@ -5,66 +5,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="09d0a4df-0748-4405-a48e-7586ee4f5c90" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/B-Dare95.panel/col2.stack/Log File.pushbutton/Log File_script.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/B-Dare95.panel/col2.stack/Log File.pushbutton/icon.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/B-Dare95.panel/col2.stack/Tally.urlbutton/bundle.yaml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/B-Dare95.panel/col2.stack/Tally.urlbutton/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/B_Dare95.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/B_Dare95.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/MEP Filters.pushbutton/MEP Filter_script.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/MEP Filters.pushbutton/icon.png" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/.idea/.name" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/.idea/.name" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/B-Dare95.Panel/User Guide.urlbutton/bundle.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/B-Dare95.panel/User Guide.urlbutton/bundle.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/B-Dare95.Panel/User Guide.urlbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/B-Dare95.panel/User Guide.urlbutton/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/B-Dare95.Panel/col2.stack/Leave a Review.urlbutton/bundle.yaml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/B-Dare95.Panel/col2.stack/Leave a Review.urlbutton/icon.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/B-Dare95.Panel/col2.stack/Report Bugs.urlbutton/bundle.yaml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/B-Dare95.Panel/col2.stack/Report Bugs.urlbutton/icon.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/B-Dare95.Panel/col2.stack/Suggest New Tool.urlbutton/bundle.yaml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/B-Dare95.Panel/col2.stack/Suggest New Tool.urlbutton/icon.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Family Confidant.panel/Family Tree.splitpushbutton/Family Tree(By Selection).pushbutton/Family Tree(By Selection)_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Families.panel/Family Tree.splitpushbutton/Family Tree(By Selection).pushbutton/Family Tree(By Selection)_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Family Confidant.panel/Family Tree.splitpushbutton/Family Tree(By Selection).pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Families.panel/Family Tree.splitpushbutton/Family Tree(By Selection).pushbutton/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Family Confidant.panel/Family Tree.splitpushbutton/Family Tree.pushbutton/Family Tree_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Families.panel/Family Tree.splitpushbutton/Family Tree.pushbutton/Family Tree_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Family Confidant.panel/Family Tree.splitpushbutton/Family Tree.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Families.panel/Family Tree.splitpushbutton/Family Tree.pushbutton/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Family Confidant.panel/Family Tree.splitpushbutton/bundle.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Families.panel/Family Tree.splitpushbutton/bundle.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Finishes.panel/Wall Finishes.pushbutton/Wall Finishes_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Walls.panel/col1.stack/Wall Finishes.pushbutton/Wall Finishes_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Finishes.panel/Wall Finishes.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Walls.panel/col1.stack/Wall Finishes.pushbutton/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/Ghost Mode.pushbutton/Ghost Model_script.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/Ghost Mode.pushbutton/icon.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/Ghost Mode.pushbutton/off.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/Ghost Mode.pushbutton/on.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/Ghost Mode.pushbutton/toggle_state.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Links.panel/col1.stack/Link Workset Inspector.pushbutton/Link Workset Inspector_script.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Links.panel/col1.stack/Link Workset Inspector.pushbutton/icon.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.splitpushbutton/Family Instances.pushbutton/Duplicate Family Instances_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.pushbutton/Duplicate Family Instances_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.splitpushbutton/Family Instances.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/Archved Code/Walls,Floors &amp; Ceilings.pushbutton/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.splitpushbutton/Walls,Floors &amp; Ceilings.pushbutton/Duplicate Walls,Floors &amp; Ceilings_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/Archved Code/Walls,Floors &amp; Ceilings.pushbutton/Duplicate Walls,Floors &amp; Ceilings_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.splitpushbutton/Walls,Floors &amp; Ceilings.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.pushbutton/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.splitpushbutton/bundle.yaml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Quick Actions.panel/Wall Peeler.pushbutton/Wall Splitter_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Walls.panel/col1.stack/Wall Peeler.pushbutton/Wall Splitter_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Quick Actions.panel/Wall Peeler.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Walls.panel/col1.stack/Wall Peeler.pushbutton/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Quick Actions.panel/col3.stack/Color Walls.pulldown/Fire Rated Walls.pushbutton/Fire Rated Walls_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Walls.panel/col1.stack/Color Walls.pulldown/Fire Rated Walls.pushbutton/Fire Rated Walls_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Quick Actions.panel/col3.stack/Color Walls.pulldown/INT vs EXT.pushbutton/INTvsEXT_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Walls.panel/col1.stack/Color Walls.pulldown/INT vs EXT.pushbutton/INTvsEXT_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Quick Actions.panel/col3.stack/Color Walls.pulldown/bundle.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Walls.panel/col1.stack/Color Walls.pulldown/bundle.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Quick Actions.panel/col3.stack/Color Walls.pulldown/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Walls.panel/col1.stack/Color Walls.pulldown/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Quick Actions.panel/col3.stack/icon.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Toggles.panel/col1.stack/3D Rooms.pushbutton/3D Rooms_script.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Toggles.panel/col1.stack/3D Rooms.pushbutton/icon.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Toggles.panel/col1.stack/3D Rooms.pushbutton/off.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Toggles.panel/col1.stack/3D Rooms.pushbutton/on.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Toggles.panel/col1.stack/3D Rooms.pushbutton/toggle_state.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Toggles.panel/col1.stack/Highlight MEP.pushbutton/Highlight MEP_script.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Toggles.panel/col1.stack/Highlight MEP.pushbutton/icon.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Toggles.panel/col1.stack/Highlight MEP.pushbutton/off.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Toggles.panel/col1.stack/Highlight MEP.pushbutton/on.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Toggles.panel/col1.stack/Highlight MEP.pushbutton/toggle_state.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Toggles.panel/col1.stack/Unbound Finishes.pushbutton/Unbound Finishes_script.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Toggles.panel/col1.stack/Unbound Finishes.pushbutton/icon.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Toggles.panel/col1.stack/Unbound Finishes.pushbutton/off.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Toggles.panel/col1.stack/Unbound Finishes.pushbutton/on.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Toggles.panel/col1.stack/Unbound Finishes.pushbutton/toggle_state.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/bundle.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/bundle.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/Test.tab/Test.panel/Python Test.pushbutton/PTest_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/Test.tab/Test.panel/Python Test.pushbutton/PTest_script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Links.panel/col1.stack/bundle.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Links.panel/col1.stack/bundle.yaml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -82,7 +26,7 @@
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="HighlightingSettingsPerFile">
-    <setting file="file://$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Openings Generator.panel/Auto Doors.pushbutton/Auto Doors_script.py" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/MEP Filters.pushbutton/MEP Filter_script.py" root0="SKIP_INSPECTION" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 5
@@ -95,22 +39,23 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "RunOnceActivity.OpenProjectViewOnStart": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "main",
-    "last_opened_file_path": "C:/Users/mohamed.bedair/Documents/GitHub/B_Dare95/B_Dare95.extension/B-Dare95.tab/B-Dare95.panel/col2.stack/Log File.pushbutton",
-    "settings.editor.selected.configurable": "vcs.Git"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/mohamed.bedair/Documents/GitHub/B_Dare95/B_Dare95.extension/B-Dare95.tab/B-Dare95.panel/col2.stack/Log File.pushbutton&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;vcs.Git&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\B-Dare95.panel\col2.stack\Log File.pushbutton" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\B-Dare95.panel\col2.stack\Tally.urlbutton" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Inspection.panel\MEP Filters.pushbutton" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Walls.panel\col1.stack" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Walls.panel" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\Archved Code" />
