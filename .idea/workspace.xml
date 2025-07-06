@@ -5,10 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="09d0a4df-0748-4405-a48e-7586ee4f5c90" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/MEP Filters.pushbutton/MEP Filter_script.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/MEP Filters.pushbutton/icon.png" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Links.panel/col1.stack/bundle.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Links.panel/col1.stack/bundle.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/MEP Filters.pushbutton/MEP Filter_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/MEP Filters.pushbutton/MEP Filter_script.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

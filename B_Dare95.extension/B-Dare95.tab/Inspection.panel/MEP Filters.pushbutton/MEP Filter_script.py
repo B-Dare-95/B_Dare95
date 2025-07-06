@@ -6,12 +6,11 @@ ________________________________________________________________
 Description:
 - Creates View Filters for MEP for Visual Inspection 
 
+How to Use:
 - Run the script
 - View Filters will be created for each MEP Network Individually
 ________________________________________________________________
 Author: Mohamed Bedair"""
-
-import random
 
 #Imports
 import clr
@@ -32,22 +31,21 @@ app         = __revit__.Application
 active_view = doc.ActiveView
 output      = script.get_output()
 
-
 ##########################################################################################################
-def create_view_filters(filter_name,cats,sys_class_name,color):
+def create_view_filters(filter_name,cats,param_id,param_value,color):
 
-    cats_id = [cat.Id for cat in cats]
+    cats_id = [ElementId(cat) for cat in cats]
 
-    pvp = ParameterValueProvider(ElementId(BuiltInParameter.RBS_SYSTEM_CLASSIFICATION_PARAM))
+    pvp = ParameterValueProvider(param_id)
 
     if app.VersionNumber >= 2021:
-        rule = FilterStringRule(pvp,FilterStringEquals(),sys_class_name,True)
+        rule = FilterStringRule(pvp,FilterStringContains(),param_value,True)
     elif app.VersionNumber <= 2022:
-        rule = FilterStringRule(pvp,FilterStringEquals(),sys_class_name)
+        rule = FilterStringRule(pvp,FilterStringContains(),param_value)
 
     element_filter = ElementParameterFilter(rule)
 
-    view_filter = ParameterFilterElement.Create(doc,filter_name,cats_id,element_filter)
+    view_filter = ParameterFilterElement.Create(doc,filter_name,List[ElementId](cats_id),element_filter)
 
     all_fill_patterns = FilteredElementCollector(doc).OfClass(FillPatternElement).ToElements()
     solid_pattern = [i for i in all_fill_patterns if i.GetFillPattern().IsSolidFill][0]
@@ -72,7 +70,7 @@ def create_view_filters(filter_name,cats,sys_class_name,color):
 all_par_filters = FilteredElementCollector(doc).OfClass(ParameterFilterElement).ToElements()
 all_par_filters_names = [f.Name for f in all_par_filters]
 
-coordination_filters_names [
+mp_filters_names = [
     "COORD_SUPPLY DUCTS",
     "COORD_RETURN DUCTS",
     "COORD_EXHAUST DUCTS",
@@ -83,11 +81,9 @@ coordination_filters_names [
     "COORD_SUPPLY CHILLED WATER",
     "COORD_RETURN CHILLED WATER",
     "COORD_DRAINAGE",
-    "COORD_ELECTRIC TRAYS",
-    "COORD_ICT TRAYS"
 ]
 
-coordination_filters_colors = [
+mp_filters_colors = [
     Color(0,128,255),   # color_supply_ducts
     Color(255,128,64),  # color_return_ducts
     Color(0,128,0),     # color_exhaust_ducts
@@ -97,9 +93,7 @@ coordination_filters_colors = [
     Color(255,115,47),  # color_hot_water_pipes
     Color(128,128,255), # color_supply_chilled_water
     Color(255,255,128), # color_return_chilled_water
-    Color(0,64,0),      # color_drainage
-    Color(255,255,0),   # color_electric_trays
-    Color(128,255,255)  # color_ict_trays
+    Color(64,0,64),      # color_drainage
 ]
 
 system_class_names = [
@@ -115,68 +109,60 @@ system_class_names = [
     "Sanitary"
 ]
 
-hvac_categories = [
+mp_categories = [
     BuiltInCategory.OST_DuctSystem,
+    BuiltInCategory.OST_DuctAccessory,
     BuiltInCategory.OST_DuctCurves,
     BuiltInCategory.OST_DuctFitting,
     BuiltInCategory.OST_FlexDuctCurves,
-    BuiltInCategory.OST_DuctInsulations,
-    BuiltInCategory.OST_DuctTerminal]
-
-
-plumbing_categories = [
+    BuiltInCategory.OST_DuctTerminal,
     BuiltInCategory.OST_PipeCurves,
     BuiltInCategory.OST_PipeFitting,
+    BuiltInCategory.OST_PipeAccessory,
     BuiltInCategory.OST_FlexPipeCurves,
-    BuiltInCategory.OST_PipeInsulations,
-    BuiltInCategory.OST_PipingSystem]
+    BuiltInCategory.OST_PipingSystem
+]
+
+
+elec_filters_names = ["COORD_ELECTRIC TRAYS","COORD_ICT TRAYS"]
+
+elec_filters_colors = [
+    Color(255, 255, 0),   # color_electric_trays
+    Color(128, 255, 255)  # color_ict_trays
+]
+
+elec_type_names = ["_E_","_T_"]
 
 electrical_categories = [
     BuiltInCategory.OST_CableTray,
-    BuiltInCategory.OST_CableTrayFitting]
+    BuiltInCategory.OST_CableTrayFitting,
+    BuiltInCategory.OST_Conduit,
+    BuiltInCategory.OST_ConduitFitting
+]
+
+mp_param_id   = ElementId(BuiltInParameter.RBS_SYSTEM_CLASSIFICATION_PARAM)
+
+elec_param_id = ElementId(BuiltInParameter.SYMBOL_NAME_PARAM)
 
 #Start Transaction
-with Transaction(doc,"Create View Filters") as t:
+with Transaction(doc,__title__) as t:
     t.Start()
+    for i in range(len(mp_filters_names)):
 
-    cats = List[ElementId]()
-    cats.Add(ElementId(BuiltInCategory.OST_DuctSystem))
-    cats.Add(ElementId(BuiltInCategory.OST_DuctCurves))
-    cats.Add(ElementId(BuiltInCategory.OST_DuctFitting))
+        create_view_filters(mp_filters_names[i],
+                            mp_categories,
+                            mp_param_id,
+                            system_class_names[i],
+                            mp_filters_colors[i]
+                            )
 
-    # for wall_type_name in wall_types_names:
-    #     filter_name = wall_type_name + " Filter_{}".format(wall_type_name)
-    #     if not filter_name in all_par_filters_names:
-    #
-    #         #Select View Filter Categories
-    #         cats = List[ElementId]()
-    #         cats.Add(ElementId(BuiltInCategory.OST_Walls))
-    #
-    #         #Rule 1 - Wall Function
-    #         pvp = ParameterValueProvider(ElementId(BuiltInParameter.SYMBOL_NAME_PARAM))
-    #         rule_1 = FilterStringRule(pvp, FilterStringEquals(),wall_type_name,True)
-    #
-    #         #Create an Element Parameter Filter
-    #         wall_filter = ElementParameterFilter(rule_1)
-    #
-    #         #Create View Filter
-    #         view_filter = ParameterFilterElement.Create(doc,filter_name,cats,wall_filter)
-    #
-    #         #Create Color and Solid Pattern
-    #         R = random.randint(0,255)
-    #         G = random.randint(0,255)
-    #         B = random.randint(0,255)
-    #
-    #         color = Color(R,G,B)
-    #         all_patterns = FilteredElementCollector(doc).OfClass(FillPatternElement).ToElements()
-    #
-    #         solid_pattern = [i for i in all_patterns if i.GetFillPattern().IsSolidFill][0]
-    #
-    #         override_settings = OverrideGraphicSettings()
-    #         override_settings.SetSurfaceForegroundPatternId(solid_pattern.Id)
-    #         override_settings.SetSurfaceForegroundPatternColor(color)
-    #
-    #         active_view.AddFilter(view_filter.Id)
-    #         active_view.SetFilterOverrides(view_filter.Id,override_settings)
+    for i in range(len(elec_filters_names)):
+
+        create_view_filters(elec_filters_names[i],
+                            electrical_categories,
+                            elec_param_id,
+                            elec_type_names[i],
+                            elec_filters_colors[i]
+                            )
 
     t.Commit()
