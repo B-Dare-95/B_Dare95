@@ -72,7 +72,7 @@ els_to_delete = []
 
 for group in element_groups.values():
     if len(group) > 1:
-        if int(app.VersionNumber) > 2021:
+        if int(app.VersionNumber) <= 2021:
             group.sort(key=lambda x: x.Id.Value)
         else:
             group.sort(key=lambda x: x.Id.IntegerValue)

@@ -95,8 +95,11 @@ t1.Start()
 shapes = []
 
 for solid in room_solids_tanks:
+    try:
+        direct_shape = DirectShape.CreateElement(doc, ElementId(BuiltInCategory.OST_GenericModel)).SetShape([solid])
+    except:
+        continue
 
-    direct_shape = DirectShape.CreateElement(doc, ElementId(BuiltInCategory.OST_GenericModel)).SetShape([solid])
     created_shapes = FilteredElementCollector(doc).OfClass(DirectShape).WhereElementIsNotElementType().ToElements()
 
     for shape in created_shapes:
