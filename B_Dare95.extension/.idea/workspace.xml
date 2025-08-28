@@ -7,10 +7,12 @@
     <list default="true" id="97e5514c-6192-402f-877a-0503c0f802f5" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/.name" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.name" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/col1.stack/Fire Tanks.pushbutton/Fire Tanks_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/col1.stack/Fire Tanks.pushbutton/Fire Tanks_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/col1.stack/Water Tanks.pushbutton/Water Tanks_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/col1.stack/Water Tanks.pushbutton/Water Tanks_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/col2.stack/3D Rooms.pushbutton/toggle_state.json" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/col2.stack/3D Rooms.pushbutton/toggle_state.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.pushbutton/Duplicate Family Instances_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.pushbutton/Duplicate Family Instances_script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/col2.stack/Highlight MEP.pushbutton/toggle_state.json" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/col2.stack/Highlight MEP.pushbutton/toggle_state.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Links.panel/col1.stack/Bulk Copy From Link.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Links.panel/col1.stack/Bulk Copy From Link.pushbutton/script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Pin &amp; Unpin.pulldown/Pin All in View.pushbutton/Pin All in View_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Pin &amp; Unpin.pulldown/Pin All in View.pushbutton/Pin All in View_script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Walls.panel/col1.stack/Wall Finishes.pushbutton/Wall Finishes_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Walls.panel/col1.stack/Wall Finishes.pushbutton/Wall Finishes_script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Walls.panel/col1.stack/Wall Peeler.pushbutton/Wall Splitter_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Walls.panel/col1.stack/Wall Peeler.pushbutton/Wall Splitter_script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test 3.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Test 3.pushbutton/script.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -127,11 +129,6 @@
           <url>file://$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/Add Issue VIew.pushbutton/Add Issue View_script.py</url>
           <line>3</line>
           <option name="timeStamp" value="4" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/Test.tab/Test.panel/Test 3.pushbutton/script.py</url>
-          <line>103</line>
-          <option name="timeStamp" value="7" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>

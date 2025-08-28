@@ -1,104 +1,89 @@
 # -*- coding: utf-8 -*-
 
-# IMPORTS
+import clr
+import Autodesk.Revit.DB as DB
 from Autodesk.Revit.DB import *
-from Autodesk.Revit.UI import *
-from Autodesk.Revit.UI.Selection import *
+from Autodesk.Revit.DB.Structure import *
+import System
 from System.Collections.Generic import List
-from pyrevit import forms, revit, script
 
-# VARIABLES
-uidoc = __revit__.ActiveUIDocument
-doc = __revit__.ActiveUIDocument.Document
-selection = uidoc.Selection
 app = __revit__.Application
-active_view = doc.ActiveView
+doc = __revit__.ActiveUIDocument.Document
+uidoc = __revit__.ActiveUIDocument
 
-# FUNCTIONS
-
-# Filter out Unbounded Rooms
-def check_room_area(rooms):
-    return [room for room in rooms if room.Area > 0]
-
-#Check for FLS Area Scheme
-def check_fls_area_scheme(area_schemes):
-    for scheme in area_schemes:
-        if scheme.Name == "FLS":
-            return scheme
+# Start a transaction
+t = Transaction(doc, "Cut Walls with Structural Columns")
+t.Start()
 
 
-# Associate every room with its boundaries as curves
-def get_rooms_bounds(rooms):
-    room_dictionary = {}
-    for room in rooms:
-        curve_bounds = []
-        room_bounds = room.GetBoundarySegments(SpatialElementBoundaryOptions())
-        for bound_list in room_bounds:
-            for bound in bound_list:
-                curve_bounds.append(bound.GetCurve())
-        room_dictionary[room] = curve_bounds
-    return room_dictionary
+# Get all walls in the active document
+wall_collector = FilteredElementCollector(doc)
+walls = wall_collector.OfClass(Wall).ToElements()
 
+# Get all structural columns in the active document
+column_collector = FilteredElementCollector(doc).OfClass(FamilyInstance).OfCategory(
+    BuiltInCategory.OST_StructuralColumns)
+columns = column_collector.ToElements()
 
-# COLLECTORS
-all_views        = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Views).WhereElementIsNotElementType().ToElements()
+# Also check linked documents for structural columns
+linkInstances = FilteredElementCollector(doc).OfClass(RevitLinkInstance).ToElements()
+linked_columns = []
 
-all_rooms        = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Rooms).WhereElementIsNotElementType().ToElements()
+# for linkInstance in linkInstances:
+#     # Skip if the link is not loaded
+#     if not linkInstance.GetLinkDocument():
+#         continue
+#
+#     linkDoc = linkInstance.GetLinkDocument()
+#     transform = linkInstance.GetTotalTransform()
+#
+#     # Get all columns in the linked document
+#     col_collector = FilteredElementCollector(linkDoc).OfClass(FamilyInstance).OfCategory(
+#         BuiltInCategory.OST_StructuralColumns)
+#     linked_cols = col_collector.ToElements()
+#
+#     for col in linked_cols:
+#         linked_columns.append((col, transform, linkInstance))
 
-all_levels       = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Levels).WhereElementIsNotElementType().ToElements()
+# Process each column in the host model
+for column in columns:
+    # Get column geometry
+    options = Options()
+    options.DetailLevel = ViewDetailLevel.Fine
+    options.ComputeReferences = True
+    options.IncludeNonVisibleObjects = True
 
-all_area_schemes = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_AreaSchemes).WhereElementIsNotElementType().ToElements()
+    geo = column.get_Geometry(options)
+    solid = None
 
-# Check if "FLS" area scheme exists
-fls_area_scheme = check_fls_area_scheme(all_area_schemes)
+    # Find the solid in the column geometry
+    for geo_obj in geo:
+        if isinstance(geo_obj, Solid) and geo_obj.Volume > 0:
+            solid = geo_obj
+            break
 
-tgrp=TransactionGroup(doc,"Create FLS Area Views")
+    if solid is None:
+        continue
 
-tgrp.Start()
+    # Check each wall for intersection
+    for wall in walls:
+        # Skip non-architectural walls
+        if wall.WallType.Kind != WallKind.Basic:
+            continue
 
-#Create FLS Area Scheme if not found
-if not fls_area_scheme:
+        # Check if the wall and column intersect
+        wall_bbox = wall.get_BoundingBox(None)
+        column_bbox = column.get_BoundingBox(None)
 
-    t_scheme = Transaction(doc, 'Create FLS Area Scheme')
+        if wall_bbox is not None and column_bbox is not None:
+            if wall_bbox.Intersects(column_bbox):
+                try:
 
-    t_scheme.Start()
+                    # Create the cut between wall and column
+                    if not InstanceVoidCutUtils.IsVoidInstanceCuttingElement(doc, wall.Id, column.Id):
+                        InstanceVoidCutUtils.AddInstanceVoidCut(doc, wall, column)
 
-    try:
-        fls_area_scheme_id = ElementTransformUtils.CopyElement(doc,all_area_schemes[0].Id,XYZ.Zero)
-    except Exception as e:
-        print(e)
-    fls_area_scheme = doc.GetElement(fls_area_scheme_id[0])
-    fls_area_scheme.Name = "FLS"
+                except Exception as e:
+                    print(e)
 
-    t_scheme.Commit()
-
-# Get Plan Views
-plan_views_names = [view.Name for view in all_views if not view.IsTemplate and view.ViewType == ViewType.FloorPlan]
-
-selected_view_names = forms.SelectFromList.show(
-    plan_views_names, title="Choose Views", width=300, button_name="Done", multiselect=True)
-
-if not selected_view_names:
-    script.exit()
-
-plan_views = [view for view in all_views if view.Name in selected_view_names]
-
-# Failsafe if no views are found
-if not plan_views:
-    TaskDialog.Show("Error", "Couldn't find Plan Views")
-    script.exit()
-
-t_area_views = Transaction(doc,"Create Area Views")
-
-t_area_views.Start()
-# Create Area Views inside a transaction
-area_views = []
-
-for view in plan_views:
-    view_level = view.GenLevel
-    new_area_view = ViewPlan.CreateAreaPlan(doc, fls_area_scheme.Id, view_level.Id)
-    area_views.append(new_area_view)
-
-t_area_views.Commit()
-
-tgrp.Assimilate()
+t.Commit()

@@ -65,7 +65,7 @@ def get_wall_types():
     all_wall_types = FilteredElementCollector(doc).OfClass(WallType).ToElements()
     return {
         wt.LookupParameter("Type Name").AsString(): wt
-        for wt in all_wall_types if "FIN" in wt.LookupParameter("Type Name").AsString()
+        for wt in all_wall_types if "FNSH" in wt.LookupParameter("Type Name").AsString()
     }
 
 

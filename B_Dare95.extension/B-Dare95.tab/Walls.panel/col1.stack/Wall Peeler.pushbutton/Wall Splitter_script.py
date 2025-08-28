@@ -109,8 +109,6 @@ def duplicate_wall(wall, keep_hosted ):
         if type(el) != Wall:
             doc.Delete(el.Id)
 
-
-
     return new_wall
 
 def get_wall_type_by_name(wall_type_name):

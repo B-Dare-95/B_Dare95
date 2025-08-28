@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-__title__ = "Unpin All in View"
+__title__ = "Pin All in View"
 __author__ = "Mohamed Bedair"
 __version__ = '1.0.0'
 __doc__ = """
