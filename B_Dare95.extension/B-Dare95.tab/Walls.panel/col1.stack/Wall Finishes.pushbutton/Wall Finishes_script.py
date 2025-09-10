@@ -121,7 +121,6 @@ def create_wall_finishes(room, wall_type, level_id, room_bounds, room_height, of
 
     t.Commit()
 
-
 # Main Execution
 room = select_room()
 wall_types = get_wall_types()
@@ -131,8 +130,7 @@ selected_wall_type_name = forms.SelectFromList.show(
     title="Choose Wall Type",
     width=400,
     button_name="Make A Selection",
-    multiselect=False
-)
+    multiselect=False)
 
 if not selected_wall_type_name:
     script.exit()

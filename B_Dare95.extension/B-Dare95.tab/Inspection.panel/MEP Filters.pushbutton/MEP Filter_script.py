@@ -38,9 +38,9 @@ def create_view_filters(filter_name,cats,param_id,param_value,color):
 
     pvp = ParameterValueProvider(param_id)
 
-    if app.VersionNumber >= 2021:
+    if app.VersionNumber <= 2021:
         rule = FilterStringRule(pvp,FilterStringContains(),param_value,True)
-    elif app.VersionNumber <= 2022:
+    elif app.VersionNumber >= 2022:
         rule = FilterStringRule(pvp,FilterStringContains(),param_value)
 
     element_filter = ElementParameterFilter(rule)
@@ -67,6 +67,8 @@ def create_view_filters(filter_name,cats,param_id,param_value,color):
     active_view.SetFilterOverrides(view_filter.Id, override_settings)
 
 ##########################################################################################################
+
+
 all_par_filters = FilteredElementCollector(doc).OfClass(ParameterFilterElement).ToElements()
 all_par_filters_names = [f.Name for f in all_par_filters]
 
@@ -82,6 +84,8 @@ mp_filters_names = [
     "COORD_RETURN CHILLED WATER",
     "COORD_DRAINAGE",
 ]
+
+
 
 mp_filters_colors = [
     Color(0,128,255),   # color_supply_ducts
@@ -126,6 +130,17 @@ mp_categories = [
 
 elec_filters_names = ["COORD_ELECTRIC TRAYS","COORD_ICT TRAYS"]
 
+
+t=Transaction(doc,"MEP Filters Check")
+
+t.Start()
+
+for f in all_par_filters:
+    if f.Name in mp_filters_names or elec_filters_names:
+        doc.Delete(f.Id)
+
+t.Commit()
+
 elec_filters_colors = [
     Color(255, 255, 0),   # color_electric_trays
     Color(128, 255, 255)  # color_ict_trays
@@ -147,14 +162,15 @@ elec_param_id = ElementId(BuiltInParameter.SYMBOL_NAME_PARAM)
 #Start Transaction
 with Transaction(doc,__title__) as t:
     t.Start()
+
+
     for i in range(len(mp_filters_names)):
 
         create_view_filters(mp_filters_names[i],
                             mp_categories,
                             mp_param_id,
                             system_class_names[i],
-                            mp_filters_colors[i]
-                            )
+                            mp_filters_colors[i])
 
     for i in range(len(elec_filters_names)):
 
@@ -162,7 +178,6 @@ with Transaction(doc,__title__) as t:
                             electrical_categories,
                             elec_param_id,
                             elec_type_names[i],
-                            elec_filters_colors[i]
-                            )
+                            elec_filters_colors[i])
 
     t.Commit()
