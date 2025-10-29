@@ -26,6 +26,7 @@ clr.AddReference('RevitAPI')
 clr.AddReference('RevitAPIUI')
 from Autodesk.Revit.DB import *
 from Autodesk.Revit.UI.Selection import *
+from pyrevit import script
 
 #VARIABLES
 
@@ -34,8 +35,10 @@ uidoc       =  __revit__.ActiveUIDocument
 selection   =  uidoc.Selection
 
 #Prompt user to Select a Linked Element
-ref_selected_element=selection.PickObjects(ObjectType.Element,"Select Element") #type: Reference
-
+try:
+    ref_selected_element=selection.PickObjects(ObjectType.Element,"Select Element") #type: Reference
+except:
+    script.exit()
 #Get Linked Element ID from Resulting Reference
 for ref_element in ref_selected_element:
     element_id = doc.GetElement(ref_element).Id
