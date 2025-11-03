@@ -11,6 +11,7 @@ PATH_SCRIPT = os.path.dirname(__file__)
 #Revit Variables
 app = __revit__.Application
 doc = __revit__.ActiveUIDocument.Document
+active_view = doc.ActiveView
 
 def read_toggle_config():
     """Function to read toggle_state.json config located in the script's folder.
@@ -45,8 +46,13 @@ icon_off = os.path.join(PATH_SCRIPT, 'off.png')
 toggle_icon(TOGGLE, icon_on, icon_off) #Change icon
 
 room_solids = []
+room_names = []
+room_centroids = []
 
 for room in only_bound_rooms:
+
+    room_name = room.get_Parameter(BuiltInParameter.ROOM_NAME).AsValueString()
+    room_names.append(room_name)
 
     calculator = SpatialElementGeometryCalculator(doc)
 
@@ -55,6 +61,29 @@ for room in only_bound_rooms:
     room_solid = results.GetGeometry()
 
     room_solids.append(room_solid)
+
+    # try:
+    #     # get shape centroid
+    #     room_bb = room.get_BoundingBox(None)
+    #
+    #     if room_bb is not None:
+    #         bb_min = room_bb.Min
+    #         bb_max = room_bb.Max
+    #
+    #         centroid_x = (bb_min.X + bb_max.X) / 2
+    #         centroid_y = (bb_min.Y + bb_max.Y) / 2
+    #         centroid_z = (bb_min.Z + bb_max.Z) / 2
+    #
+    #         centroid = XYZ(centroid_x, centroid_y, centroid_z)
+    #
+    #         room_centroids.append(centroid)
+    #
+    #     # write room name in 3d
+    #     for name, pt in room_names, room_centroids:
+    #         TextNote.Create(doc, active_view.Id, centroid, name, 3813106)
+    # except Exception as e:
+    #     print(e)
+    #     continue
 
 #Collecting Solid patterns
 all_patterns  = FilteredElementCollector(doc).OfClass(FillPatternElement).ToElements()
@@ -82,6 +111,7 @@ t1.Start()
 
 shapes = []
 
+
 for solid in room_solids:
     try:
         direct_shape = DirectShape.CreateElement(doc, ElementId(BuiltInCategory.OST_GenericModel)).SetShape([solid])
@@ -92,8 +122,10 @@ for solid in room_solids:
         try:
             shapes.append(shape)
             doc.ActiveView.SetElementOverrides(shape.Id, override_settings)
+
         except:
             continue
+
 
 t1.Commit()
 
