@@ -32,11 +32,11 @@ def read_toggle_config():
         json.dump(new_data, f)
     return TOGGLE
 
-all_rooms        = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Rooms).WhereElementIsNotElementType().ToElements()
+all_rooms = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Rooms).WhereElementIsNotElementType().ToElements()
 
-non_bound_rooms  = [room for room in all_rooms if room.get_Parameter(BuiltInParameter.ROOM_AREA).AsDouble() == 0]
+non_bound_rooms   = [room for room in all_rooms if room.get_Parameter(BuiltInParameter.ROOM_AREA).AsDouble() == 0]
 
-only_bound_rooms = [room for room in all_rooms if room not in non_bound_rooms]
+only_bound_rooms  = [room for room in all_rooms if room not in non_bound_rooms]
 
 TOGGLE = read_toggle_config()
 
@@ -62,28 +62,27 @@ for room in only_bound_rooms:
 
     room_solids.append(room_solid)
 
-    # try:
-    #     # get shape centroid
-    #     room_bb = room.get_BoundingBox(None)
-    #
-    #     if room_bb is not None:
-    #         bb_min = room_bb.Min
-    #         bb_max = room_bb.Max
-    #
-    #         centroid_x = (bb_min.X + bb_max.X) / 2
-    #         centroid_y = (bb_min.Y + bb_max.Y) / 2
-    #         centroid_z = (bb_min.Z + bb_max.Z) / 2
-    #
-    #         centroid = XYZ(centroid_x, centroid_y, centroid_z)
-    #
-    #         room_centroids.append(centroid)
-    #
-    #     # write room name in 3d
-    #     for name, pt in room_names, room_centroids:
-    #         TextNote.Create(doc, active_view.Id, centroid, name, 3813106)
-    # except Exception as e:
-    #     print(e)
-    #     continue
+    try:
+        # get shape centroid
+        room_bb = room.get_BoundingBox(None)
+
+        if room_bb is not None:
+            bb_min = room_bb.Min
+            bb_max = room_bb.Max
+
+            centroid_x = (bb_min.X + bb_max.X) / 2
+            centroid_y = (bb_min.Y + bb_max.Y) / 2
+            centroid_z = (bb_min.Z + bb_max.Z) / 2
+
+            centroid = XYZ(centroid_x, centroid_y, centroid_z)
+
+            room_centroids.append(centroid)
+    except Exception as e:
+        print(e)
+        continue
+
+
+
 
 #Collecting Solid patterns
 all_patterns  = FilteredElementCollector(doc).OfClass(FillPatternElement).ToElements()
@@ -110,7 +109,7 @@ t1 = Transaction(doc,"create 3D Rooms")
 t1.Start()
 
 shapes = []
-
+threede_texts = []
 
 for solid in room_solids:
     try:
@@ -126,6 +125,15 @@ for solid in room_solids:
         except:
             continue
 
+# write room name in 3d
+try:
+
+    for name, pt in zip(room_names, room_centroids):
+        threede_text = TextNote.Create(doc, active_view.Id, pt, name, ElementId(3813106))
+        threede_texts.append(threede_text)
+
+except:
+    pass
 
 t1.Commit()
 
@@ -139,6 +147,9 @@ if not TOGGLE:
 
         for shape in created_shapes:
             doc.Delete(shape.Id)
+
+        for threede_text in threede_texts:
+            doc.Delete(threede_text.Id)
 
         t.Commit()
     except Exception as e:
