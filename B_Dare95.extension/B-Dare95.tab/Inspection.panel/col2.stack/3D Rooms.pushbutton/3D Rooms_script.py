@@ -92,6 +92,8 @@ color = Color(89,42,250)
 
 override_settings = OverrideGraphicSettings()
 
+override_settings.SetSurfaceTransparency(0)
+
 override_settings.SetSurfaceForegroundPatternId(solid_pattern.Id)
 override_settings.SetSurfaceForegroundPatternColor(color)
 
