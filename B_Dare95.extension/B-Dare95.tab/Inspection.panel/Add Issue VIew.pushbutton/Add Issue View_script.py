@@ -6,7 +6,7 @@ from Autodesk.Revit.UI import *
 from pyrevit import script
 
 #Revit Variables
-uidoc       = __revit__.ActiveUIDocument
+   uidoc    = __revit__.ActiveUIDocument
 doc         = __revit__.ActiveUIDocument.Document
 active_view = doc.ActiveView
 

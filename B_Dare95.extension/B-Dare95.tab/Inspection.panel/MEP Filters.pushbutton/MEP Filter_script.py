@@ -130,17 +130,6 @@ mp_categories = [
 
 elec_filters_names = ["COORD_ELECTRIC TRAYS","COORD_ICT TRAYS"]
 
-
-t=Transaction(doc,"MEP Filters Check")
-
-t.Start()
-
-for f in all_par_filters:
-    if f.Name in mp_filters_names or elec_filters_names:
-        doc.Delete(f.Id)
-
-t.Commit()
-
 elec_filters_colors = [
     Color(255, 255, 0),   # color_electric_trays
     Color(128, 255, 255)  # color_ict_trays
@@ -159,25 +148,44 @@ mp_param_id   = ElementId(BuiltInParameter.RBS_SYSTEM_CLASSIFICATION_PARAM)
 
 elec_param_id = ElementId(BuiltInParameter.SYMBOL_NAME_PARAM)
 
+# for mp_filter_name in mp_filters_names:
+#     if mp_filter_name not in all_par_filters_names:
+#         continue
+#     else:
+#         pass
+#         TaskDialog.Show("Error", "MP Filters already found, kindly add them from Filters ")
+#
+# for elec_filter_name in elec_filters_names:
+#     if elec_filter_name not in elec_filters_colors:
+#         continue
+#     else:
+#         pass
+#         TaskDialog.Show("Error", "Elec. Filters already found, kindly add them from Filters ")
+
 #Start Transaction
-with Transaction(doc,__title__) as t:
-    t.Start()
+try:
+    with Transaction(doc,__title__) as t:
+        t.Start()
 
 
-    for i in range(len(mp_filters_names)):
+        for i in range(len(mp_filters_names)):
 
-        create_view_filters(mp_filters_names[i],
-                            mp_categories,
-                            mp_param_id,
-                            system_class_names[i],
-                            mp_filters_colors[i])
+            create_view_filters(mp_filters_names[i],
+                                mp_categories,
+                                mp_param_id,
+                                system_class_names[i],
+                                mp_filters_colors[i])
 
-    for i in range(len(elec_filters_names)):
+        for i in range(len(elec_filters_names)):
 
-        create_view_filters(elec_filters_names[i],
-                            electrical_categories,
-                            elec_param_id,
-                            elec_type_names[i],
-                            elec_filters_colors[i])
+            create_view_filters(elec_filters_names[i],
+                                electrical_categories,
+                                elec_param_id,
+                                elec_type_names[i],
+                                elec_filters_colors[i])
 
-    t.Commit()
+        t.Commit()
+
+except Exception as e:
+    TaskDialog.Show("Error", "Filters Already Exist, kindly add them from filters menu")
+    script.exit
