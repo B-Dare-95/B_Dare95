@@ -5,13 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="97e5514c-6192-402f-877a-0503c0f802f5" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/.name" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.name" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/Add Issue VIew.pushbutton/Add Issue View_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/Add Issue VIew.pushbutton/Add Issue View_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/MEP Filters.pushbutton/MEP Filter_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/MEP Filters.pushbutton/MEP Filter_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/MEP Filters.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/MEP Filters.pushbutton/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/col2.stack/Highlight MEP.pushbutton/Highlight MEP_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/col2.stack/Highlight MEP.pushbutton/Highlight MEP_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test 3.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Test 3.pushbutton/script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test 1.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Test 1.pushbutton/script.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -59,14 +55,17 @@
     &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
     &quot;git-widget-placeholder&quot;: &quot;main&quot;,
     &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
+    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
     &quot;last_opened_file_path&quot;: &quot;D:/Documents/RevitAPI stubs RVT 20-24/RevitAPI stubs/RVT 20&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
     &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
     &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;,
+    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;,
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
 }</component>
@@ -89,7 +88,7 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-python-sdk-b3d66beaba9a-c6efb3732140-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-252.26199.168" />
+        <option value="bundled-python-sdk-ce6832f46686-7b97d883f26b-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-252.25557.178" />
       </set>
     </attachedChunks>
   </component>
