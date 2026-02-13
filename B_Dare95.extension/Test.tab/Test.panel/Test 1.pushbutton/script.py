@@ -88,48 +88,48 @@ t=Transaction(doc,"Create Shaft Encasing")
 
 t.Start()
 
-try:
-    for shaft in shafts_less_than_3lvls:
 
-        shaft_bounds = shaft.BoundaryCurves
+for shaft in shafts_less_than_3lvls:
 
-        for i,l in enumerate(sorted_levels):
+    shaft_bounds = shaft.BoundaryCurves
 
-            current_lvl = l[i].Elevation
-            next_lvl = l[i+1].Elevation
+    for i,l in enumerate(sorted_levels):
+        try:
+            current_lvl = sorted_levels[i].Elevation
+            next_lvl = sorted_levels[i+1].Elevation
 
             wall_height = next_lvl - current_lvl
+        except:
+            continue
 
-            for b in shaft_bounds:
-
-                 shaft_wall = Wall.Create(doc,
-                                         b,
-                                         chosen_one_hr_type_wall.Id,
-                                         l.Id,
-                                         wall_height,
-                                         0,
-                                         False,
-                                         False)
-
-
-
-    for shaft in shafts_greater_than_3lvls:
-
-        shaft_bounds = shaft.BoundaryCurves
-
-        for b,l in shaft_bounds,sorted_levels:
+        for b in shaft_bounds:
 
              shaft_wall = Wall.Create(doc,
                                      b,
-                                     chosen_two_hr_type_wall.Id,
+                                     chosen_one_hr_type_wall.Id,
                                      l.Id,
-                                     3000,
+                                     wall_height,
                                      0,
                                      False,
                                      False)
-except Exception as e:
-    print(e)
-    script.exit()
+
+
+
+# for shaft in shafts_greater_than_3lvls:
+#
+#     shaft_bounds = shaft.BoundaryCurves
+#
+#     for b,l in shaft_bounds,sorted_levels:
+#
+#          shaft_wall = Wall.Create(doc,
+#                                  b,
+#                                  chosen_two_hr_type_wall.Id,
+#                                  l.Id,
+#                                  3000,
+#                                  0,
+#                                  False,
+#                                  False)
+
 
 t.Commit()
 
