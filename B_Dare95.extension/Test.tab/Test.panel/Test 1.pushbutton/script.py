@@ -16,6 +16,143 @@ app         = __revit__.Application
 active_view = doc.ActiveView
 output      = script.get_output()
 
+all_wall_types = FilteredElementCollector(doc).OfClass(WallType).ToElements()
+
+wall_type_names = {
+        wt.LookupParameter("Type Name").AsString(): wt
+        for wt in all_wall_types}
+
+wall_type_ids = {wt:
+            wt.Id
+            for wt in all_wall_types}
+
+wall_type_widths = {wt:
+                    wt.Width
+                    for wt in all_wall_types}
+
+
+all_levels = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Levels).WhereElementIsNotElementType().ToElements()
+
+#sort levels based on elevations for consistency
+sorted_levels = sorted(all_levels, key=lambda level: level.Elevation)
+sorted_levels_ids = [lvl.Id for lvl in sorted_levels]
+
+#Collect Shafts based on no. of levels connected by the shaft
+all_shafts = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_ShaftOpening).WhereElementIsNotElementType().ToElements()
+
+shafts_less_than_3lvls = []
+shafts_greater_than_3lvls = []
+
+#start collecting shafts into their containers
+for shaft in all_shafts:
+
+    shaft_top = shaft.get_Parameter(BuiltInParameter.WALL_HEIGHT_TYPE).AsElementId()
+
+    shaft_bottom = shaft.get_Parameter(BuiltInParameter.WALL_BASE_CONSTRAINT).AsElementId()
+
+    no_of_connected_lvls = (len
+                            (sorted_levels_ids
+                             [sorted_levels_ids.index(shaft_bottom)
+                              :sorted_levels_ids.index(shaft_top)])+1
+                            )
+
+    if no_of_connected_lvls < 3:
+        shafts_less_than_3lvls.append(shaft)
+    elif no_of_connected_lvls >= 3:
+        shafts_greater_than_3lvls.append(shaft)
+
+TaskDialog.Show("Choose Wall Type","Choose a Wall Type for Shafts connecting less than 3 levels")
+
+wall_1hr_chosen = forms.SelectFromList.show(
+    sorted(wall_type_names.keys()),
+    title="Choose a Wall Type",
+    width=300,
+    button_name="Done",
+    multiselect=False)
+
+chosen_one_hr_type_wall= wall_type_names[wall_1hr_chosen]
+
+TaskDialog.Show("Choose Wall Type","Choose a Wall Type for Shafts connecting more than 3 levels")
+
+wall_2hr_chosen = forms.SelectFromList.show(
+    sorted(wall_type_names.keys()),
+    title="Choose a Wall Type",
+    width=300,
+    button_name="Done",
+    multiselect=False)
+
+chosen_two_hr_type_wall= wall_type_names[wall_2hr_chosen]
+
+
+t=Transaction(doc,"Create Shaft Encasing")
+
+t.Start()
+
+
+for shaft in shafts_less_than_3lvls:
+
+    shaft_bounds = shaft.BoundaryCurves
+
+    for i,l in enumerate(sorted_levels):
+        try:
+            current_lvl = sorted_levels[i].Elevation
+            next_lvl = sorted_levels[i+1].Elevation
+
+            wall_height = next_lvl - current_lvl
+        except:
+            continue
+
+        for b in shaft_bounds:
+
+             shaft_wall = Wall.Create(doc,
+                                     b,
+                                     chosen_one_hr_type_wall.Id,
+                                     l.Id,
+                                     wall_height,
+                                     0,
+                                     False,
+                                     False)
+
+
+
+# for shaft in shafts_greater_than_3lvls:
+#
+#     shaft_bounds = shaft.BoundaryCurves
+#
+#     for b,l in shaft_bounds,sorted_levels:
+#
+#          shaft_wall = Wall.Create(doc,
+#                                  b,
+#                                  chosen_two_hr_type_wall.Id,
+#                                  l.Id,
+#                                  3000,
+#                                  0,
+#                                  False,
+#                                  False)
+
+
+t.Commit()
+
+
+# t=Transaction(doc,"Create Wall Shafts")
+#
+# t.Start()
+#
+# for s in all_shafts:
+#
+#     shaft_level = s.LevelId
+#
+#     shaft_bounds = s.BoundaryCurves
+#
+#     for b in shaft_bounds:
+#
+#
+#
+#         shaft_wall = Wall.Create(doc,b,shaft_level,True)
+#
+# t.Commit()
+
+
 # #
 # # #Special Variables
 # #
@@ -97,4 +234,3 @@ output      = script.get_output()
 # #             print(inspection_point)
 # # #
 # # # # print(room_inspection_points)
-
