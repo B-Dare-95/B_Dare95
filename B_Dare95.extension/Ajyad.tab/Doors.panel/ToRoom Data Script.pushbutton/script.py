@@ -47,10 +47,6 @@ for door in all_doors:
 
         door_room_data_level.Set(to_room_level)
 
-        # door_room_designator_param = door.LookupParameter("SDC_A_DOR_TOROOM_DESIGNATOR")
-        #
-        # door_room_designator_param.Set("1")
-
         room_data = to_room_level + to_room_number
 
         doors_in_same_room[door] = room_data

@@ -1,16 +1,55 @@
+# -*- coding: utf-8 -*-
+__title__ = "Column Guard Generator"
+__doc__ = """Version = 1.0
+_____________________________________________________________________
+Description:
+Generates individual Column Guardrails for each column in a linked file.
+
+How to use:
+
+1-Select a Railing Type to use as Column Guardrail
+2-Select Structural Columns to apply the guard 
+3-Done!!
+_____________________________________________________________________
+Author: Mohamed Bedair"""
+
 import clr
 
 clr.AddReference('RevitAPI')
 clr.AddReference('RevitAPIUI')
 from Autodesk.Revit.DB import *
 from Autodesk.Revit.DB.Architecture import Railing
+from Autodesk.Revit.DB.Architecture import RailingType
 from Autodesk.Revit.DB import RevitLinkInstance
 from Autodesk.Revit.UI import *
 from Autodesk.Revit.UI.Selection import ISelectionFilter, ObjectType
 
+from pyrevit import forms
+
 doc = __revit__.ActiveUIDocument.Document
 uidoc = __revit__.ActiveUIDocument
 
+#Select Railing for Column Guard
+
+all_rail_types = FilteredElementCollector(doc).OfClass(RailingType).ToElements()
+
+all_rail_types_id = FilteredElementCollector(doc).OfClass(RailingType).ToElementIds()
+
+all_rail_names = [rail.get_Parameter(BuiltInParameter.ALL_MODEL_TYPE_NAME).AsValueString() for rail in all_rail_types]
+
+rail_dict_type_name = dict(zip(all_rail_types, all_rail_names))
+
+rail_dict_name_id = dict(zip(all_rail_names, all_rail_types_id))
+
+
+selected_rail = forms.SelectFromList.show(
+    all_rail_names,
+    title="Choose Rail Type",
+    width=300,
+    button_name="Make A Selection",
+    multiselect=False)
+
+selected_rail_id = rail_dict_name_id.get(selected_rail)
 
 # --- Selection Filter ---
 
@@ -37,7 +76,6 @@ class LinkedStructuralColumnFilter(ISelectionFilter):
             )
         except Exception:
             return False
-
 
 # --- Helpers ---
 
@@ -136,14 +174,12 @@ else:
             column_guards = Railing.Create(
                 doc,
                 curveloop,
-                ElementId(1659996),
-                ElementId(30)
+                selected_rail_id,
+                column.LevelId
             )
 
         t.Commit()
 
-
     except Exception as e:
         print(e)
         t.RollBack()
-
