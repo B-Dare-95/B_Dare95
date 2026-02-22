@@ -24,10 +24,8 @@ Author: Mohamed Bedair"""
 import clr
 clr.AddReference('RevitAPI')
 clr.AddReference('RevitAPIUI')
-from Autodesk.Revit.DB import *
-from Autodesk.Revit.UI.Selection import *
+from Autodesk.Revit.UI.Selection import ObjectType
 from pyrevit import script
-
 #VARIABLES
 
 doc         =  __revit__.ActiveUIDocument.Document

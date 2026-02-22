@@ -25,9 +25,7 @@ Author: Mohamed Bedair"""
 import clr
 clr.AddReference('RevitAPI')
 clr.AddReference('RevitAPIUI')
-from System.Collections.Generic import List
-from Autodesk.Revit.DB import *
-from Autodesk.Revit.UI.Selection import *
+from Autodesk.Revit.UI.Selection import ObjectType
 from pyrevit import script
 
 #VARIABLES

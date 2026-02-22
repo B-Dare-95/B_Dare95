@@ -57,6 +57,7 @@ try:
         button_name="Make A Selection",
         multiselect=True)
 except:
+    pass
     script.exit()
 #Selecting View Template to apply
 
@@ -78,6 +79,7 @@ try:
         multiselect=False)
 
 except:
+    pass
     script.exit()
 
 try:
@@ -89,6 +91,7 @@ try:
         multiselect=False)
 
 except:
+    pass
     script.exit()
 
 vt_to_apply_plans = vt_dict.get(selected_view_template_plans)

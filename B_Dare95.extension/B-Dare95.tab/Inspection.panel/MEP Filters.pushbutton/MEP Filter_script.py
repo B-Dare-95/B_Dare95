@@ -20,7 +20,7 @@ from System.Collections.Generic import List
 from Autodesk.Revit.DB import *
 from Autodesk.Revit.UI import *
 from Autodesk.Revit.UI.Selection import *
-from pyrevit import forms, revit,script
+from pyrevit import forms, revit, script
 from pyrevit import EXEC_PARAMS
 
 #Revit Variables
@@ -32,45 +32,76 @@ active_view = doc.ActiveView
 output      = script.get_output()
 
 ##########################################################################################################
-def create_view_filters(filter_name,cats,param_id,param_value,color):
+def get_existing_filter(filter_name):
+    """Returns a ParameterFilterElement if one with the given name exists, otherwise None."""
+    all_par_filters = FilteredElementCollector(doc).OfClass(ParameterFilterElement).ToElements()
+    for f in all_par_filters:
+        if f.Name == filter_name:
+            return f
+    return None
 
-    cats_id = [ElementId(cat) for cat in cats]
 
-    pvp = ParameterValueProvider(param_id)
+def is_filter_applied_to_view(view, filter_id):
+    """Returns True if the filter is already added to the given view."""
+    applied_filter_ids = view.GetFilters()
+    return filter_id in applied_filter_ids
 
-    if app.VersionNumber <= 2021:
-        rule = FilterStringRule(pvp,FilterStringContains(),param_value,True)
-    elif app.VersionNumber >= 2022:
-        rule = FilterStringRule(pvp,FilterStringContains(),param_value)
 
-    element_filter = ElementParameterFilter(rule)
-
-    view_filter = ParameterFilterElement.Create(doc,filter_name,List[ElementId](cats_id),element_filter)
-
+def build_override_settings(doc):
+    """Builds and returns the OverrideGraphicSettings with solid fill, given a color."""
     all_fill_patterns = FilteredElementCollector(doc).OfClass(FillPatternElement).ToElements()
     solid_pattern = [i for i in all_fill_patterns if i.GetFillPattern().IsSolidFill][0]
 
     all_line_patterns = FilteredElementCollector(doc).OfClass(LinePatternElement).ToElements()
     solid_line_pattern_id = [i.GetSolidPatternId() for i in all_line_patterns][0]
 
+    return solid_pattern, solid_line_pattern_id
+
+
+def create_view_filters(filter_name, cats, param_id, param_value, color):
+
+    solid_pattern, solid_line_pattern_id = build_override_settings(doc)
+
     override_settings = OverrideGraphicSettings()
     override_settings.SetSurfaceForegroundPatternId(solid_pattern.Id)
     override_settings.SetSurfaceForegroundPatternColor(color)
     override_settings.SetSurfaceBackgroundPatternId(solid_pattern.Id)
     override_settings.SetSurfaceBackgroundPatternColor(color)
-
     override_settings.SetProjectionLinePatternId(solid_line_pattern_id)
     override_settings.SetProjectionLineColor(color)
     override_settings.SetProjectionLineWeight(1)
 
-    active_view.AddFilter(view_filter.Id)
-    active_view.SetFilterOverrides(view_filter.Id, override_settings)
+    existing_filter = get_existing_filter(filter_name)
+
+    if existing_filter is not None:
+        # Filter exists in the document — check if it is applied to the active view
+        if is_filter_applied_to_view(active_view, existing_filter.Id):
+            # Already applied — skip entirely
+            output.print_md("**Skipped (already applied):** {}".format(filter_name))
+        else:
+            # Exists but not applied — apply it now
+            active_view.AddFilter(existing_filter.Id)
+            active_view.SetFilterOverrides(existing_filter.Id, override_settings)
+            output.print_md("**Applied existing filter:** {}".format(filter_name))
+    else:
+        # Filter does not exist — create it from scratch
+        cats_id = [ElementId(cat) for cat in cats]
+        pvp = ParameterValueProvider(param_id)
+
+        if app.VersionNumber <= 2021:
+            rule = FilterStringRule(pvp, FilterStringContains(), param_value, True)
+        else:
+            rule = FilterStringRule(pvp, FilterStringContains(), param_value)
+
+        element_filter = ElementParameterFilter(rule)
+        view_filter = ParameterFilterElement.Create(doc, filter_name, List[ElementId](cats_id), element_filter)
+
+        active_view.AddFilter(view_filter.Id)
+        active_view.SetFilterOverrides(view_filter.Id, override_settings)
+        output.print_md("**Created new filter:** {}".format(filter_name))
 
 ##########################################################################################################
 
-
-all_par_filters = FilteredElementCollector(doc).OfClass(ParameterFilterElement).ToElements()
-all_par_filters_names = [f.Name for f in all_par_filters]
 
 mp_filters_names = [
     "COORD_SUPPLY DUCTS",
@@ -85,19 +116,17 @@ mp_filters_names = [
     "COORD_DRAINAGE",
 ]
 
-
-
 mp_filters_colors = [
-    Color(0,128,255),   # color_supply_ducts
-    Color(255,128,64),  # color_return_ducts
-    Color(0,128,0),     # color_exhaust_ducts
-    Color(255,0,0),     # color_fire_pipes
-    Color(128,128,0),   # color_novec_pipes
-    Color(0,0,255),     # color_cold_water_pipes
-    Color(255,115,47),  # color_hot_water_pipes
-    Color(128,128,255), # color_supply_chilled_water
-    Color(255,255,128), # color_return_chilled_water
-    Color(64,0,64),      # color_drainage
+    Color(0,128,255),
+    Color(255,128,64),
+    Color(0,128,0),
+    Color(255,0,0),
+    Color(128,128,0),
+    Color(0,0,255),
+    Color(255,115,47),
+    Color(128,128,255),
+    Color(255,255,128),
+    Color(64,0,64),
 ]
 
 system_class_names = [
@@ -127,15 +156,14 @@ mp_categories = [
     BuiltInCategory.OST_PipingSystem
 ]
 
-
-elec_filters_names = ["COORD_ELECTRIC TRAYS","COORD_ICT TRAYS"]
+elec_filters_names = ["COORD_ELECTRIC TRAYS", "COORD_ICT TRAYS"]
 
 elec_filters_colors = [
-    Color(255, 255, 0),   # color_electric_trays
-    Color(128, 255, 255)  # color_ict_trays
+    Color(255, 255, 0),
+    Color(128, 255, 255)
 ]
 
-elec_type_names = ["_E_","_T_"]
+elec_type_names = ["_E_", "_T_"]
 
 electrical_categories = [
     BuiltInCategory.OST_CableTray,
@@ -145,47 +173,28 @@ electrical_categories = [
 ]
 
 mp_param_id   = ElementId(BuiltInParameter.RBS_SYSTEM_CLASSIFICATION_PARAM)
-
 elec_param_id = ElementId(BuiltInParameter.SYMBOL_NAME_PARAM)
 
-# for mp_filter_name in mp_filters_names:
-#     if mp_filter_name not in all_par_filters_names:
-#         continue
-#     else:
-#         pass
-#         TaskDialog.Show("Error", "MP Filters already found, kindly add them from Filters ")
-#
-# for elec_filter_name in elec_filters_names:
-#     if elec_filter_name not in elec_filters_colors:
-#         continue
-#     else:
-#         pass
-#         TaskDialog.Show("Error", "Elec. Filters already found, kindly add them from Filters ")
+# Start Transaction
+with Transaction(doc, __title__) as t:
+    t.Start()
 
-#Start Transaction
-try:
-    with Transaction(doc,__title__) as t:
-        t.Start()
+    for i in range(len(mp_filters_names)):
+        create_view_filters(
+            mp_filters_names[i],
+            mp_categories,
+            mp_param_id,
+            system_class_names[i],
+            mp_filters_colors[i]
+        )
 
+    for i in range(len(elec_filters_names)):
+        create_view_filters(
+            elec_filters_names[i],
+            electrical_categories,
+            elec_param_id,
+            elec_type_names[i],
+            elec_filters_colors[i]
+        )
 
-        for i in range(len(mp_filters_names)):
-
-            create_view_filters(mp_filters_names[i],
-                                mp_categories,
-                                mp_param_id,
-                                system_class_names[i],
-                                mp_filters_colors[i])
-
-        for i in range(len(elec_filters_names)):
-
-            create_view_filters(elec_filters_names[i],
-                                electrical_categories,
-                                elec_param_id,
-                                elec_type_names[i],
-                                elec_filters_colors[i])
-
-        t.Commit()
-
-except Exception as e:
-    TaskDialog.Show("Error", "Filters Already Exist, kindly add them from filters menu")
-    script.exit
+    t.Commit()
