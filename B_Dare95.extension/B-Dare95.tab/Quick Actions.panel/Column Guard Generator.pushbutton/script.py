@@ -17,13 +17,12 @@ import clr
 
 clr.AddReference('RevitAPI')
 clr.AddReference('RevitAPIUI')
-from Autodesk.Revit.DB import *
-from Autodesk.Revit.DB.Architecture import Railing
-from Autodesk.Revit.DB.Architecture import RailingType
-from Autodesk.Revit.DB import RevitLinkInstance
-from Autodesk.Revit.UI import *
+from Autodesk.Revit.DB import (FilteredElementCollector, BuiltInParameter,
+                                BuiltInCategory, Options, ViewDetailLevel,
+                                GeometryInstance, Solid, CurveLoop,
+                                Transaction, XYZ, RevitLinkInstance)
+from Autodesk.Revit.DB.Architecture import Railing, RailingType
 from Autodesk.Revit.UI.Selection import ISelectionFilter, ObjectType
-
 from pyrevit import forms
 
 doc = __revit__.ActiveUIDocument.Document
