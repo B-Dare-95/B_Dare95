@@ -5,15 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="97e5514c-6192-402f-877a-0503c0f802f5" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Shaft Closer.pushbutton/script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/.name" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.name" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Auto Dimension.pushbutton/script.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Families.panel/Family Tree.splitpushbutton/Family Tree(By Selection).pushbutton/Family Tree(By Selection)_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Families.panel/Family Tree.splitpushbutton/Family Tree(By Selection).pushbutton/Family Tree(By Selection)_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Families.panel/Family Tree.splitpushbutton/Family Tree.pushbutton/Family Tree_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Families.panel/Family Tree.splitpushbutton/Family Tree.pushbutton/Family Tree_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Column Guard Generator.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Column Guard Generator.pushbutton/script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.pushbutton/Duplicate Family Instances_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.pushbutton/Duplicate Family Instances_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col2.stack/Get Element ID.pulldown/What's This ID.pushbutton/What's This ID_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col2.stack/Get Element ID.pulldown/What's This ID.pushbutton/What's This ID_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test 1.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Test 1.pushbutton/script.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test 3.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Test 3.pushbutton/script.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -38,6 +31,7 @@
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/col1.stack/Fire Tanks.pushbutton/Fire Tanks_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/col1.stack/Water Tanks.pushbutton/Water Tanks_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Links.panel/col1.stack/Levels &amp; Grids Check.pushbutton/Lvls &amp; Grids_script.py" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Auto Dimension.pushbutton/script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Leasing Generator.pushbutton/script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Pre-Filter Selection.pushbutton/Button_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col2.stack/Master Selection.pushbutton/Master Selection_script.py" root0="SKIP_INSPECTION" />
