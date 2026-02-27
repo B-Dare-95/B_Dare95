@@ -115,27 +115,26 @@ threede_texts = []
 
 for solid in room_solids:
     try:
-        direct_shape = DirectShape.CreateElement(doc, ElementId(BuiltInCategory.OST_GenericModel)).SetShape([solid])
+        direct_shape = DirectShape.CreateElement(doc, ElementId(BuiltInCategory.OST_GenericModel))
+        direct_shape.SetShape([solid])
+        shapes.append(direct_shape)
+        doc.ActiveView.SetElementOverrides(direct_shape.Id, override_settings)
     except:
         continue
-    created_shapes = FilteredElementCollector(doc).OfClass(DirectShape).WhereElementIsNotElementType().ToElements()
-    for shape in created_shapes:
-        try:
-            shapes.append(shape)
-            doc.ActiveView.SetElementOverrides(shape.Id, override_settings)
 
-        except:
-            continue
-
-# write room name in 3d
-try:
-
-    for name, pt in zip(room_names, room_centroids):
-        threede_text = TextNote.Create(doc, active_view.Id, pt, name, ElementId(3813106))
-        threede_texts.append(threede_text)
-
-except:
-    pass
+# # write room name in comments parameter
+# try:
+#
+#     for room, shape in zip(only_bound_rooms, shapes):
+#         shape_comment_parame = shape.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)
+#
+#         room_name = room.get_Parameter(BuiltInParameter.ROOM_NAME).AsValueString()
+#         room_number = room.get_Parameter(BuiltInParameter.ROOM_NUMBER).AsValueString()
+#
+#         shape_comment_parame.Set(room_name + " - " + room_number)
+#
+# except:
+#     pass
 
 t1.Commit()
 

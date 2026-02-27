@@ -9,18 +9,17 @@ Description:
 ________________________________________________________________
 Author: Mohamed Bedair"""
 
-#Imports
-import json, os, codecs
+# Imports
+import json, os
 from Autodesk.Revit.DB import *
 from Autodesk.Revit.UI import *
 from Autodesk.Revit.UI.Selection import *
 from System.Collections.Generic import List
-from pyrevit import forms, revit,script
+from pyrevit import forms, revit, script
 from pyrevit import EXEC_PARAMS
 from pyrevit.script import toggle_icon
-from pyrevit.coreutils.ribbon import ICON_MEDIUM
 
-#Revit Variables
+# Revit Variables
 uidoc       = __revit__.ActiveUIDocument
 doc         = __revit__.ActiveUIDocument.Document
 selection   = uidoc.Selection
@@ -28,76 +27,121 @@ app         = __revit__.Application
 active_view = doc.ActiveView
 output      = script.get_output()
 
-#Check for View Template
-if not active_view.ViewTemplateId.IntegerValue == -1:
-    TaskDialog.Show('Error', 'This View has a View Template. Please Turn off')
+# ── Version Detection ──────────────────────────────────────────────────────────
+REVIT_VERSION = int(app.VersionNumber)   # e.g. 2024, 2025, 2026
+
+# ── ElementId Compatibility ────────────────────────────────────────────────────
+def get_element_id_value(element_id):
+    """ElementId.IntegerValue was removed in Revit 2026, replaced with .Value.
+    This helper works transparently across all versions."""
+    if hasattr(element_id, 'IntegerValue'):
+        return element_id.IntegerValue   # Revit 2025 and older
+    return element_id.Value              # Revit 2026+
+
+# ── Check for View Template ────────────────────────────────────────────────────
+if get_element_id_value(active_view.ViewTemplateId) != -1:
+    TaskDialog.Show('Error', 'This View has a View Template. Please turn it off first.')
     script.exit()
 
 PATH_SCRIPT = os.path.dirname(__file__)
 
+# ── Toggle Config ──────────────────────────────────────────────────────────────
 def read_toggle_config():
-    """Function to read toggle_state.json config located in the script's folder.
-    If file is not found it will be created with False value."""
+    """Read toggle_state.json from the script folder.
+    Creates the file with a False value if not found."""
     json_toggle_state = os.path.join(PATH_SCRIPT, 'toggle_state.json')
 
-    # READ/CREATE file
     if os.path.exists(json_toggle_state):
         with open(json_toggle_state) as f:
-            json_data = json.load(f)
-            TOGGLE = json_data['toggle_state']
+            TOGGLE = json.load(f)['toggle_state']
     else:
         TOGGLE = False
-    # REVERSE VALUE
+
     with open(json_toggle_state, "w") as f:
-        x = not TOGGLE
-        new_data = {"toggle_state": x}
-        json.dump(new_data, f)
+        json.dump({"toggle_state": not TOGGLE}, f)
+
     return TOGGLE
 
 TOGGLE = read_toggle_config()
 
-# ACTIVATE/DEACTIVATE ICON
+# Activate/Deactivate icon
 icon_on  = os.path.join(PATH_SCRIPT, 'on.png')
 icon_off = os.path.join(PATH_SCRIPT, 'off.png')
-toggle_icon(TOGGLE, icon_on, icon_off) #Change icon
+toggle_icon(TOGGLE, icon_on, icon_off)
 
-all_categories = doc.Settings.Categories
-line_category = Category.GetCategory(doc,BuiltInCategory.OST_Lines)
+# ── Override Helper ────────────────────────────────────────────────────────────
+def build_ghost_override(transparency=95):
+    """Build OverrideGraphicSettings with surface transparency.
+    Handles API differences across Revit versions."""
+    ogs = OverrideGraphicSettings()
+    ogs.SetSurfaceTransparency(transparency)
 
-override_settings = OverrideGraphicSettings()
-override_settings.SetSurfaceTransparency(95)
+    if REVIT_VERSION >= 2026:
+        try:
+            solid_id = LinePatternElement.GetSolidPatternId()
+            ogs.SetProjectionLinePatternId(solid_id)
+        except Exception:
+            pass  # Transparency alone is sufficient if this fails
 
-t=Transaction(doc,"Ghost Model")
-t.Start()
+    return ogs
 
-doc.ActiveView.DisplayStyle = DisplayStyle.Shading
-
-try:
-    doc.ActiveView.SetCategoryHidden(line_category.Id, True)
-except:
-    pass
-
-for category in all_categories:
+def set_display_style(view, style):
+    """Set DisplayStyle, guarding against view types that don't support it."""
     try:
-        doc.ActiveView.SetCategoryOverrides(category.Id, override_settings)
+        view.DisplayStyle = style
+    except Exception as e:
+        print("Could not set DisplayStyle: {}".format(e))
 
-    except:
-        continue
-t.Commit()
+def set_category_hidden(view, cat_id, hidden):
+    """Wrapper for SetCategoryHidden — Revit 2026 is stricter about
+    which categories accept this call."""
+    try:
+        view.SetCategoryHidden(cat_id, hidden)
+    except Exception:
+        pass
 
-reset_override = OverrideGraphicSettings()
+# ── Main Logic ─────────────────────────────────────────────────────────────────
+all_categories = doc.Settings.Categories
+line_category  = Category.GetCategory(doc, BuiltInCategory.OST_Lines)
 
 if not TOGGLE:
-    t = Transaction(doc, "Reset Ghost Model")
+    # ── Ghost Mode ON ──────────────────────────────────────────────────────
+    ghost_override = build_ghost_override(transparency=95)
 
+    t = Transaction(doc, "Ghost Model - ON")
     t.Start()
+    try:
+        set_display_style(active_view, DisplayStyle.Shading)
+        set_category_hidden(active_view, line_category.Id, True)
 
-    doc.ActiveView.DisplayStyle = DisplayStyle.ShadingWithEdges
+        for category in all_categories:
+            try:
+                active_view.SetCategoryOverrides(category.Id, ghost_override)
+            except Exception:
+                continue
 
-    for category in all_categories:
-        try:
+        t.Commit()
+    except Exception as e:
+        t.RollBack()
+        TaskDialog.Show("Ghost Model Error", "Failed to apply Ghost Mode:\n{}".format(e))
 
-            doc.ActiveView.SetCategoryOverrides(category.Id, reset_override)
-        except:
-            pass
-    t.Commit()
+else:
+    # ── Ghost Mode OFF (Reset) ─────────────────────────────────────────────
+    reset_override = OverrideGraphicSettings()
+
+    t = Transaction(doc, "Ghost Model - OFF")
+    t.Start()
+    try:
+        set_display_style(active_view, DisplayStyle.ShadingWithEdges)
+        set_category_hidden(active_view, line_category.Id, False)
+
+        for category in all_categories:
+            try:
+                active_view.SetCategoryOverrides(category.Id, reset_override)
+            except Exception:
+                continue
+
+        t.Commit()
+    except Exception as e:
+        t.RollBack()
+        TaskDialog.Show("Ghost Model Error", "Failed to reset Ghost Mode:\n{}".format(e))
