@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__title__ = "Easy Auto Dimension"
+__title__ = "Easy Dimension"
 __author__ = "Mohamed Bedair"
 __version__ = '1.0.0'
 __doc__ = """
