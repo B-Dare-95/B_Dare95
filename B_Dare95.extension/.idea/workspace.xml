@@ -5,32 +5,56 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="97e5514c-6192-402f-877a-0503c0f802f5" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Match.pulldown/Match Shafts.pushbutton/script.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Diyar.panel/col1.stack/Timesheet.pushbutton/script.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/.name" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.name" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Match.pulldown/Match Ceiling Height.pushbutton/Match Ceiling Height_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Match.pulldown/Match Ceiling Height.pushbutton/Match Ceiling Height_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Match.pulldown/Match Floor Height.pushbutton/Match Floor Height_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Match.pulldown/Match Floor Height.pushbutton/Match Floor Height_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Python Test.pushbutton/EF Code.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Python Test.pushbutton/PTest_script.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Python Test.pushbutton/icon.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test 1.pushbutton/Sample.xlsx" beforeDir="false" afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Test.pushbutton/Sample.xlsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test 1.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Test.pushbutton/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test 1.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Test.pushbutton/script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test 2.pushbutton/Sample.xlsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test 2.pushbutton/icon.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test 2.pushbutton/script.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test 3.pushbutton/created_shaft_shapes.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test 3.pushbutton/icon.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test 3.pushbutton/off.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test 3.pushbutton/on.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test 3.pushbutton/script.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test 3.pushbutton/toggle_state.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Tools.panel/Get Origin.pushbutton/icon.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Tools.panel/Get Origin.pushbutton/script.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Tools.panel/Get Parameters.pushbutton/Get Params_script.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Tools.panel/Get Parameters.pushbutton/icon.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Tools.panel/Get Point.pushbutton/icon.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Tools.panel/Get Point.pushbutton/script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Diyar.panel/col1.stack/Timesheet.urlbutton/bundle.yaml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Diyar.panel/col1.stack/Timesheet.urlbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Diyar.panel/col1.stack/Timesheet.pushbutton/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Auto Dimension.pushbutton/icon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Auto Dimension.pushbutton/script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Column Guard Generator.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Automations.panel/col2.stack/Column Guard Generator.pushbutton/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Column Guard Generator.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Automations.panel/col2.stack/Column Guard Generator.pushbutton/script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Convert Units.pushbutton/Convert Units_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Automations.panel/col1.stack/Convert Units.pushbutton/Convert Units_script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Convert Units.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Automations.panel/col1.stack/Convert Units.pushbutton/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Convert Units.pushbutton/off.png" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Automations.panel/col1.stack/Convert Units.pushbutton/off.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Convert Units.pushbutton/on.png" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Automations.panel/col1.stack/Convert Units.pushbutton/on.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Convert Units.pushbutton/toggle_state.json" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Automations.panel/col1.stack/Convert Units.pushbutton/toggle_state.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Leasing Generator.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Automations.panel/col2.stack/Leasing Generator.pushbutton/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Leasing Generator.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Automations.panel/col2.stack/Leasing Generator.pushbutton/script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Pre-Filter Selection.pushbutton/Button_script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Pre-Filter Selection.pushbutton/icon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.pushbutton/Duplicate Family Instances_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Automations.panel/col1.stack/Remove Duplicates.pushbutton/Duplicate Family Instances_script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Remove Duplicates.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Automations.panel/col1.stack/Remove Duplicates.pushbutton/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Shaft Closer.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Automations.panel/col1.stack/Shaft Closer.pushbutton/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Shaft Closer.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Automations.panel/col1.stack/Shaft Closer.pushbutton/script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Match.pulldown/Match Ceiling Height.pushbutton/Match Ceiling Height_script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Match.pulldown/Match Floor Height.pushbutton/Match Floor Height_script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Match.pulldown/Match Shafts.pushbutton/script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Match.pulldown/icon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Pin &amp; Unpin.pulldown/Levels,Grids &amp; Links.pushbutton/pin lvls_script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Pin &amp; Unpin.pulldown/Pin All in View.pushbutton/Pin All in View_script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Pin &amp; Unpin.pulldown/Pin By Category.pushbutton/Pin By Category_script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Pin &amp; Unpin.pulldown/Unpin All in View.pushbutton/Unpin in View_script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Pin &amp; Unpin.pulldown/icon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/Unplaced Areas.pushbutton/icon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/Unplaced Areas.pushbutton/script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/Unplaced Rooms.pushbutton/Button_script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/Unplaced Rooms.pushbutton/icon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/Wipe.pulldown/icon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col1.stack/bundle.yaml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col2.stack/Get Element ID.pulldown/Active Element.pushbutton/Get Active ID_script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col2.stack/Get Element ID.pulldown/Linked Element.pushbutton/Get Linked ID_script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col2.stack/Get Element ID.pulldown/What's This ID.pushbutton/What's This ID_script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col2.stack/Get Element ID.pulldown/icon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col2.stack/Master Selection.pushbutton/Master Selection_script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col2.stack/Master Selection.pushbutton/icon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col2.stack/Quick Reports.pulldown/Parking Report.pushbutton/icon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col2.stack/Quick Reports.pulldown/Parking Report.pushbutton/script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col2.stack/Quick Reports.pulldown/Room Areas.pushbutton/Inspect Room Areas_script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col2.stack/Quick Reports.pulldown/Room Areas.pushbutton/icon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col2.stack/bundle.yaml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/bundle.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/bundle.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Test.pushbutton/script.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -93,11 +117,12 @@
     &quot;git-widget-placeholder&quot;: &quot;main&quot;,
     &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
     &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;C:/Users/mohamed.bedair.SDCNT/Documents/GitHub/B_Dare95/B_Dare95.extension/B-Dare95.tab/Inspection.panel/MEP Tracer.pushbutton&quot;,
+    &quot;last_opened_file_path&quot;: &quot;E:/Github/B_Dare95/B_Dare95.extension/B-Dare95.tab/Quick Actions.panel/col2.stack/Shafts.pulldown&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
     &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
     &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;,
     &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;,
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
@@ -105,24 +130,25 @@
 }</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="E:\Github\B_Dare95\B_Dare95.extension\B-Dare95.tab\Quick Actions.panel\col2.stack\Shafts.pulldown" />
+      <recent name="E:\Github\B_Dare95\B_Dare95.extension\B-Dare95.tab\Quick Actions.panel\Master Selection.pushbutton" />
       <recent name="C:\Users\mohamed.bedair.SDCNT\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Inspection.panel\MEP Tracer.pushbutton" />
       <recent name="C:\Users\moham\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Quick Actions.panel\col2.stack\Quick Reports.pulldown\Parking Report.pushbutton" />
       <recent name="C:\Users\moham\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Quick Actions.panel\col2.stack\Quick Reports.pulldown\Room Areas.pushbutton" />
-      <recent name="D:\Projects\B_Dare95\B_Dare95.extension\B-Dare95.tab\Inspection.panel\col1.stack\Water Tanks.pushbutton" />
-      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Inspection.panel\Fire Tanks.pushbutton" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
-      <recent name="D:\Projects\B_Dare95\B_Dare95.extension\B-Dare95.tab\Inspection.panel\col1.stack" />
-      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Inspection.panel\Fire Tanks.pushbutton" />
-      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Inspection.panel" />
-      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\Test.tab\Test.panel\Python Test.pushbutton" />
-      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\Archved Code" />
+      <recent name="E:\Github\B_Dare95\B_Dare95.extension\B-Dare95.tab\Automations.panel\col2.stack" />
+      <recent name="E:\Github\B_Dare95\B_Dare95.extension\B-Dare95.tab\Automations.panel\col1.stack" />
+      <recent name="E:\Github\B_Dare95\B_Dare95.extension\B-Dare95.tab\Automations.panel" />
+      <recent name="E:\Github\B_Dare95\B_Dare95.extension\B-Dare95.tab\Quick Actions.panel\col2.stack" />
+      <recent name="E:\Github\B_Dare95\B_Dare95.extension\B-Dare95.tab\Quick Actions.panel" />
     </key>
   </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-python-sdk-4762d8aabb82-6d6dccd035ac-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-253.30387.173" />
+        <option value="bundled-js-predefined-d6986cc7102b-b598e85cdad2-JavaScript-PY-252.25557.178" />
+        <option value="bundled-python-sdk-ce6832f46686-7b97d883f26b-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-252.25557.178" />
       </set>
     </attachedChunks>
   </component>
@@ -139,6 +165,10 @@
       <workItem from="1761052932488" duration="839000" />
       <workItem from="1761736633793" duration="144000" />
       <workItem from="1762168648604" duration="8000" />
+      <workItem from="1775074079835" duration="479000" />
+      <workItem from="1775074907845" duration="557000" />
+      <workItem from="1775075600494" duration="420000" />
+      <workItem from="1775076052004" duration="1283000" />
     </task>
     <servers />
   </component>
