@@ -22,7 +22,7 @@ class CustomISelectionFilter(ISelectionFilter):
 #Select an Element from The UI
 custom_filter = CustomISelectionFilter()
 
-try: floor_reference = selection.PickObject(ObjectType.Element,"Select A Floor")
+try: floor_reference = selection.PickObject(ObjectType.Element,custom_filter,"Select A Floor")
 except: forms.alert("Script is canceled.",exitscript=True,title="Script Canceled.")
 
 floor_element = doc.GetElement(floor_reference.ElementId)
@@ -32,7 +32,7 @@ source_floor_height = floor_element.get_Parameter(BuiltInParameter.FLOOR_HEIGHTA
 with forms.WarningBar(title="Pick Floor to match Height:", handle_esc=True):
     while True:
 
-        try: target_floor_reference = selection.PickObject(ObjectType.Element,"Select A Floor")
+        try: target_floor_reference = selection.PickObject(ObjectType.Element,custom_filter,"Select A Floor")
 
         except: break
 
