@@ -18,7 +18,7 @@ clr.AddReference('System.Drawing')
 # We alias them here to keep things unambiguous throughout.
 
 from System.Windows.Forms import (
-    Form, SplitContainer,
+    Form, SplitContainer, FixedPanel,
     FlowLayoutPanel, FlowDirection,         # still used for the bottom button bar
     Panel,                          # WinForms Panel (not Revit curtain Panel)
     GroupBox, RadioButton, Label,
@@ -196,7 +196,34 @@ class ColorizeForm(Form):
             b.Click += fn
             return b
 
-        # ── 1. Source toggle (top strip) ──────────────────────────────────────
+        # ── 1. Bottom buttons ─────────────────────────────────────────────────
+        bp               = FlowLayoutPanel()
+        bp.Dock          = DockStyle.Bottom
+        bp.Height        = 46
+        bp.FlowDirection = FlowDirection.RightToLeft
+        bp.WrapContents  = False
+        bp.Padding       = Padding(8, 7, 8, 0)
+
+        bp.Controls.Add(mk_btn("Cancel", self._on_cancel))
+        bp.Controls.Add(mk_btn("Reset",  self._on_reset))
+        bp.Controls.Add(mk_btn("Apply",  self._on_apply))
+
+        # ── 3. SplitContainer (fills remaining space) ─────────────────────────
+        split       = SplitContainer()
+        split.Dock  = DockStyle.Fill
+        self._split = split
+
+        # ── LEFT side ─────────────────────────────────────────────────────────
+        # Layout (top → bottom inside split.Panel1):
+        #   [GroupBox: Parameter Source]   ← DockStyle.Top
+        #   [lbl_param]                    ← DockStyle.Top
+        #   [cb_param]                     ← DockStyle.Top
+        #   [lbl_values]                   ← DockStyle.Top
+        #   [lbl_search]                   ← DockStyle.Top
+        #   [tb_search]                    ← DockStyle.Top
+        #   [clb]                          ← DockStyle.Fill
+
+        # GroupBox now lives inside Panel1, not on the form
         grp         = GroupBox()
         grp.Text    = "Parameter Source"
         grp.Dock    = DockStyle.Top
@@ -223,38 +250,6 @@ class ColorizeForm(Form):
         grp.Controls.Add(self.rb_inst)
         grp.Controls.Add(self.rb_type)
 
-        # ── 2. Bottom buttons ─────────────────────────────────────────────────
-        bp               = FlowLayoutPanel()
-        bp.Dock          = DockStyle.Bottom
-        bp.Height        = 46
-        bp.FlowDirection = FlowDirection.RightToLeft
-        bp.WrapContents  = False
-        bp.Padding       = Padding(8, 7, 8, 0)
-
-        bp.Controls.Add(mk_btn("Cancel", self._on_cancel))
-        bp.Controls.Add(mk_btn("Reset",  self._on_reset))
-        bp.Controls.Add(mk_btn("Apply",  self._on_apply))
-
-        # ── 3. SplitContainer (fills remaining space) ─────────────────────────
-        # Panel1MinSize / Panel2MinSize / SplitterDistance are all set in
-        # _on_load after the form has real pixel dimensions.
-        split       = SplitContainer()
-        split.Dock  = DockStyle.Fill
-        self._split = split
-
-        # ── LEFT side: DockStyle stacking ─────────────────────────────────────
-        # Controls are added Top-to-bottom using DockStyle.Top.
-        # The CheckedListBox is added LAST with DockStyle.Fill to claim what's left.
-        # WinForms processes DockStyle.Top children in reverse insertion order
-        # (last-added Top control docks at the very top), so we add them bottom-up.
-        #
-        # Desired visual order (top → bottom):
-        #   [lbl_param]  [cb_param]  [lbl_values]  [lbl_search]  [tb_search]  [clb ←Fill]
-        #
-        # Insertion order for DockStyle.Top (must be reversed):
-        #   tb_search, lbl_search, lbl_values, cb_param, lbl_param
-        # Then clb with DockStyle.Fill at the very end.
-
         lp         = Panel()
         lp.Dock    = DockStyle.Fill
         lp.Padding = Padding(8, 6, 8, 6)
@@ -263,36 +258,31 @@ class ColorizeForm(Form):
         self.cb_param.Dock          = DockStyle.Top
         self.cb_param.DropDownStyle = ComboBoxStyle.DropDownList
         self.cb_param.Height        = 24
-        self.cb_param.Margin        = Padding(0, 0, 0, 6)
         self.cb_param.SelectedIndexChanged += self._on_param_changed
 
-        self.tb_search              = TextBox()
-        self.tb_search.Dock         = DockStyle.Top
-        self.tb_search.Height       = 22
-        self.tb_search.TextChanged  += self._on_search
+        self.tb_search             = TextBox()
+        self.tb_search.Dock        = DockStyle.Top
+        self.tb_search.Height      = 22
+        self.tb_search.TextChanged += self._on_search
 
         self.clb              = CheckedListBox()
         self.clb.Dock         = DockStyle.Fill
         self.clb.CheckOnClick = True
         self.clb.ItemCheck   += self._on_item_check
 
-        lbl_search         = mklbl("Search:")
-        lbl_values         = mklbl("Values:", h=26)
-        lbl_param          = mklbl("Parameter:")
+        lbl_search = mklbl("Search:")
+        lbl_values = mklbl("Values:", h=26)
+        lbl_param  = mklbl("Parameter:")
 
-        # Reverse insertion so top-most item is added last
-        lp.Controls.Add(self.tb_search)   # added 5th → docks top-most? No —
-        # Correct WinForms rule: with DockStyle.Top, the FIRST control added
-        # sits at the very top; subsequent Top controls stack below it.
-        # So we add in VISUAL order, then add Fill at the end.
-        lp.Controls.Clear()
-        lp.Controls.Add(lbl_param)         # 1st → very top
-        lp.Controls.Add(self.cb_param)     # 2nd
-        lp.Controls.Add(lbl_values)        # 3rd
-        lp.Controls.Add(lbl_search)        # 4th
-        lp.Controls.Add(self.tb_search)    # 5th
-        lp.Controls.Add(self.clb)          # Fill → takes remaining height
+        lp.Controls.Add(lbl_param)
+        lp.Controls.Add(self.cb_param)
+        lp.Controls.Add(lbl_values)
+        lp.Controls.Add(lbl_search)
+        lp.Controls.Add(self.tb_search)
+        lp.Controls.Add(self.clb)
 
+        # GroupBox docks Top first, then lp fills the rest of Panel1
+        split.Panel1.Controls.Add(grp)
         split.Panel1.Controls.Add(lp)
 
         # ── RIGHT side ────────────────────────────────────────────────────────
@@ -324,8 +314,7 @@ class ColorizeForm(Form):
 
         split.Panel2.Controls.Add(rp)
 
-        # ── Assemble form (Top/Bottom before Fill) ────────────────────────────
-        self.Controls.Add(grp)
+        # ── Assemble form (Bottom before Fill) ───────────────────────────────
         self.Controls.Add(bp)
         self.Controls.Add(split)
 
@@ -336,16 +325,23 @@ class ColorizeForm(Form):
 
     def _on_load(self, s, e):
         """
-        Form.Load fires after layout — the SplitContainer has its real pixel
-        width here.  Set ALL three sizing properties in the correct order:
-          1. Panel1MinSize  (no cross-validation against current distance)
-          2. Panel2MinSize  (same)
-          3. SplitterDistance  (now validated against real Width and both mins)
+        Form.Load fires after layout — the SplitContainer has real pixel dims.
+
+        Strategy: fix Panel1 at 420 px so the parameter list always has a
+        comfortable width regardless of how wide the user stretches the form.
+        Panel2 (colour assignments) gets all the extra space on resize.
+
+        Order matters:
+          1. FixedPanel    — must be set before SplitterDistance
+          2. Panel1MinSize / Panel2MinSize
+          3. SplitterDistance — validated last against real Width + both mins
         """
-        self._split.Panel1MinSize    = 260
-        self._split.Panel2MinSize    = 220
+        self._split.FixedPanel    = FixedPanel.Panel1
+        self._split.Panel1MinSize = 260
+        self._split.Panel2MinSize = 240
         w    = self._split.Width
-        dist = max(260, min(int(w * 0.55), w - 220 - self._split.SplitterWidth))
+        # Clamp to a fixed 420 px left panel, respecting both minimums
+        dist = max(260, min(420, w - 240 - self._split.SplitterWidth))
         self._split.SplitterDistance = dist
 
     # ───────────────────────────────────────────── Data loading ──────────────
