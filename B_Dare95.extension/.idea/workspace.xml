@@ -7,8 +7,6 @@
     <list default="true" id="97e5514c-6192-402f-877a-0503c0f802f5" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/.name" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.name" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Walls.panel/col1.stack/Color Walls.pulldown/Fire Rated Walls.pushbutton/Fire Rated Walls_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Walls.panel/col1.stack/Color Walls.pulldown/Fire Rated Walls.pushbutton/Fire Rated Walls_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Walls.panel/col1.stack/Color Walls.pulldown/INT vs EXT.pushbutton/INTvsEXT_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Walls.panel/col1.stack/Color Walls.pulldown/INT vs EXT.pushbutton/INTvsEXT_script.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Test.pushbutton/script.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -34,20 +32,8 @@
     <setting file="file://$PROJECT_DIR$/Archved Code/Auto Doors/Auto Doors_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/FLS.panel/Area Plan.pulldown/Area from Rooms.pushbutton/Area from Rooms_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/Add Issue VIew.pushbutton/Add Issue View_script.py" root0="SKIP_INSPECTION" />
-    <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/col1.stack/Fire Tanks.pushbutton/Fire Tanks_script.py" root0="SKIP_INSPECTION" />
-    <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/col1.stack/Water Tanks.pushbutton/Water Tanks_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Links.panel/col1.stack/Levels &amp; Grids Check.pushbutton/Lvls &amp; Grids_script.py" root0="SKIP_INSPECTION" />
-    <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Auto Dimension.pushbutton/script.py" root0="SKIP_INSPECTION" />
-    <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Leasing Generator.pushbutton/script.py" root0="SKIP_INSPECTION" />
-    <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/Pre-Filter Selection.pushbutton/Button_script.py" root0="SKIP_INSPECTION" />
-    <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Quick Actions.panel/col2.stack/Master Selection.pushbutton/Master Selection_script.py" root0="SKIP_INSPECTION" />
-    <setting file="file://$PROJECT_DIR$/Test.tab/Test.panel/Python Test.pushbutton/PTest_script.py" root0="SKIP_INSPECTION" />
-    <setting file="file://$PROJECT_DIR$/Test.tab/Test.panel/Test 1.pushbutton/script.py" root0="SKIP_INSPECTION" />
-    <setting file="file://$PROJECT_DIR$/Test.tab/Test.panel/Test 2.pushbutton/script.py" root0="SKIP_INSPECTION" />
-    <setting file="file://$PROJECT_DIR$/Test.tab/Test.panel/Test 3.pushbutton/script.py" root0="SKIP_INSPECTION" />
-    <setting file="file://$PROJECT_DIR$/Test.tab/Tools.panel/Get Origin.pushbutton/script.py" root0="SKIP_INSPECTION" />
-    <setting file="file://$PROJECT_DIR$/Test.tab/Tools.panel/Get Parameters.pushbutton/Get Params_script.py" root0="SKIP_INSPECTION" />
-    <setting file="file://$PROJECT_DIR$/Test.tab/Tools.panel/Get Point.pushbutton/script.py" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/Test.tab/Test.panel/Test.pushbutton/script.py" root0="SKIP_INSPECTION" />
   </component>
   <component name="McpProjectServerCommands">
     <commands />
