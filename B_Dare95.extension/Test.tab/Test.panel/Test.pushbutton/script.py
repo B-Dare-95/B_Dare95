@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-__title__   = "Pick Shaft - Open Above"
+__title__   = "Shaft Text Note"
 __doc__     = """
 ________________________________________________________________
 Description:
@@ -53,7 +53,6 @@ from pyrevit import forms, script
 uidoc       = __revit__.ActiveUIDocument
 doc         = __revit__.ActiveUIDocument.Document
 active_view = doc.ActiveView
-output      = script.get_output()
 
 # ─────────────────────────────────────────────────────────────────────
 # Constant — gap below bbox for the text note (Revit feet)
@@ -174,9 +173,9 @@ def get_text_position(shaft, view):
 def annotate_shaft(shaft, view, ogs, annotation_text, text_type_id):
     """
     Apply override + text note to one shaft inside a single transaction.
-    Returns True on success, False on failure.
+    Returns (True, None) on success, (False, error_message) on failure.
     """
-    t = Transaction(doc, "Shaft Open Above — {}".format(shaft.Id.IntegerValue))
+    t = Transaction(doc, "Shaft Open Above — {}".format(shaft.Id))
     t.Start()
     try:
         # 1. Apply graphic override on the shaft element
@@ -189,23 +188,16 @@ def annotate_shaft(shaft, view, ogs, annotation_text, text_type_id):
                 opts = TextNoteOptions(text_type_id)
                 opts.HorizontalAlignment = HorizontalTextAlignment.Center
                 TextNote.Create(doc, view.Id, pos, annotation_text, opts)
-            else:
-                output.print_md(
-                    "  ⚠ No bounding box for shaft `{}` — "
-                    "text note skipped.".format(shaft.Id.IntegerValue))
 
         t.Commit()
-        return True
+        return True, None
 
     except Exception as ex:
         try:
             t.RollBack()
         except Exception:
             pass
-        output.print_md(
-            "  ❌ Failed on shaft `{}`: {}".format(
-                shaft.Id.IntegerValue, str(ex)))
-        return False
+        return False, str(ex)
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -340,11 +332,11 @@ def show_settings_dialog(line_styles, text_note_types):
     stream = MemoryStream(Encoding.UTF8.GetBytes(XAML))
     window = Markup.XamlReader.Load(stream)
 
-    ls_combo  = window.FindName('LineStyleCombo')
-    tt_combo  = window.FindName('TextTypeCombo')
-    text_box  = window.FindName('AnnotationTextBox')
-    ok_btn    = window.FindName('OkBtn')
-    cancel_btn= window.FindName('CancelBtn')
+    ls_combo   = window.FindName('LineStyleCombo')
+    tt_combo   = window.FindName('TextTypeCombo')
+    text_box   = window.FindName('AnnotationTextBox')
+    ok_btn     = window.FindName('OkBtn')
+    cancel_btn = window.FindName('CancelBtn')
 
     # ── Populate line styles ─────────────────────────────────────────
     for ls in line_styles:
@@ -417,24 +409,18 @@ def main():
     if not cfg.get('ok'):
         return
 
-    chosen_style   = cfg['line_style']
-    annot_text     = cfg['text']
-    text_type_id   = cfg['text_type_id']
-    ogs            = build_override_settings(chosen_style)
-    sel_filter     = ShaftSelectionFilter()
+    chosen_style = cfg['line_style']
+    annot_text   = cfg['text']
+    text_type_id = cfg['text_type_id']
+    ogs          = build_override_settings(chosen_style)
+    sel_filter   = ShaftSelectionFilter()
 
     # ── 4. Interactive pick loop ─────────────────────────────────────
-    output.print_md("## Pick Shaft — Open Above\n")
-    output.print_md(
-        "**View:** `{}`  |  **Style:** `{}`  |  **Text:** `{}`\n".format(
-            active_view.Name, chosen_style.Name, annot_text))
-    output.print_md("_Click shafts in the canvas — press **Esc** to finish._\n")
-
-    count = 0
+    count    = 0
+    failures = []   # list of (shaft_id_int, error_message)
 
     while True:
         try:
-            # Prompt the user to click exactly one shaft
             ref = uidoc.Selection.PickObject(
                 ObjectType.Element,
                 sel_filter,
@@ -450,34 +436,35 @@ def main():
                     title="Wrong View Type")
                 break
 
-            success = annotate_shaft(
+            success, err = annotate_shaft(
                 shaft, active_view, ogs, annot_text, text_type_id)
 
             if success:
                 count += 1
-                output.print_md(
-                    "- ✅ Shaft `{}` annotated  *(total: {})*".format(
-                        shaft.Id.IntegerValue, count))
+            else:
+                failures.append((shaft.Id, err))
 
         except OperationCanceledException:
-            # User pressed Esc — clean exit, not an error
-            output.print_md("\n_Picking cancelled by user (Esc)._")
             break
 
         except Exception as ex:
-            output.print_md("  ❌ Unexpected error: `{}`".format(str(ex)))
+            # Unexpected error outside the transaction — stop the loop
+            forms.alert(
+                "Unexpected error during picking:\n\n{}".format(str(ex)),
+                title="Pick Shaft — Open Above")
             break
 
-    # ── 5. Final summary ─────────────────────────────────────────────
-    output.print_md(
-        "\n**Done.** {} shaft(s) annotated in view `{}`.".format(
-            count, active_view.Name))
-
-    if count > 0:
+    # ── 5. Report failures only ──────────────────────────────────────
+    if failures:
+        lines = [
+            "The following shaft(s) could not be annotated:\n"
+        ]
+        for shaft_id, err in failures:
+            lines.append("  • ID {}:\n    {}".format(shaft_id, err))
+        lines.append(
+            "\n{} shaft(s) annotated successfully.".format(count))
         forms.alert(
-            "Finished!\n\n{} shaft(s) annotated in:\n{}".format(
-                count, active_view.Name),
-            title="Pick Shaft — Open Above")
-
+            "\n".join(lines),
+            title="Pick Shaft — Open Above  |  Errors")
 
 main()
