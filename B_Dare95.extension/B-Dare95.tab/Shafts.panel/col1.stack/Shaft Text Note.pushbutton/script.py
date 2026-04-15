@@ -175,7 +175,7 @@ def annotate_shaft(shaft, view, ogs, annotation_text, text_type_id):
     Apply override + text note to one shaft inside a single transaction.
     Returns (True, None) on success, (False, error_message) on failure.
     """
-    t = Transaction(doc, "Shaft Open Above — {}".format(shaft.Id))
+    t = Transaction(doc, "Shaft Text Note")
     t.Start()
     try:
         # 1. Apply graphic override on the shaft element

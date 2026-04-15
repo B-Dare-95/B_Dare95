@@ -1,470 +1,484 @@
 # -*- coding: utf-8 -*-
 
-__title__   = "Shaft Text Note"
+__title__   = "MEP Filters"
 __doc__     = """
 ________________________________________________________________
 Description:
-Interactively pick Shaft Openings in a 2D Plan View.
-After each pick:
-  - The chosen Line Style is applied as a Graphical Override
-    on the shaft's Symbolic Lines
-  - A Text Note is placed below the shaft with your chosen text
+- Creates View Filters for MEP for Visual Inspection
 
 How to Use:
-1. Open a Floor Plan or Engineering Plan view
-2. Run the script
-3. Choose a Line Style and type the annotation text, click OK
-4. Click shafts one by one — each is annotated immediately
-5. Press Esc (or close) to finish
+- Run the script
+- A configuration dialog will open
+- For MEP Systems: assign a color to each System Classification
+- For Electrical (Cable Trays): type a match text and assign a color
+- Click "Apply Filters" to create/apply the filters
 ________________________________________________________________
 Author: Mohamed Bedair"""
 
-# ─────────────────────────────────────────────────────────────────────
-# Imports
-# ─────────────────────────────────────────────────────────────────────
+# ── Imports ───────────────────────────────────────────────────────────────────
 import clr
 clr.AddReference('System')
-clr.AddReference('PresentationFramework')
-clr.AddReference('PresentationCore')
-clr.AddReference('WindowsBase')
+clr.AddReference('System.Windows.Forms')
+clr.AddReference('System.Drawing')
 
-from System.IO       import MemoryStream
-from System.Text     import Encoding
-from System.Windows.Media import SolidColorBrush, Color
-import System.Windows.Markup as Markup
+from System.Collections.Generic import List
+import System.Windows.Forms as WinForms
+import System.Drawing as Drawing
 
-from Autodesk.Revit.DB import (
-    FilteredElementCollector,
-    BuiltInCategory, BuiltInParameter,
-    GraphicsStyle, GraphicsStyleType,
-    OverrideGraphicSettings, ElementId,
-    TextNote, TextNoteOptions, HorizontalTextAlignment,
-    TextNoteType, Transaction,
-    ViewType, XYZ
-)
-from Autodesk.Revit.UI.Selection import ISelectionFilter, ObjectType
-from Autodesk.Revit.Exceptions   import OperationCanceledException
+from Autodesk.Revit.DB import *
+from Autodesk.Revit.UI import *
+from pyrevit import script
 
-from pyrevit import forms, script
-
-# ─────────────────────────────────────────────────────────────────────
-# Revit handles
-# ─────────────────────────────────────────────────────────────────────
+# ── Revit Variables ───────────────────────────────────────────────────────────
 uidoc       = __revit__.ActiveUIDocument
 doc         = __revit__.ActiveUIDocument.Document
+app         = __revit__.Application
 active_view = doc.ActiveView
+output      = script.get_output()
 
-# ─────────────────────────────────────────────────────────────────────
-# Constant — gap below bbox for the text note (Revit feet)
-# ─────────────────────────────────────────────────────────────────────
-TEXT_OFFSET_FT = 1.0
+# ── UI Theme ──────────────────────────────────────────────────────────────────
+DARK_BG    = Drawing.Color.FromArgb(28,  28,  28)
+PANEL_BG   = Drawing.Color.FromArgb(38,  38,  38)
+ROW_A      = Drawing.Color.FromArgb(48,  48,  48)
+ROW_B      = Drawing.Color.FromArgb(43,  43,  43)
+HEADER_BG  = Drawing.Color.FromArgb(33,  33,  33)
+SECTION_BG = Drawing.Color.FromArgb(30,  60, 100)
+TEXT_FG    = Drawing.Color.FromArgb(220, 220, 220)
+DIM_FG     = Drawing.Color.FromArgb(150, 150, 150)
+ACCENT_FG  = Drawing.Color.FromArgb(100, 180, 255)
+GREEN_FG   = Drawing.Color.FromArgb(140, 200, 140)
+BTN_BG     = Drawing.Color.FromArgb(58,  58,  58)
+BTN_OK_BG  = Drawing.Color.FromArgb(0,   100, 180)
+BORDER_CLR = Drawing.Color.FromArgb(72,  72,  72)
+
+FONT_NORM  = Drawing.Font("Segoe UI", 9)
+FONT_BOLD  = Drawing.Font("Segoe UI", 9, Drawing.FontStyle.Bold)
+FONT_TITLE = Drawing.Font("Segoe UI", 11, Drawing.FontStyle.Bold)
+
+# ── Filter Data ───────────────────────────────────────────────────────────────
+mp_filters_names = [
+    "COORD_SUPPLY DUCTS",
+    "COORD_RETURN DUCTS",
+    "COORD_EXHAUST DUCTS",
+    "COORD_FIRE PIPES",
+    "COORD_NOVEC PIPES",
+    "COORD_COLD WATER PIPES",
+    "COORD_HOT WATER PIPES",
+    "COORD_SUPPLY CHILLED WATER",
+    "COORD_RETURN CHILLED WATER",
+    "COORD_DRAINAGE",
+]
+
+mp_default_colors = [
+    Drawing.Color.FromArgb(0,   128, 255),
+    Drawing.Color.FromArgb(255, 128,  64),
+    Drawing.Color.FromArgb(0,   128,   0),
+    Drawing.Color.FromArgb(255,   0,   0),
+    Drawing.Color.FromArgb(128, 128,   0),
+    Drawing.Color.FromArgb(0,     0, 255),
+    Drawing.Color.FromArgb(255, 115,  47),
+    Drawing.Color.FromArgb(128, 128, 255),
+    Drawing.Color.FromArgb(255, 255, 128),
+    Drawing.Color.FromArgb(64,    0,  64),
+]
+
+system_class_names = [
+    "Supply Air",
+    "Return Air",
+    "Exhaust Air",
+    "Fire Protection Wet",
+    "Fire Protection Other",
+    "Domestic Cold Water",
+    "Domestic Hot Water",
+    "Hydronic Supply",
+    "Hydronic Return",
+    "Sanitary",
+]
+
+mp_categories = [
+    BuiltInCategory.OST_DuctSystem,
+    BuiltInCategory.OST_DuctAccessory,
+    BuiltInCategory.OST_DuctCurves,
+    BuiltInCategory.OST_DuctFitting,
+    BuiltInCategory.OST_FlexDuctCurves,
+    BuiltInCategory.OST_DuctTerminal,
+    BuiltInCategory.OST_PipeCurves,
+    BuiltInCategory.OST_PipeFitting,
+    BuiltInCategory.OST_PipeAccessory,
+    BuiltInCategory.OST_FlexPipeCurves,
+    BuiltInCategory.OST_PipingSystem,
+]
+
+elec_filters_names   = ["COORD_ELECTRIC TRAYS",          "COORD_ICT TRAYS"           ]
+elec_default_colors  = [Drawing.Color.FromArgb(255,255,0), Drawing.Color.FromArgb(128,255,255)]
+elec_default_texts   = ["_E_",                            "_T_"                        ]
+
+electrical_categories = [
+    BuiltInCategory.OST_CableTray,
+    BuiltInCategory.OST_CableTrayFitting,
+    BuiltInCategory.OST_Conduit,
+    BuiltInCategory.OST_ConduitFitting,
+]
+
+mp_param_id   = ElementId(BuiltInParameter.RBS_SYSTEM_CLASSIFICATION_PARAM)
+elec_param_id = ElementId(BuiltInParameter.SYMBOL_NAME_PARAM)
+
+# ── Revit Helper Functions ────────────────────────────────────────────────────
+def get_existing_filter(filter_name):
+    all_filters = FilteredElementCollector(doc).OfClass(ParameterFilterElement).ToElements()
+    for f in all_filters:
+        if f.Name == filter_name:
+            return f
+    return None
 
 
-# ═════════════════════════════════════════════════════════════════════
-# ACTIVE-VIEW GUARD
-# ═════════════════════════════════════════════════════════════════════
-
-ALLOWED_VIEW_TYPES = {ViewType.FloorPlan, ViewType.EngineeringPlan}
-
-def check_active_view():
-    """
-    Returns True when the active view is a plan view.
-    Alerts the user and returns False otherwise.
-    """
-    if active_view.ViewType not in ALLOWED_VIEW_TYPES:
-        forms.alert(
-            "This tool can only run in a Floor Plan or Engineering Plan view.\n\n"
-            "Current view type: {}\n\n"
-            "Please switch to a plan view and try again.".format(
-                str(active_view.ViewType)),
-            title="Wrong View Type")
-        return False
-    return True
+def is_filter_applied_to_view(view, filter_id):
+    return filter_id in view.GetFilters()
 
 
-# ═════════════════════════════════════════════════════════════════════
-# DATA COLLECTION
-# ═════════════════════════════════════════════════════════════════════
+def _get_pattern_elements():
+    """Cache-friendly fetch of solid fill + solid line pattern IDs."""
+    all_fill = FilteredElementCollector(doc).OfClass(FillPatternElement).ToElements()
+    solid_fp  = next(p for p in all_fill if p.GetFillPattern().IsSolidFill)
 
-def get_line_styles():
-    lines_cat = doc.Settings.Categories.get_Item(BuiltInCategory.OST_Lines)
-    styles = []
-    for sub in lines_cat.SubCategories:
-        gs = sub.GetGraphicsStyle(GraphicsStyleType.Projection)
-        if gs is not None:
-            styles.append(gs)
-    return sorted(styles, key=lambda s: s.Name)
+    all_line  = FilteredElementCollector(doc).OfClass(LinePatternElement).ToElements()
+    solid_lp_id = all_line[0].GetSolidPatternId()
+    return solid_fp, solid_lp_id
 
 
-def get_text_note_types():
-    types = FilteredElementCollector(doc).OfClass(TextNoteType).ToElements()
-    return sorted(
-        types,
-        key=lambda t: t.get_Parameter(
-            BuiltInParameter.ALL_MODEL_TYPE_NAME).AsString()
-    )
+def _build_overrides(drawing_color):
+    """Convert a System.Drawing.Color into a Revit OverrideGraphicSettings."""
+    solid_fp, solid_lp_id = _get_pattern_elements()
+    rv_color = Color(drawing_color.R, drawing_color.G, drawing_color.B)
 
-
-# ═════════════════════════════════════════════════════════════════════
-# SELECTION FILTER — shafts only
-# ═════════════════════════════════════════════════════════════════════
-
-class ShaftSelectionFilter(ISelectionFilter):
-    def AllowElement(self, element):
-        return element.Category is not None and \
-               element.Category.Id == ElementId(BuiltInCategory.OST_ShaftOpening)
-
-    def AllowReference(self, reference, point):
-        return False
-
-
-# ═════════════════════════════════════════════════════════════════════
-# GRAPHICAL OVERRIDE
-# ═════════════════════════════════════════════════════════════════════
-
-def build_override_settings(line_style_gs):
-    """
-    Build OverrideGraphicSettings from the chosen GraphicsStyle.
-    Applies colour, weight and pattern to both projection and cut lines
-    (projection lines are what you see as symbolic lines in plan views).
-    """
-    ogs    = OverrideGraphicSettings()
-    cat    = line_style_gs.GraphicsStyleCategory
-    color  = cat.LineColor
-    weight = cat.GetLineWeight(GraphicsStyleType.Projection)
-    pat_id = cat.GetLinePatternId(GraphicsStyleType.Projection)
-
-    if color and color.IsValid:
-        ogs.SetProjectionLineColor(color)
-        ogs.SetCutLineColor(color)
-    if weight and weight > 0:
-        ogs.SetProjectionLineWeight(weight)
-        ogs.SetCutLineWeight(weight)
-    if pat_id and pat_id != ElementId.InvalidElementId:
-        ogs.SetProjectionLinePatternId(pat_id)
-        ogs.SetCutLinePatternId(pat_id)
-
+    ogs = OverrideGraphicSettings()
+    ogs.SetSurfaceForegroundPatternId(solid_fp.Id)
+    ogs.SetSurfaceForegroundPatternColor(rv_color)
+    ogs.SetSurfaceBackgroundPatternId(solid_fp.Id)
+    ogs.SetSurfaceBackgroundPatternColor(rv_color)
+    ogs.SetProjectionLinePatternId(solid_lp_id)
+    ogs.SetProjectionLineColor(rv_color)
+    ogs.SetProjectionLineWeight(1)
     return ogs
 
 
-# ═════════════════════════════════════════════════════════════════════
-# TEXT NOTE PLACEMENT
-# ═════════════════════════════════════════════════════════════════════
+def create_view_filter(filter_name, cats, param_id, param_value, drawing_color):
+    overrides        = _build_overrides(drawing_color)
+    existing_filter  = get_existing_filter(filter_name)
 
-def get_text_position(shaft, view):
-    """
-    XYZ centred below the shaft bounding box, TEXT_OFFSET_FT beneath
-    the minimum Y extent, at the view's level elevation.
-    Returns None if no bounding box is available.
-    """
-    bbox = shaft.get_BoundingBox(view) or shaft.get_BoundingBox(None)
-    if not bbox:
-        return None
-    cx   = (bbox.Min.X + bbox.Max.X) / 2.0
-    cy   = bbox.Min.Y - TEXT_OFFSET_FT
-    elev = view.GenLevel.Elevation if view.GenLevel else 0.0
-    return XYZ(cx, cy, elev)
+    if existing_filter is not None:
+        if is_filter_applied_to_view(active_view, existing_filter.Id):
+            output.print_md("**Skipped (already applied):** {}".format(filter_name))
+        else:
+            active_view.AddFilter(existing_filter.Id)
+            active_view.SetFilterOverrides(existing_filter.Id, overrides)
+            output.print_md("**Applied existing filter:** {}".format(filter_name))
+    else:
+        cats_ids       = [ElementId(c) for c in cats]
+        pvp            = ParameterValueProvider(param_id)
 
+        if app.VersionNumber <= "2021":
+            rule = FilterStringRule(pvp, FilterStringContains(), param_value, True)
+        else:
+            rule = FilterStringRule(pvp, FilterStringContains(), param_value)
 
-# ═════════════════════════════════════════════════════════════════════
-# PROCESS A SINGLE PICKED SHAFT
-# ═════════════════════════════════════════════════════════════════════
-
-def annotate_shaft(shaft, view, ogs, annotation_text, text_type_id):
-    """
-    Apply override + text note to one shaft inside a single transaction.
-    Returns (True, None) on success, (False, error_message) on failure.
-    """
-    t = Transaction(doc, "Shaft Open Above — {}".format(shaft.Id))
-    t.Start()
-    try:
-        # 1. Apply graphic override on the shaft element
-        view.SetElementOverrides(shaft.Id, ogs)
-
-        # 2. Place text note below the shaft
-        if text_type_id:
-            pos = get_text_position(shaft, view)
-            if pos:
-                opts = TextNoteOptions(text_type_id)
-                opts.HorizontalAlignment = HorizontalTextAlignment.Center
-                TextNote.Create(doc, view.Id, pos, annotation_text, opts)
-
-        t.Commit()
-        return True, None
-
-    except Exception as ex:
-        try:
-            t.RollBack()
-        except Exception:
-            pass
-        return False, str(ex)
+        elem_filter  = ElementParameterFilter(rule)
+        view_filter  = ParameterFilterElement.Create(
+            doc, filter_name, List[ElementId](cats_ids), elem_filter
+        )
+        active_view.AddFilter(view_filter.Id)
+        active_view.SetFilterOverrides(view_filter.Id, overrides)
+        output.print_md("**Created new filter:** {}".format(filter_name))
 
 
-# ═════════════════════════════════════════════════════════════════════
-# WPF SETTINGS DIALOG
-# ═════════════════════════════════════════════════════════════════════
-
-def hex_brush(hex_str):
-    h = hex_str.lstrip('#')
-    return SolidColorBrush(
-        Color.FromRgb(int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)))
-
-
-XAML = """
-<Window
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Pick Shaft — Open Above"
-    Height="400" Width="420"
-    WindowStartupLocation="CenterScreen"
-    ResizeMode="NoResize"
-    Background="#1E1E2E"
-    Foreground="#CDD6F4"
-    FontFamily="Segoe UI"
-    FontSize="12">
-
-    <Grid Margin="20,20,20,18">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>  <!-- 0  Header            -->
-            <RowDefinition Height="Auto"/>  <!-- 1  Line style label  -->
-            <RowDefinition Height="Auto"/>  <!-- 2  Line style combo  -->
-            <RowDefinition Height="Auto"/>  <!-- 3  Text type label   -->
-            <RowDefinition Height="Auto"/>  <!-- 4  Text type combo   -->
-            <RowDefinition Height="Auto"/>  <!-- 5  Annot label       -->
-            <RowDefinition Height="Auto"/>  <!-- 6  Annot textbox     -->
-            <RowDefinition Height="*"/>     <!-- 7  Spacer            -->
-            <RowDefinition Height="Auto"/>  <!-- 8  Buttons           -->
-        </Grid.RowDefinitions>
-
-        <!-- 0  Header -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,18">
-            <TextBlock Text="PICK SHAFT — OPEN ABOVE"
-                       FontSize="15" FontWeight="Bold"
-                       Foreground="#F0A500"/>
-            <TextBlock Text="Configure the override style and annotation text, then click OK to begin picking."
-                       Foreground="#6C7086" FontSize="10.5"
-                       TextWrapping="Wrap" Margin="0,4,0,0"/>
-        </StackPanel>
-
-        <!-- 1  Line Style label -->
-        <TextBlock Grid.Row="1" Text="Override Line Style"
-                   Foreground="#BAC2DE" FontWeight="SemiBold"
-                   Margin="0,0,0,5"/>
-
-        <!-- 2  Line Style combo -->
-        <ComboBox Grid.Row="2" x:Name="LineStyleCombo"
-                  Height="30" Margin="0,0,0,14"
-                  Background="#FFFFFF" Foreground="#1E1E2E"
-                  BorderBrush="#45475A">
-            <ComboBox.ItemContainerStyle>
-                <Style TargetType="ComboBoxItem">
-                    <Setter Property="Foreground" Value="#1E1E2E"/>
-                    <Setter Property="Background" Value="#FFFFFF"/>
-                    <Style.Triggers>
-                        <Trigger Property="IsHighlighted" Value="True">
-                            <Setter Property="Background" Value="#E0E0E0"/>
-                        </Trigger>
-                    </Style.Triggers>
-                </Style>
-            </ComboBox.ItemContainerStyle>
-        </ComboBox>
-
-        <!-- 3  Text Note Type label -->
-        <TextBlock Grid.Row="3" Text="Text Note Type"
-                   Foreground="#BAC2DE" FontWeight="SemiBold"
-                   Margin="0,0,0,5"/>
-
-        <!-- 4  Text Note Type combo -->
-        <ComboBox Grid.Row="4" x:Name="TextTypeCombo"
-                  Height="30" Margin="0,0,0,14"
-                  Background="#FFFFFF" Foreground="#1E1E2E"
-                  BorderBrush="#45475A">
-            <ComboBox.ItemContainerStyle>
-                <Style TargetType="ComboBoxItem">
-                    <Setter Property="Foreground" Value="#1E1E2E"/>
-                    <Setter Property="Background" Value="#FFFFFF"/>
-                    <Style.Triggers>
-                        <Trigger Property="IsHighlighted" Value="True">
-                            <Setter Property="Background" Value="#E0E0E0"/>
-                        </Trigger>
-                    </Style.Triggers>
-                </Style>
-            </ComboBox.ItemContainerStyle>
-        </ComboBox>
-
-        <!-- 5  Annotation label -->
-        <TextBlock Grid.Row="5" Text="Annotation Text"
-                   Foreground="#BAC2DE" FontWeight="SemiBold"
-                   Margin="0,0,0,5"/>
-
-        <!-- 6  Annotation textbox -->
-        <TextBox Grid.Row="6" x:Name="AnnotationTextBox"
-                 Height="32" Padding="8,6"
-                 Background="#181825" Foreground="#CDD6F4"
-                 BorderBrush="#45475A" CaretBrush="#F0A500"
-                 Text="OPEN ABOVE"/>
-
-        <!-- 8  Buttons -->
-        <StackPanel Grid.Row="8" Orientation="Horizontal"
-                    HorizontalAlignment="Right">
-            <Button x:Name="CancelBtn" Content="Cancel"
-                    Width="90" Height="32" Margin="0,0,10,0"
-                    Background="#313244" Foreground="#CDD6F4"
-                    BorderBrush="#45475A"/>
-            <Button x:Name="OkBtn" Content="OK  →  Pick"
-                    Width="110" Height="32"
-                    Background="#F0A500" Foreground="#1E1E2E"
-                    FontWeight="Bold" BorderBrush="#F0A500"/>
-        </StackPanel>
-
-    </Grid>
-</Window>
-"""
+# ── UI Helpers ────────────────────────────────────────────────────────────────
+ROW_H  = 34
+COL1_W = 220   # Filter name
+COL2_W = 195   # System class / text input
+COL3_W = 80    # Color swatch
+GUTTER = 8     # Left margin inside form
+TOTAL_W = GUTTER + COL1_W + COL2_W + COL3_W + GUTTER  # 511
 
 
-def show_settings_dialog(line_styles, text_note_types):
-    """
-    Show the configuration dialog.
-    Returns:
-      { 'ok': bool, 'line_style': GraphicsStyle,
-        'text': str, 'text_type_id': ElementId }
-    """
-    stream = MemoryStream(Encoding.UTF8.GetBytes(XAML))
-    window = Markup.XamlReader.Load(stream)
+def _lbl(text, x, y, w, h, font=None, fg=None, bg=None,
+         align=Drawing.ContentAlignment.MiddleLeft):
+    lb = WinForms.Label()
+    lb.Text      = text
+    lb.Location  = Drawing.Point(x, y)
+    lb.Size      = Drawing.Size(w, h)
+    lb.Font      = font  or FONT_NORM
+    lb.ForeColor = fg    or TEXT_FG
+    lb.BackColor = bg    or Drawing.Color.Transparent
+    lb.TextAlign = align
+    return lb
 
-    ls_combo   = window.FindName('LineStyleCombo')
-    tt_combo   = window.FindName('TextTypeCombo')
-    text_box   = window.FindName('AnnotationTextBox')
-    ok_btn     = window.FindName('OkBtn')
-    cancel_btn = window.FindName('CancelBtn')
 
-    # ── Populate line styles ─────────────────────────────────────────
-    for ls in line_styles:
-        ls_combo.Items.Add(ls.Name)
-    if ls_combo.Items.Count > 0:
-        ls_combo.SelectedIndex = 0
+def _color_btn(x, y, color):
+    """Square swatch button that opens a ColorDialog when clicked."""
+    btn = WinForms.Button()
+    btn.Location  = Drawing.Point(x, y)
+    btn.Size      = Drawing.Size(COL3_W - 10, ROW_H - 8)
+    btn.BackColor = color
+    btn.FlatStyle = WinForms.FlatStyle.Flat
+    btn.FlatAppearance.BorderColor = BORDER_CLR
+    btn.FlatAppearance.BorderSize  = 1
+    btn.Text      = ""
+    btn.Cursor    = WinForms.Cursors.Hand
+    return btn
 
-    # ── Populate text note types ─────────────────────────────────────
-    for tt in text_note_types:
-        name = tt.get_Parameter(BuiltInParameter.ALL_MODEL_TYPE_NAME).AsString()
-        tt_combo.Items.Add(name)
-    if tt_combo.Items.Count > 0:
-        tt_combo.SelectedIndex = 0
 
-    result = {'ok': False}
+def _separator(y, w):
+    sep = WinForms.Panel()
+    sep.Location  = Drawing.Point(GUTTER, y)
+    sep.Size      = Drawing.Size(w, 1)
+    sep.BackColor = BORDER_CLR
+    return sep
 
-    def on_ok(s, e):
-        if ls_combo.SelectedIndex < 0:
-            forms.alert("Please select a line style.",
-                        title="No Line Style Selected")
-            return
-        if tt_combo.SelectedIndex < 0:
-            forms.alert("Please select a text note type.",
-                        title="No Text Note Type Selected")
-            return
-        result['ok']           = True
-        result['line_style']   = line_styles[ls_combo.SelectedIndex]
-        result['text']         = text_box.Text.strip() or "OPEN ABOVE"
-        result['text_type_id'] = text_note_types[tt_combo.SelectedIndex].Id
-        window.Close()
+
+# ── Main Dialog ───────────────────────────────────────────────────────────────
+def show_filter_dialog():
+    # Mutable state (IronPython 2.7 – no nonlocal)
+    mp_colors   = list(mp_default_colors)
+    elec_colors = list(elec_default_colors)
+    confirmed   = [False]
+
+    form_w = TOTAL_W + 20   # outer form width
+
+    form = WinForms.Form()
+    form.Text            = "MEP Filters Configuration"
+    form.BackColor       = DARK_BG
+    form.ForeColor       = TEXT_FG
+    form.Width           = form_w
+    form.FormBorderStyle = WinForms.FormBorderStyle.FixedDialog
+    form.StartPosition   = WinForms.FormStartPosition.CenterScreen
+    form.MaximizeBox     = False
+    form.MinimizeBox     = False
+    form.Font            = FONT_NORM
+
+    y = [10]   # running vertical cursor as a list for closure access
+
+    # ── Title bar ────────────────────────────────────────────────────────────
+    form.Controls.Add(_lbl(
+        "  MEP FILTER CONFIGURATION",
+        0, y[0], form_w, 36,
+        font=FONT_TITLE, fg=ACCENT_FG,
+        bg=Drawing.Color.FromArgb(22, 22, 22)
+    ))
+    y[0] += 44
+
+    # ── Column header row ────────────────────────────────────────────────────
+    def add_column_headers():
+        hdr = WinForms.Panel()
+        hdr.Location  = Drawing.Point(GUTTER, y[0])
+        hdr.Size      = Drawing.Size(TOTAL_W, 24)
+        hdr.BackColor = HEADER_BG
+        hdr.Controls.Add(_lbl("Filter Name",            2,       0, COL1_W,    24, fg=DIM_FG, font=FONT_BOLD))
+        hdr.Controls.Add(_lbl("System Classification",  COL1_W, 0, COL2_W,    24, fg=DIM_FG, font=FONT_BOLD))
+        hdr.Controls.Add(_lbl("Color",                  COL1_W + COL2_W, 0, COL3_W, 24, fg=DIM_FG, font=FONT_BOLD,
+                               align=Drawing.ContentAlignment.MiddleCenter))
+        form.Controls.Add(hdr)
+        y[0] += 24
+
+    # ── Section header ───────────────────────────────────────────────────────
+    def add_section_hdr(title):
+        form.Controls.Add(_lbl(
+            "  " + title,
+            GUTTER, y[0], TOTAL_W, 26,
+            font=FONT_BOLD,
+            fg=Drawing.Color.FromArgb(180, 220, 255),
+            bg=SECTION_BG
+        ))
+        y[0] += 26
+
+    # ── Row builder (returns color button for wiring) ────────────────────────
+    def add_row(idx, name_text, right_widget, row_color, color_btn_obj):
+        """
+        Adds a single filter row to the form.
+        right_widget  – a pre-built Control (Label or TextBox)
+        color_btn_obj – the swatch Button for this row
+        """
+        row = WinForms.Panel()
+        row.Location  = Drawing.Point(GUTTER, y[0] + idx * ROW_H)
+        row.Size      = Drawing.Size(TOTAL_W, ROW_H)
+        row.BackColor = ROW_A if idx % 2 == 0 else ROW_B
+
+        name_lbl = _lbl(name_text, 4, 0, COL1_W - 4, ROW_H)
+
+        right_widget.Location = Drawing.Point(COL1_W, (ROW_H - right_widget.Height) // 2)
+        right_widget.Width    = COL2_W - 8
+
+        color_btn_obj.Location = Drawing.Point(
+            COL1_W + COL2_W + (COL3_W - color_btn_obj.Width) // 2,
+            (ROW_H - color_btn_obj.Height) // 2
+        )
+
+        row.Controls.Add(name_lbl)
+        row.Controls.Add(right_widget)
+        row.Controls.Add(color_btn_obj)
+        form.Controls.Add(row)
+
+    # ═════════════════════════════════════════════════════════════════════════
+    # Section 1 – MEP Systems
+    # ═════════════════════════════════════════════════════════════════════════
+    add_section_hdr("MEP Systems  (filtered by System Classification)")
+    add_column_headers()
+
+    for i in range(len(mp_filters_names)):
+        # Right side: read-only label showing the classification value
+        cls_lbl = WinForms.Label()
+        cls_lbl.Text      = system_class_names[i]
+        cls_lbl.Height    = ROW_H - 8
+        cls_lbl.Font      = FONT_NORM
+        cls_lbl.ForeColor = GREEN_FG
+        cls_lbl.BackColor = Drawing.Color.Transparent
+        cls_lbl.TextAlign = Drawing.ContentAlignment.MiddleLeft
+
+        swatch = _color_btn(0, 0, mp_default_colors[i])
+
+        # Click handler – closure captures index and button correctly
+        def mp_click(s, e, idx=i, btn=swatch):
+            dlg       = WinForms.ColorDialog()
+            dlg.Color = mp_colors[idx]
+            dlg.FullOpen = True
+            if dlg.ShowDialog() == WinForms.DialogResult.OK:
+                mp_colors[idx] = dlg.Color
+                btn.BackColor  = dlg.Color
+
+        swatch.Click += mp_click
+        add_row(i, mp_filters_names[i], cls_lbl, ROW_A, swatch)
+
+    y[0] += len(mp_filters_names) * ROW_H + 12
+
+    # ═════════════════════════════════════════════════════════════════════════
+    # Section 2 – Electrical (Cable Trays / Conduits)
+    # ═════════════════════════════════════════════════════════════════════════
+    add_section_hdr("Electrical  (Cable Trays & Conduits – match by Type Name)")
+    add_column_headers()
+
+    # Override header label for the middle column
+    form.Controls.Add(_lbl(
+        "Match Text  (Type Name contains…)",
+        GUTTER + COL1_W, y[0] - 24, COL2_W, 24,
+        fg=DIM_FG, font=FONT_BOLD
+    ))
+
+    elec_textboxes = []   # kept for reading values after dialog closes
+
+    for i in range(len(elec_filters_names)):
+        tb = WinForms.TextBox()
+        tb.Text        = elec_default_texts[i]
+        tb.Height      = 22
+        tb.BackColor   = Drawing.Color.FromArgb(62, 62, 62)
+        tb.ForeColor   = TEXT_FG
+        tb.Font        = FONT_NORM
+        tb.BorderStyle = WinForms.BorderStyle.FixedSingle
+        elec_textboxes.append(tb)
+
+        swatch = _color_btn(0, 0, elec_default_colors[i])
+
+        def elec_click(s, e, idx=i, btn=swatch):
+            dlg       = WinForms.ColorDialog()
+            dlg.Color = elec_colors[idx]
+            dlg.FullOpen = True
+            if dlg.ShowDialog() == WinForms.DialogResult.OK:
+                elec_colors[idx] = dlg.Color
+                btn.BackColor    = dlg.Color
+
+        swatch.Click += elec_click
+        add_row(i, elec_filters_names[i], tb, ROW_A, swatch)
+
+    y[0] += len(elec_filters_names) * ROW_H + 16
+
+    # ═════════════════════════════════════════════════════════════════════════
+    # Bottom bar – Cancel / Apply
+    # ═════════════════════════════════════════════════════════════════════════
+    form.Controls.Add(_separator(y[0], TOTAL_W))
+    y[0] += 10
+
+    btn_cancel = WinForms.Button()
+    btn_cancel.Text      = "Cancel"
+    btn_cancel.Size      = Drawing.Size(100, 32)
+    btn_cancel.Location  = Drawing.Point(form_w - 240, y[0])
+    btn_cancel.BackColor = BTN_BG
+    btn_cancel.ForeColor = TEXT_FG
+    btn_cancel.FlatStyle = WinForms.FlatStyle.Flat
+    btn_cancel.FlatAppearance.BorderColor = BORDER_CLR
+    btn_cancel.Font      = FONT_NORM
+    btn_cancel.Cursor    = WinForms.Cursors.Hand
+
+    btn_apply = WinForms.Button()
+    btn_apply.Text      = "Apply Filters"
+    btn_apply.Size      = Drawing.Size(120, 32)
+    btn_apply.Location  = Drawing.Point(form_w - 130, y[0])
+    btn_apply.BackColor = BTN_OK_BG
+    btn_apply.ForeColor = Drawing.Color.White
+    btn_apply.FlatStyle = WinForms.FlatStyle.Flat
+    btn_apply.FlatAppearance.BorderColor = Drawing.Color.FromArgb(0, 140, 220)
+    btn_apply.Font      = FONT_BOLD
+    btn_apply.Cursor    = WinForms.Cursors.Hand
 
     def on_cancel(s, e):
-        window.Close()
+        form.Close()
 
-    ok_btn.Click     += on_ok
-    cancel_btn.Click += on_cancel
+    def on_apply(s, e):
+        for i, tb in enumerate(elec_textboxes):
+            if not tb.Text.strip():
+                WinForms.MessageBox.Show(
+                    "Match text for '{}' cannot be empty.".format(elec_filters_names[i]),
+                    "Validation Error",
+                    WinForms.MessageBoxButtons.OK,
+                    WinForms.MessageBoxIcon.Warning
+                )
+                return
+        confirmed[0] = True
+        form.Close()
 
-    window.ShowDialog()
-    return result
+    btn_cancel.Click += on_cancel
+    btn_apply.Click  += on_apply
+
+    form.Controls.Add(btn_cancel)
+    form.Controls.Add(btn_apply)
+
+    y[0] += 42
+    form.Height = y[0] + 40   # +40 for window chrome
+
+    form.ShowDialog()
+
+    if not confirmed[0]:
+        return None
+
+    return {
+        "mp_colors"   : mp_colors,
+        "elec_colors" : elec_colors,
+        "elec_texts"  : [tb.Text.strip() for tb in elec_textboxes],
+    }
 
 
-# ═════════════════════════════════════════════════════════════════════
-# MAIN
-# ═════════════════════════════════════════════════════════════════════
+# ── Entry Point ───────────────────────────────────────────────────────────────
+result = show_filter_dialog()
 
-def main():
+if result is None:
+    script.exit()
 
-    # ── 1. Enforce plan-view-only constraint ─────────────────────────
-    if not check_active_view():
-        return
+with Transaction(doc, __title__) as t:
+    t.Start()
 
-    # ── 2. Collect resources ─────────────────────────────────────────
-    line_styles     = get_line_styles()
-    text_note_types = get_text_note_types()
+    for i in range(len(mp_filters_names)):
+        create_view_filter(
+            mp_filters_names[i],
+            mp_categories,
+            mp_param_id,
+            system_class_names[i],
+            result["mp_colors"][i],
+        )
 
-    if not line_styles:
-        forms.alert(
-            "No custom line styles found.\n"
-            "Create one via  Manage → Additional Settings → Line Styles.",
-            title="Pick Shaft — Open Above")
-        return
+    for i in range(len(elec_filters_names)):
+        create_view_filter(
+            elec_filters_names[i],
+            electrical_categories,
+            elec_param_id,
+            result["elec_texts"][i],
+            result["elec_colors"][i],
+        )
 
-    if not text_note_types:
-        forms.alert("No text note types found in the document.",
-                    title="Pick Shaft — Open Above")
-        return
-
-    # ── 3. Show settings dialog ──────────────────────────────────────
-    cfg = show_settings_dialog(line_styles, text_note_types)
-    if not cfg.get('ok'):
-        return
-
-    chosen_style = cfg['line_style']
-    annot_text   = cfg['text']
-    text_type_id = cfg['text_type_id']
-    ogs          = build_override_settings(chosen_style)
-    sel_filter   = ShaftSelectionFilter()
-
-    # ── 4. Interactive pick loop ─────────────────────────────────────
-    count    = 0
-    failures = []   # list of (shaft_id_int, error_message)
-
-    while True:
-        try:
-            ref = uidoc.Selection.PickObject(
-                ObjectType.Element,
-                sel_filter,
-                "Click a Shaft Opening  [Esc to finish]")
-
-            shaft = doc.GetElement(ref.ElementId)
-
-            # Re-check view type in case the user switched views somehow
-            if doc.ActiveView.ViewType not in ALLOWED_VIEW_TYPES:
-                forms.alert(
-                    "The active view changed to a non-plan view.\n"
-                    "The script will now exit.",
-                    title="Wrong View Type")
-                break
-
-            success, err = annotate_shaft(
-                shaft, active_view, ogs, annot_text, text_type_id)
-
-            if success:
-                count += 1
-            else:
-                failures.append((shaft.Id, err))
-
-        except OperationCanceledException:
-            break
-
-        except Exception as ex:
-            # Unexpected error outside the transaction — stop the loop
-            forms.alert(
-                "Unexpected error during picking:\n\n{}".format(str(ex)),
-                title="Pick Shaft — Open Above")
-            break
-
-    # ── 5. Report failures only ──────────────────────────────────────
-    if failures:
-        lines = [
-            "The following shaft(s) could not be annotated:\n"
-        ]
-        for shaft_id, err in failures:
-            lines.append("  • ID {}:\n    {}".format(shaft_id, err))
-        lines.append(
-            "\n{} shaft(s) annotated successfully.".format(count))
-        forms.alert(
-            "\n".join(lines),
-            title="Pick Shaft — Open Above  |  Errors")
-
-main()
+    t.Commit()
