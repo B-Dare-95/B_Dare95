@@ -27,8 +27,8 @@ clr.AddReference('WindowsBase')
 
 from System.IO       import MemoryStream
 from System.Text     import Encoding
-from System.Windows  import Thickness
-from System.Windows.Controls import CheckBox
+from System.Windows  import Thickness, Visibility
+from System.Windows.Controls import CheckBox, TextBox
 from System.Windows.Media    import SolidColorBrush, Color
 import System.Windows.Markup as Markup
 
@@ -258,6 +258,14 @@ def process_view(view, all_shafts, text_type_id):
 
     return placed, skipped_no_value, skipped_no_bbox
 
+# ─────────────────────────────────────────────────────────────────────
+# HELPER
+# ─────────────────────────────────────────────────────────────────────
+def hex_brush(hex_str):
+    h = hex_str.lstrip('#')
+    return SolidColorBrush(Color.FromRgb(int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)))
+
+
 
 # ═════════════════════════════════════════════════════════════════════
 # WPF FORM
@@ -274,180 +282,123 @@ XAML = """
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="Shaft Function Tag"
-    Height="540" Width="460"
-    MinHeight="420"
+    Height="600" Width="460"
+    MinHeight="450"
     WindowStartupLocation="CenterScreen"
-    ResizeMode="CanResizeWithGrip"
-    Background="#1E1E2E"
-    Foreground="#CDD6F4"
-    FontFamily="Segoe UI"
-    FontSize="12">
+    Background="#1E1E2E" Foreground="#CDD6F4"
+    FontFamily="Segoe UI" FontSize="12">
 
-    <Grid Margin="18,18,18,16">
+    <Window.Resources>
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Margin" Value="4,3,4,3"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="18">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>  <!-- 0  Header             -->
-            <RowDefinition Height="Auto"/>  <!-- 1  Views label row    -->
-            <RowDefinition Height="*"/>     <!-- 2  Checkbox list      -->
-            <RowDefinition Height="Auto"/>  <!-- 3  Text type label    -->
-            <RowDefinition Height="Auto"/>  <!-- 4  Text type combo    -->
-            <RowDefinition Height="Auto"/>  <!-- 5  Buttons            -->
-        </Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>  <RowDefinition Height="Auto"/>  <RowDefinition Height="Auto"/>  <RowDefinition Height="*"/>     <RowDefinition Height="Auto"/>  <RowDefinition Height="Auto"/>  <RowDefinition Height="Auto"/>  </Grid.RowDefinitions>
 
-        <!-- 0  Header -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,14">
-            <TextBlock Text="SHAFT FUNCTION TAG"
-                       FontSize="16" FontWeight="Bold"
-                       Foreground="#F0A500"/>
-            <TextBlock Text="Place a text note with the shaft function at each shaft's bottom-left corner"
-                       Foreground="#6C7086" FontSize="10.5" Margin="0,3,0,0"
-                       TextWrapping="Wrap"/>
+        <StackPanel Grid.Row="0" Margin="0,0,0,10">
+            <TextBlock Text="SHAFT FUNCTION TAG" FontSize="16" FontWeight="Bold" Foreground="#F0A500"/>
         </StackPanel>
 
-        <!-- 1  Plan Views label + Select All / Clear -->
-        <Grid Grid.Row="1" Margin="0,0,0,6">
+        <TextBox Grid.Row="1" x:Name="SearchBox" Height="25" Margin="0,0,0,10" 
+                 Background="#181825" Foreground="White" BorderBrush="#45475A"
+                 VerticalContentAlignment="Center" Padding="5,0,0,0"/>
+
+        <Grid Grid.Row="2" Margin="0,0,0,6">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="10"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="Plan Views"
-                       Foreground="#BAC2DE" FontWeight="SemiBold"
-                       VerticalAlignment="Center"/>
-            <Button Grid.Column="1" x:Name="SelectAllBtn" Content="Select All"
-                    Background="Transparent" BorderBrush="Transparent"
-                    Foreground="#F0A500" Cursor="Hand" FontSize="11"
-                    Padding="0" VerticalAlignment="Center"/>
-            <Button Grid.Column="3" x:Name="ClearAllBtn" Content="Clear All"
-                    Background="Transparent" BorderBrush="Transparent"
-                    Foreground="#6C7086" Cursor="Hand" FontSize="11"
-                    Padding="0" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="0" Text="Plan Views" Foreground="#BAC2DE" FontWeight="SemiBold"/>
+            <Button Grid.Column="1" x:Name="SelectAllBtn" Content="Select All" Background="Transparent" BorderBrush="Transparent" Foreground="#F0A500"/>
+            <Button Grid.Column="3" x:Name="ClearAllBtn" Content="Clear All" Background="Transparent" BorderBrush="Transparent" Foreground="#6C7086"/>
         </Grid>
 
-        <!-- 2  Scrollable checkbox list -->
-        <Border Grid.Row="2"
-                Background="#181825" BorderBrush="#45475A"
-                BorderThickness="1" CornerRadius="3"
-                Margin="0,0,0,14">
+        <Border Grid.Row="3" Background="#181825" BorderBrush="#45475A" BorderThickness="1" CornerRadius="3" Margin="0,0,0,14">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <StackPanel x:Name="ViewsPanel" Margin="6,4,6,4"/>
+                <StackPanel x:Name="ViewsPanel" Margin="6"/>
             </ScrollViewer>
         </Border>
 
-        <!-- 3  Text Note Type label -->
-        <TextBlock Grid.Row="3" Text="Text Note Type"
-                   Foreground="#BAC2DE" FontWeight="SemiBold"
-                   Margin="0,0,0,5"/>
+        <TextBlock Grid.Row="4" Text="Text Note Type" Foreground="#BAC2DE" FontWeight="SemiBold" Margin="0,0,0,5"/>
+        <ComboBox Grid.Row="5" x:Name="TextTypeCombo" Height="30" Margin="0,0,0,18" Background="White" Foreground="#1E1E2E"/>
 
-        <!-- 4  Text Note Type combo — light bg, dark text -->
-        <ComboBox Grid.Row="4" x:Name="TextTypeCombo"
-                  Height="30" Margin="0,0,0,18"
-                  Background="#FFFFFF" Foreground="#1E1E2E"
-                  BorderBrush="#45475A">
-            <ComboBox.ItemContainerStyle>
-                <Style TargetType="ComboBoxItem">
-                    <Setter Property="Foreground" Value="#1E1E2E"/>
-                    <Setter Property="Background" Value="#FFFFFF"/>
-                    <Style.Triggers>
-                        <Trigger Property="IsHighlighted" Value="True">
-                            <Setter Property="Background" Value="#E0E0E0"/>
-                        </Trigger>
-                    </Style.Triggers>
-                </Style>
-            </ComboBox.ItemContainerStyle>
-        </ComboBox>
-
-        <!-- 5  Buttons -->
-        <StackPanel Grid.Row="5" Orientation="Horizontal"
-                    HorizontalAlignment="Right">
-            <Button x:Name="CancelBtn" Content="Cancel"
-                    Width="90" Height="32" Margin="0,0,10,0"
-                    Background="#313244" Foreground="#CDD6F4"
-                    BorderBrush="#45475A"/>
-            <Button x:Name="ApplyBtn" Content="Apply"
-                    Width="90" Height="32"
-                    Background="#F0A500" Foreground="#1E1E2E"
-                    FontWeight="Bold" BorderBrush="#F0A500"/>
+        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="CancelBtn" Content="Cancel" Width="90" Height="32" Margin="0,0,10,0" Background="#313244" Foreground="#CDD6F4"/>
+            <Button x:Name="ApplyBtn" Content="Apply" Width="90" Height="32" Background="#F0A500" Foreground="#1E1E2E" FontWeight="Bold"/>
         </StackPanel>
-
     </Grid>
 </Window>
 """
 
 
 def show_form(plan_views, text_note_types):
-    """
-    Display the settings dialog.
-    Returns:
-      { 'ok': bool, 'views': [...], 'text_type_id': ElementId }
-    or { 'ok': False } when cancelled.
-    """
     stream = MemoryStream(Encoding.UTF8.GetBytes(XAML))
     window = Markup.XamlReader.Load(stream)
 
-    views_panel    = window.FindName('ViewsPanel')
-    tt_combo       = window.FindName('TextTypeCombo')
-    apply_btn      = window.FindName('ApplyBtn')
-    cancel_btn     = window.FindName('CancelBtn')
+    search_box = window.FindName('SearchBox')
+    views_panel = window.FindName('ViewsPanel')
+    tt_combo = window.FindName('TextTypeCombo')
+    apply_btn = window.FindName('ApplyBtn')
+    cancel_btn = window.FindName('CancelBtn')
     select_all_btn = window.FindName('SelectAllBtn')
-    clear_all_btn  = window.FindName('ClearAllBtn')
+    clear_all_btn = window.FindName('ClearAllBtn')
 
-    # ── Build checkbox items ─────────────────────────────────────────
     view_checkboxes = []
-    transparent     = SolidColorBrush(Color.FromArgb(0, 0, 0, 0))
-    text_brush      = hex_brush('#CDD6F4')
-
     for v in plan_views:
-        cb            = CheckBox()
-        cb.Content    = v.Name
-        cb.Foreground = text_brush
-        cb.Background = transparent
-        cb.Margin     = Thickness(4, 3, 4, 3)
+        cb = CheckBox()
+        cb.Content = v.Name
         view_checkboxes.append(cb)
         views_panel.Children.Add(cb)
 
-    # ── Populate text note type combo ────────────────────────────────
-    for tt in text_note_types:
-        name = tt.get_Parameter(BuiltInParameter.ALL_MODEL_TYPE_NAME).AsString()
-        tt_combo.Items.Add(name)
-    if tt_combo.Items.Count > 0:
-        tt_combo.SelectedIndex = 0
+    # --- Search Logic ---
+    def on_search_changed(s, e):
+        search_text = search_box.Text.lower()
+        for cb in view_checkboxes:
+            if search_text in cb.Content.lower():
+                cb.Visibility = Visibility.Visible
+            else:
+                cb.Visibility = Visibility.Collapsed
 
-    result = {'ok': False}
+    search_box.TextChanged += on_search_changed
 
+    # --- Existing Event Handlers ---
     def on_select_all(s, e):
         for cb in view_checkboxes:
-            cb.IsChecked = True
+            if cb.Visibility == Visibility.Visible:
+                cb.IsChecked = True
 
     def on_clear_all(s, e):
         for cb in view_checkboxes:
             cb.IsChecked = False
 
-    def on_apply(s, e):
-        selected_views = [plan_views[i]
-                          for i, cb in enumerate(view_checkboxes)
-                          if cb.IsChecked]
-        if not selected_views:
-            forms.alert("Please tick at least one plan view.",
-                        title="No Views Selected")
-            return
-        if tt_combo.SelectedIndex < 0:
-            forms.alert("Please select a text note type.",
-                        title="No Text Note Type Selected")
-            return
+    for tt in text_note_types:
+        name = tt.get_Parameter(BuiltInParameter.ALL_MODEL_TYPE_NAME).AsString()
+        tt_combo.Items.Add(name)
+    if tt_combo.Items.Count > 0: tt_combo.SelectedIndex = 0
 
-        result['ok']           = True
-        result['views']        = selected_views
+    result = {'ok': False}
+
+    def on_apply(s, e):
+        selected = [plan_views[i] for i, cb in enumerate(view_checkboxes) if cb.IsChecked]
+        if not selected:
+            forms.alert("Please tick at least one plan view.")
+            return
+        result['ok'] = True
+        result['views'] = selected
         result['text_type_id'] = text_note_types[tt_combo.SelectedIndex].Id
         window.Close()
 
-    def on_cancel(s, e):
-        window.Close()
-
-    apply_btn.Click      += on_apply
-    cancel_btn.Click     += on_cancel
+    apply_btn.Click += on_apply
+    cancel_btn.Click += lambda s, e: window.Close()
     select_all_btn.Click += on_select_all
-    clear_all_btn.Click  += on_clear_all
+    clear_all_btn.Click += on_clear_all
 
     window.ShowDialog()
     return result
