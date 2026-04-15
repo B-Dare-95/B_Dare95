@@ -46,18 +46,18 @@ if not isinstance(active_view, View3D):
         exitscript=True
     )
 
-# ── Guard 2 : SDC_Shaft Function parameter must exist in the project ─────────
+# ── Guard 2 : Shaft Function parameter must exist in the project ─────────
 _param_probe = (FilteredElementCollector(doc)
                 .OfCategory(BuiltInCategory.OST_ShaftOpening)
                 .WhereElementIsNotElementType()
                 .FirstElement())
 
 _param_found = (_param_probe is not None and
-                _param_probe.LookupParameter("SDC_Shaft Function") is not None)
+                _param_probe.LookupParameter("Shaft Function") is not None)
 
 if not _param_found:
     forms.alert(
-        "The parameter 'SDC_Shaft Function' was not found on Shaft Openings.\n"
+        "The parameter 'Shaft Function' was not found on Shaft Openings.\n"
         "Please verify the parameter exists in this project.",
         title="3D Shaft – Missing Parameter",
         exitscript=True
@@ -73,13 +73,13 @@ if not all_shafts:
     forms.alert("No Shaft Openings found in the model.", exitscript=True)
 
 unique_functions = sorted(set(
-    (shaft.LookupParameter("SDC_Shaft Function").AsString() or "(Undefined)")
+    (shaft.LookupParameter("Shaft Function").AsString() or "(Undefined)")
     for shaft in all_shafts
-    if shaft.LookupParameter("SDC_Shaft Function") is not None
+    if shaft.LookupParameter("Shaft Function") is not None
 ))
 
 if not unique_functions:
-    forms.alert("No 'SDC_Shaft Function' values found.", exitscript=True)
+    forms.alert("No 'Shaft Function' values found.", exitscript=True)
 
 # ── Collect worksets ─────────────────────────────────────────────────────────
 worksets = FilteredWorksetCollector(doc)\
@@ -357,7 +357,7 @@ if not picked:
 # ── 5. Build shaft_data only from picked elements ────────────────────────────
 shaft_data = []
 for shaft in picked:
-    func_param  = shaft.LookupParameter("SDC_Shaft Function")
+    func_param  = shaft.LookupParameter("Shaft Function")
     func        = func_param.AsString() if func_param and func_param.AsString() else "(Undefined)"
 
     base_level_id = shaft.get_Parameter(BuiltInParameter.WALL_BASE_CONSTRAINT).AsElementId()
