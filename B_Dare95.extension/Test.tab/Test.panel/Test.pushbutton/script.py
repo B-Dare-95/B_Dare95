@@ -9,8 +9,15 @@ Description:
 How to Use:
 - Run the script
 - A configuration dialog will open
-- For MEP Systems: assign a color to each System Classification
-- For Electrical (Cable Trays): type a match text and assign a color
+- For MEP Systems:
+    * Edit the filter name (pre-filled with defaults)
+    * Pick a System Classification from the dropdown
+      (values are loaded from all linked Revit files)
+    * Choose a highlight color
+- For Electrical (Cable Trays / Conduits):
+    * Edit the filter name
+    * Type any match text (Type Name contains...)
+    * Choose a highlight color
 - Click "Apply Filters" to create/apply the filters
 ________________________________________________________________
 Author: Mohamed Bedair"""
@@ -38,15 +45,16 @@ output      = script.get_output()
 
 # ── UI Theme ──────────────────────────────────────────────────────────────────
 DARK_BG    = Drawing.Color.FromArgb(28,  28,  28)
-PANEL_BG   = Drawing.Color.FromArgb(38,  38,  38)
 ROW_A      = Drawing.Color.FromArgb(48,  48,  48)
 ROW_B      = Drawing.Color.FromArgb(43,  43,  43)
 HEADER_BG  = Drawing.Color.FromArgb(33,  33,  33)
 SECTION_BG = Drawing.Color.FromArgb(30,  60, 100)
+WARN_BG    = Drawing.Color.FromArgb(80,  55,  10)
 TEXT_FG    = Drawing.Color.FromArgb(220, 220, 220)
 DIM_FG     = Drawing.Color.FromArgb(150, 150, 150)
 ACCENT_FG  = Drawing.Color.FromArgb(100, 180, 255)
-GREEN_FG   = Drawing.Color.FromArgb(140, 200, 140)
+WARN_FG    = Drawing.Color.FromArgb(255, 200,  80)
+INPUT_BG   = Drawing.Color.FromArgb(58,  58,  58)
 BTN_BG     = Drawing.Color.FromArgb(58,  58,  58)
 BTN_OK_BG  = Drawing.Color.FromArgb(0,   100, 180)
 BORDER_CLR = Drawing.Color.FromArgb(72,  72,  72)
@@ -54,9 +62,10 @@ BORDER_CLR = Drawing.Color.FromArgb(72,  72,  72)
 FONT_NORM  = Drawing.Font("Segoe UI", 9)
 FONT_BOLD  = Drawing.Font("Segoe UI", 9, Drawing.FontStyle.Bold)
 FONT_TITLE = Drawing.Font("Segoe UI", 11, Drawing.FontStyle.Bold)
+FONT_WARN  = Drawing.Font("Segoe UI", 8, Drawing.FontStyle.Italic)
 
-# ── Filter Data ───────────────────────────────────────────────────────────────
-mp_filters_names = [
+# ── Filter Defaults ───────────────────────────────────────────────────────────
+mp_default_names = [
     "COORD_SUPPLY DUCTS",
     "COORD_RETURN DUCTS",
     "COORD_EXHAUST DUCTS",
@@ -82,7 +91,8 @@ mp_default_colors = [
     Drawing.Color.FromArgb(64,    0,  64),
 ]
 
-system_class_names = [
+# Used to pre-select the matching ComboBox item if found in the linked-file values
+mp_default_classifications = [
     "Supply Air",
     "Return Air",
     "Exhaust Air",
@@ -109,9 +119,9 @@ mp_categories = [
     BuiltInCategory.OST_PipingSystem,
 ]
 
-elec_filters_names   = ["COORD_ELECTRIC TRAYS",          "COORD_ICT TRAYS"           ]
-elec_default_colors  = [Drawing.Color.FromArgb(255,255,0), Drawing.Color.FromArgb(128,255,255)]
-elec_default_texts   = ["_E_",                            "_T_"                        ]
+elec_default_names  = ["COORD_ELECTRIC TRAYS",            "COORD_ICT TRAYS"            ]
+elec_default_texts  = ["_E_",                              "_T_"                        ]
+elec_default_colors = [Drawing.Color.FromArgb(255, 255, 0), Drawing.Color.FromArgb(128, 255, 255)]
 
 electrical_categories = [
     BuiltInCategory.OST_CableTray,
@@ -122,6 +132,41 @@ electrical_categories = [
 
 mp_param_id   = ElementId(BuiltInParameter.RBS_SYSTEM_CLASSIFICATION_PARAM)
 elec_param_id = ElementId(BuiltInParameter.SYMBOL_NAME_PARAM)
+
+
+# ── Linked-File Scanner ───────────────────────────────────────────────────────
+def get_linked_system_classifications():
+    """
+    Scans every loaded RevitLinkInstance for unique values of
+    RBS_SYSTEM_CLASSIFICATION_PARAM on duct / pipe system elements.
+
+    Returns a sorted list of unique strings.
+    Returns an empty list when no links are loaded or none are resolved.
+    """
+    values = set()
+    link_instances = FilteredElementCollector(doc).OfClass(RevitLinkInstance).ToElements()
+
+    for link_inst in link_instances:
+        link_doc = link_inst.GetLinkDocument()
+        if link_doc is None:
+            continue   # link not loaded / not resolved
+
+        for bic in [BuiltInCategory.OST_DuctSystem, BuiltInCategory.OST_PipingSystem]:
+            try:
+                collector = (FilteredElementCollector(link_doc)
+                             .OfCategory(bic)
+                             .WhereElementIsNotElementType())
+                for elem in collector:
+                    param = elem.get_Parameter(BuiltInParameter.RBS_SYSTEM_CLASSIFICATION_PARAM)
+                    if param and param.HasValue:
+                        val = param.AsString()
+                        if val and val.strip():
+                            values.add(val.strip())
+            except Exception:
+                pass   # skip categories that fail on a particular link
+
+    return sorted(values)
+
 
 # ── Revit Helper Functions ────────────────────────────────────────────────────
 def get_existing_filter(filter_name):
@@ -137,20 +182,16 @@ def is_filter_applied_to_view(view, filter_id):
 
 
 def _get_pattern_elements():
-    """Cache-friendly fetch of solid fill + solid line pattern IDs."""
-    all_fill = FilteredElementCollector(doc).OfClass(FillPatternElement).ToElements()
-    solid_fp  = next(p for p in all_fill if p.GetFillPattern().IsSolidFill)
-
-    all_line  = FilteredElementCollector(doc).OfClass(LinePatternElement).ToElements()
+    all_fill    = FilteredElementCollector(doc).OfClass(FillPatternElement).ToElements()
+    solid_fp    = next(p for p in all_fill if p.GetFillPattern().IsSolidFill)
+    all_line    = FilteredElementCollector(doc).OfClass(LinePatternElement).ToElements()
     solid_lp_id = all_line[0].GetSolidPatternId()
     return solid_fp, solid_lp_id
 
 
 def _build_overrides(drawing_color):
-    """Convert a System.Drawing.Color into a Revit OverrideGraphicSettings."""
     solid_fp, solid_lp_id = _get_pattern_elements()
     rv_color = Color(drawing_color.R, drawing_color.G, drawing_color.B)
-
     ogs = OverrideGraphicSettings()
     ogs.SetSurfaceForegroundPatternId(solid_fp.Id)
     ogs.SetSurfaceForegroundPatternColor(rv_color)
@@ -163,8 +204,8 @@ def _build_overrides(drawing_color):
 
 
 def create_view_filter(filter_name, cats, param_id, param_value, drawing_color):
-    overrides        = _build_overrides(drawing_color)
-    existing_filter  = get_existing_filter(filter_name)
+    overrides       = _build_overrides(drawing_color)
+    existing_filter = get_existing_filter(filter_name)
 
     if existing_filter is not None:
         if is_filter_applied_to_view(active_view, existing_filter.Id):
@@ -174,16 +215,14 @@ def create_view_filter(filter_name, cats, param_id, param_value, drawing_color):
             active_view.SetFilterOverrides(existing_filter.Id, overrides)
             output.print_md("**Applied existing filter:** {}".format(filter_name))
     else:
-        cats_ids       = [ElementId(c) for c in cats]
-        pvp            = ParameterValueProvider(param_id)
-
+        cats_ids    = [ElementId(c) for c in cats]
+        pvp         = ParameterValueProvider(param_id)
         if app.VersionNumber <= "2021":
             rule = FilterStringRule(pvp, FilterStringContains(), param_value, True)
         else:
             rule = FilterStringRule(pvp, FilterStringContains(), param_value)
-
-        elem_filter  = ElementParameterFilter(rule)
-        view_filter  = ParameterFilterElement.Create(
+        elem_filter = ElementParameterFilter(rule)
+        view_filter = ParameterFilterElement.Create(
             doc, filter_name, List[ElementId](cats_ids), elem_filter
         )
         active_view.AddFilter(view_filter.Id)
@@ -191,33 +230,60 @@ def create_view_filter(filter_name, cats, param_id, param_value, drawing_color):
         output.print_md("**Created new filter:** {}".format(filter_name))
 
 
-# ── UI Helpers ────────────────────────────────────────────────────────────────
-ROW_H  = 34
-COL1_W = 220   # Filter name
-COL2_W = 195   # System class / text input
-COL3_W = 80    # Color swatch
-GUTTER = 8     # Left margin inside form
-TOTAL_W = GUTTER + COL1_W + COL2_W + COL3_W + GUTTER  # 511
+# ── UI Layout Constants ───────────────────────────────────────────────────────
+ROW_H   = 34
+COL1_W  = 210   # editable filter name
+COL2_W  = 200   # classification combo / match textbox
+COL3_W  = 82    # colour swatch
+GUTTER  = 8
+TOTAL_W = GUTTER + COL1_W + COL2_W + COL3_W + GUTTER   # 508
 
 
+# ── Primitive Builders ────────────────────────────────────────────────────────
 def _lbl(text, x, y, w, h, font=None, fg=None, bg=None,
          align=Drawing.ContentAlignment.MiddleLeft):
     lb = WinForms.Label()
     lb.Text      = text
     lb.Location  = Drawing.Point(x, y)
     lb.Size      = Drawing.Size(w, h)
-    lb.Font      = font  or FONT_NORM
-    lb.ForeColor = fg    or TEXT_FG
-    lb.BackColor = bg    or Drawing.Color.Transparent
+    lb.Font      = font or FONT_NORM
+    lb.ForeColor = fg   or TEXT_FG
+    lb.BackColor = bg   or Drawing.Color.Transparent
     lb.TextAlign = align
     return lb
 
 
-def _color_btn(x, y, color):
-    """Square swatch button that opens a ColorDialog when clicked."""
+def _input_tb(default_text):
+    tb = WinForms.TextBox()
+    tb.Text        = default_text
+    tb.Height      = 22
+    tb.BackColor   = INPUT_BG
+    tb.ForeColor   = TEXT_FG
+    tb.Font        = FONT_NORM
+    tb.BorderStyle = WinForms.BorderStyle.FixedSingle
+    return tb
+
+
+def _classification_combo(items, preselect=None):
+    cb = WinForms.ComboBox()
+    cb.DropDownStyle = WinForms.ComboBoxStyle.DropDownList
+    cb.BackColor     = INPUT_BG
+    cb.ForeColor     = TEXT_FG
+    cb.Font          = FONT_NORM
+    cb.FlatStyle     = WinForms.FlatStyle.Flat
+    cb.Height        = 22
+    for item in items:
+        cb.Items.Add(item)
+    if preselect and preselect in items:
+        cb.SelectedItem = preselect
+    elif cb.Items.Count > 0:
+        cb.SelectedIndex = 0
+    return cb
+
+
+def _swatch_btn(color):
     btn = WinForms.Button()
-    btn.Location  = Drawing.Point(x, y)
-    btn.Size      = Drawing.Size(COL3_W - 10, ROW_H - 8)
+    btn.Size      = Drawing.Size(COL3_W - 12, ROW_H - 10)
     btn.BackColor = color
     btn.FlatStyle = WinForms.FlatStyle.Flat
     btn.FlatAppearance.BorderColor = BORDER_CLR
@@ -236,13 +302,23 @@ def _separator(y, w):
 
 
 # ── Main Dialog ───────────────────────────────────────────────────────────────
-def show_filter_dialog():
-    # Mutable state (IronPython 2.7 – no nonlocal)
-    mp_colors   = list(mp_default_colors)
-    elec_colors = list(elec_default_colors)
-    confirmed   = [False]
+def show_filter_dialog(linked_classifications, fallback_used):
+    """
+    linked_classifications  - sorted list of system classification strings
+    fallback_used           - True when no links were found (hardcoded defaults used)
 
-    form_w = TOTAL_W + 20   # outer form width
+    Returns result dict on confirmation, or None if cancelled.
+    """
+    # Mutable state (IronPython 2.7 – no nonlocal)
+    mp_colors      = list(mp_default_colors)
+    elec_colors    = list(elec_default_colors)
+    confirmed      = [False]
+    mp_name_tbs    = []    # TextBox  – MEP filter names
+    mp_combos      = []    # ComboBox – system classifications
+    elec_name_tbs  = []    # TextBox  – electrical filter names
+    elec_match_tbs = []    # TextBox  – electrical match text
+
+    form_w = TOTAL_W + 20
 
     form = WinForms.Form()
     form.Text            = "MEP Filters Configuration"
@@ -255,9 +331,9 @@ def show_filter_dialog():
     form.MinimizeBox     = False
     form.Font            = FONT_NORM
 
-    y = [10]   # running vertical cursor as a list for closure access
+    y = [10]   # running vertical cursor (list for closure mutability)
 
-    # ── Title bar ────────────────────────────────────────────────────────────
+    # ── Title bar ─────────────────────────────────────────────────────────────
     form.Controls.Add(_lbl(
         "  MEP FILTER CONFIGURATION",
         0, y[0], form_w, 36,
@@ -266,20 +342,7 @@ def show_filter_dialog():
     ))
     y[0] += 44
 
-    # ── Column header row ────────────────────────────────────────────────────
-    def add_column_headers():
-        hdr = WinForms.Panel()
-        hdr.Location  = Drawing.Point(GUTTER, y[0])
-        hdr.Size      = Drawing.Size(TOTAL_W, 24)
-        hdr.BackColor = HEADER_BG
-        hdr.Controls.Add(_lbl("Filter Name",            2,       0, COL1_W,    24, fg=DIM_FG, font=FONT_BOLD))
-        hdr.Controls.Add(_lbl("System Classification",  COL1_W, 0, COL2_W,    24, fg=DIM_FG, font=FONT_BOLD))
-        hdr.Controls.Add(_lbl("Color",                  COL1_W + COL2_W, 0, COL3_W, 24, fg=DIM_FG, font=FONT_BOLD,
-                               align=Drawing.ContentAlignment.MiddleCenter))
-        form.Controls.Add(hdr)
-        y[0] += 24
-
-    # ── Section header ───────────────────────────────────────────────────────
+    # ── Helpers inside the dialog ─────────────────────────────────────────────
     def add_section_hdr(title):
         form.Controls.Add(_lbl(
             "  " + title,
@@ -290,115 +353,119 @@ def show_filter_dialog():
         ))
         y[0] += 26
 
-    # ── Row builder (returns color button for wiring) ────────────────────────
-    def add_row(idx, name_text, right_widget, row_color, color_btn_obj):
-        """
-        Adds a single filter row to the form.
-        right_widget  – a pre-built Control (Label or TextBox)
-        color_btn_obj – the swatch Button for this row
-        """
+    def add_col_headers(mid_label):
+        hdr = WinForms.Panel()
+        hdr.Location  = Drawing.Point(GUTTER, y[0])
+        hdr.Size      = Drawing.Size(TOTAL_W, 24)
+        hdr.BackColor = HEADER_BG
+        hdr.Controls.Add(_lbl("Filter Name",  4,       0, COL1_W,    24, fg=DIM_FG, font=FONT_BOLD))
+        hdr.Controls.Add(_lbl(mid_label,      COL1_W,  0, COL2_W,    24, fg=DIM_FG, font=FONT_BOLD))
+        hdr.Controls.Add(_lbl("Color",
+            COL1_W + COL2_W, 0, COL3_W, 24,
+            fg=DIM_FG, font=FONT_BOLD,
+            align=Drawing.ContentAlignment.MiddleCenter))
+        form.Controls.Add(hdr)
+        y[0] += 24
+
+    def add_row(row_idx, name_widget, mid_widget, swatch):
         row = WinForms.Panel()
-        row.Location  = Drawing.Point(GUTTER, y[0] + idx * ROW_H)
+        row.Location  = Drawing.Point(GUTTER, y[0])
         row.Size      = Drawing.Size(TOTAL_W, ROW_H)
-        row.BackColor = ROW_A if idx % 2 == 0 else ROW_B
+        row.BackColor = ROW_A if row_idx % 2 == 0 else ROW_B
 
-        name_lbl = _lbl(name_text, 4, 0, COL1_W - 4, ROW_H)
+        name_widget.Location = Drawing.Point(4, (ROW_H - name_widget.Height) // 2)
+        name_widget.Width    = COL1_W - 8
 
-        right_widget.Location = Drawing.Point(COL1_W, (ROW_H - right_widget.Height) // 2)
-        right_widget.Width    = COL2_W - 8
+        mid_widget.Location  = Drawing.Point(COL1_W, (ROW_H - mid_widget.Height) // 2)
+        mid_widget.Width     = COL2_W - 8
 
-        color_btn_obj.Location = Drawing.Point(
-            COL1_W + COL2_W + (COL3_W - color_btn_obj.Width) // 2,
-            (ROW_H - color_btn_obj.Height) // 2
+        swatch.Location = Drawing.Point(
+            COL1_W + COL2_W + (COL3_W - swatch.Width) // 2,
+            (ROW_H - swatch.Height) // 2
         )
 
-        row.Controls.Add(name_lbl)
-        row.Controls.Add(right_widget)
-        row.Controls.Add(color_btn_obj)
+        row.Controls.Add(name_widget)
+        row.Controls.Add(mid_widget)
+        row.Controls.Add(swatch)
         form.Controls.Add(row)
+        y[0] += ROW_H
 
-    # ═════════════════════════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════════════════
     # Section 1 – MEP Systems
-    # ═════════════════════════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════════════════
     add_section_hdr("MEP Systems  (filtered by System Classification)")
-    add_column_headers()
 
-    for i in range(len(mp_filters_names)):
-        # Right side: read-only label showing the classification value
-        cls_lbl = WinForms.Label()
-        cls_lbl.Text      = system_class_names[i]
-        cls_lbl.Height    = ROW_H - 8
-        cls_lbl.Font      = FONT_NORM
-        cls_lbl.ForeColor = GREEN_FG
-        cls_lbl.BackColor = Drawing.Color.Transparent
-        cls_lbl.TextAlign = Drawing.ContentAlignment.MiddleLeft
+    if fallback_used:
+        form.Controls.Add(_lbl(
+            "  \u26a0  No loaded Revit links found – showing default classification values.",
+            GUTTER, y[0], TOTAL_W, 20,
+            font=FONT_WARN, fg=WARN_FG, bg=WARN_BG
+        ))
+        y[0] += 20
 
-        swatch = _color_btn(0, 0, mp_default_colors[i])
+    add_col_headers("System Classification")
 
-        # Click handler – closure captures index and button correctly
+    for i in range(len(mp_default_names)):
+        name_tb = _input_tb(mp_default_names[i])
+        mp_name_tbs.append(name_tb)
+
+        combo = _classification_combo(
+            linked_classifications,
+            preselect=mp_default_classifications[i]
+        )
+        mp_combos.append(combo)
+
+        swatch = _swatch_btn(mp_default_colors[i])
+
         def mp_click(s, e, idx=i, btn=swatch):
-            dlg       = WinForms.ColorDialog()
-            dlg.Color = mp_colors[idx]
+            dlg          = WinForms.ColorDialog()
+            dlg.Color    = mp_colors[idx]
             dlg.FullOpen = True
             if dlg.ShowDialog() == WinForms.DialogResult.OK:
                 mp_colors[idx] = dlg.Color
                 btn.BackColor  = dlg.Color
 
         swatch.Click += mp_click
-        add_row(i, mp_filters_names[i], cls_lbl, ROW_A, swatch)
+        add_row(i, name_tb, combo, swatch)
 
-    y[0] += len(mp_filters_names) * ROW_H + 12
+    y[0] += 12
 
-    # ═════════════════════════════════════════════════════════════════════════
-    # Section 2 – Electrical (Cable Trays / Conduits)
-    # ═════════════════════════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════════════════
+    # Section 2 – Electrical
+    # ══════════════════════════════════════════════════════════════════════════
     add_section_hdr("Electrical  (Cable Trays & Conduits – match by Type Name)")
-    add_column_headers()
+    add_col_headers("Match Text  (Type Name contains...)")
 
-    # Override header label for the middle column
-    form.Controls.Add(_lbl(
-        "Match Text  (Type Name contains…)",
-        GUTTER + COL1_W, y[0] - 24, COL2_W, 24,
-        fg=DIM_FG, font=FONT_BOLD
-    ))
+    for i in range(len(elec_default_names)):
+        name_tb  = _input_tb(elec_default_names[i])
+        elec_name_tbs.append(name_tb)
 
-    elec_textboxes = []   # kept for reading values after dialog closes
+        match_tb = _input_tb(elec_default_texts[i])
+        elec_match_tbs.append(match_tb)
 
-    for i in range(len(elec_filters_names)):
-        tb = WinForms.TextBox()
-        tb.Text        = elec_default_texts[i]
-        tb.Height      = 22
-        tb.BackColor   = Drawing.Color.FromArgb(62, 62, 62)
-        tb.ForeColor   = TEXT_FG
-        tb.Font        = FONT_NORM
-        tb.BorderStyle = WinForms.BorderStyle.FixedSingle
-        elec_textboxes.append(tb)
-
-        swatch = _color_btn(0, 0, elec_default_colors[i])
+        swatch = _swatch_btn(elec_default_colors[i])
 
         def elec_click(s, e, idx=i, btn=swatch):
-            dlg       = WinForms.ColorDialog()
-            dlg.Color = elec_colors[idx]
+            dlg          = WinForms.ColorDialog()
+            dlg.Color    = elec_colors[idx]
             dlg.FullOpen = True
             if dlg.ShowDialog() == WinForms.DialogResult.OK:
                 elec_colors[idx] = dlg.Color
                 btn.BackColor    = dlg.Color
 
         swatch.Click += elec_click
-        add_row(i, elec_filters_names[i], tb, ROW_A, swatch)
+        add_row(i, name_tb, match_tb, swatch)
 
-    y[0] += len(elec_filters_names) * ROW_H + 16
+    y[0] += 14
 
-    # ═════════════════════════════════════════════════════════════════════════
-    # Bottom bar – Cancel / Apply
-    # ═════════════════════════════════════════════════════════════════════════
+    # ── Footer ────────────────────────────────────────────────────────────────
     form.Controls.Add(_separator(y[0], TOTAL_W))
     y[0] += 10
 
     btn_cancel = WinForms.Button()
     btn_cancel.Text      = "Cancel"
     btn_cancel.Size      = Drawing.Size(100, 32)
-    btn_cancel.Location  = Drawing.Point(form_w - 240, y[0])
+    btn_cancel.Location  = Drawing.Point(form_w - 244, y[0])
     btn_cancel.BackColor = BTN_BG
     btn_cancel.ForeColor = TEXT_FG
     btn_cancel.FlatStyle = WinForms.FlatStyle.Flat
@@ -408,8 +475,8 @@ def show_filter_dialog():
 
     btn_apply = WinForms.Button()
     btn_apply.Text      = "Apply Filters"
-    btn_apply.Size      = Drawing.Size(120, 32)
-    btn_apply.Location  = Drawing.Point(form_w - 130, y[0])
+    btn_apply.Size      = Drawing.Size(128, 32)
+    btn_apply.Location  = Drawing.Point(form_w - 136, y[0])
     btn_apply.BackColor = BTN_OK_BG
     btn_apply.ForeColor = Drawing.Color.White
     btn_apply.FlatStyle = WinForms.FlatStyle.Flat
@@ -421,14 +488,38 @@ def show_filter_dialog():
         form.Close()
 
     def on_apply(s, e):
-        for i, tb in enumerate(elec_textboxes):
+        # Validate MEP filter names
+        for i, tb in enumerate(mp_name_tbs):
             if not tb.Text.strip():
                 WinForms.MessageBox.Show(
-                    "Match text for '{}' cannot be empty.".format(elec_filters_names[i]),
-                    "Validation Error",
-                    WinForms.MessageBoxButtons.OK,
-                    WinForms.MessageBoxIcon.Warning
-                )
+                    "Filter name for MEP row {} cannot be empty.".format(i + 1),
+                    "Validation", WinForms.MessageBoxButtons.OK,
+                    WinForms.MessageBoxIcon.Warning)
+                return
+        # Validate MEP combo selections
+        for i, cb in enumerate(mp_combos):
+            if cb.SelectedIndex < 0:
+                WinForms.MessageBox.Show(
+                    "Please select a System Classification for row {}.".format(i + 1),
+                    "Validation", WinForms.MessageBoxButtons.OK,
+                    WinForms.MessageBoxIcon.Warning)
+                return
+        # Validate electrical filter names
+        for i, tb in enumerate(elec_name_tbs):
+            if not tb.Text.strip():
+                WinForms.MessageBox.Show(
+                    "Filter name for Electrical row {} cannot be empty.".format(i + 1),
+                    "Validation", WinForms.MessageBoxButtons.OK,
+                    WinForms.MessageBoxIcon.Warning)
+                return
+        # Validate electrical match texts
+        for i, tb in enumerate(elec_match_tbs):
+            if not tb.Text.strip():
+                WinForms.MessageBox.Show(
+                    "Match text for '{}' cannot be empty.".format(
+                        elec_name_tbs[i].Text.strip() or "row {}".format(i + 1)),
+                    "Validation", WinForms.MessageBoxButtons.OK,
+                    WinForms.MessageBoxIcon.Warning)
                 return
         confirmed[0] = True
         form.Close()
@@ -440,7 +531,7 @@ def show_filter_dialog():
     form.Controls.Add(btn_apply)
 
     y[0] += 42
-    form.Height = y[0] + 40   # +40 for window chrome
+    form.Height = y[0] + 42   # +42 for OS window chrome
 
     form.ShowDialog()
 
@@ -448,33 +539,47 @@ def show_filter_dialog():
         return None
 
     return {
-        "mp_colors"   : mp_colors,
-        "elec_colors" : elec_colors,
-        "elec_texts"  : [tb.Text.strip() for tb in elec_textboxes],
+        "mp_names"           : [tb.Text.strip()      for tb in mp_name_tbs],
+        "mp_classifications" : [str(cb.SelectedItem) for cb in mp_combos],
+        "mp_colors"          : mp_colors,
+        "elec_names"         : [tb.Text.strip()      for tb in elec_name_tbs],
+        "elec_texts"         : [tb.Text.strip()      for tb in elec_match_tbs],
+        "elec_colors"        : elec_colors,
     }
 
 
 # ── Entry Point ───────────────────────────────────────────────────────────────
-result = show_filter_dialog()
+
+# 1. Scan all loaded linked files for unique System Classification values
+linked_classifications = get_linked_system_classifications()
+fallback_used          = len(linked_classifications) == 0
+
+if fallback_used:
+    # No links loaded – fall back to hardcoded defaults so the dialog is usable
+    linked_classifications = list(mp_default_classifications)
+
+# 2. Show the configuration dialog
+result = show_filter_dialog(linked_classifications, fallback_used)
 
 if result is None:
     script.exit()
 
+# 3. Create / apply all filters in a single transaction
 with Transaction(doc, __title__) as t:
     t.Start()
 
-    for i in range(len(mp_filters_names)):
+    for i in range(len(result["mp_names"])):
         create_view_filter(
-            mp_filters_names[i],
+            result["mp_names"][i],
             mp_categories,
             mp_param_id,
-            system_class_names[i],
+            result["mp_classifications"][i],
             result["mp_colors"][i],
         )
 
-    for i in range(len(elec_filters_names)):
+    for i in range(len(result["elec_names"])):
         create_view_filter(
-            elec_filters_names[i],
+            result["elec_names"][i],
             electrical_categories,
             elec_param_id,
             result["elec_texts"][i],
