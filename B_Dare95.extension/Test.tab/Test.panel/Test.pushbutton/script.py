@@ -1,20 +1,28 @@
 # -*- coding: utf-8 -*-
 """
-FLS Area Plan Creator
+FLS Area Plan Creator  v2.0.0
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Creates Area Plans from selected Floor Plan views with automatic
-NET / GROSS boundary logic derived from room Occupancy values.
+NET / GROSS boundary logic driven by the custom FLS parameters.
+
+Reads from rooms:
+  FLS Occupancy         → copied verbatim onto the new Area
+  FLS Area Measurement  → drives NET / GROSS boundary logic
 
 Boundary rules:
   • NET  room  → boundary at interior finish face of wall
   • GROSS room → boundary at exterior (outer) face of wall
   • GROSS ↔ GROSS shared wall → boundary at wall centre-line
 
-After all boundaries are placed, duplicate / overlapping curves
+After all boundaries are placed duplicate / overlapping curves
 are removed for a clean result.
+
+Prerequisite:
+  Run "FLS Parameter Creator" first so both parameters exist in
+  the project before running this script.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Author  : B_Dare95
-Version : 1.0.0
+Version : 2.0.0
 """
 
 # ──────────────────────────────────────────────────────────────
@@ -40,28 +48,71 @@ from pyrevit import forms, script
 uidoc = __revit__.ActiveUIDocument
 doc   = uidoc.Document
 
+# ──────────────────────────────────────────────────────────────
+# FLS PARAMETER NAMES  (must match exactly what the creator made)
+# ──────────────────────────────────────────────────────────────
+FLS_OCCUPANCY_PARAM    = "FLS Occupancy"       # descriptive occupancy label
+FLS_AREA_MEAS_PARAM    = "FLS Area Measurement" # "NET" or "GROSS"
+
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# SECTION 1 – HELPER UTILITIES
+# SECTION 1 – PREFLIGHT: VERIFY FLS PARAMETERS EXIST
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-def _occupancy(room):
-    """Return the room's Occupancy value, upper-cased, or empty string."""
-    param = room.get_Parameter(BuiltInParameter.ROOM_OCCUPANCY)
-    if param is None:
+def _get_bound_param_names(doc):
+    """Return a set of all parameter names currently bound in the project."""
+    names = set()
+    it = doc.ParameterBindings.ForwardIterator()
+    while it.MoveNext():
+        try:
+            names.add(it.Key.Name)
+        except Exception:
+            pass
+    return names
+
+
+_bound_params = _get_bound_param_names(doc)
+_missing = [
+    p for p in (FLS_OCCUPANCY_PARAM, FLS_AREA_MEAS_PARAM)
+    if p not in _bound_params
+]
+
+if _missing:
+    forms.alert(
+        u"The following required FLS parameters were not found in this project:\n\n"
+        + u"\n".join(u"  \u2022  {}".format(p) for p in _missing)
+        + u"\n\nPlease run the \u201cFLS Parameter Creator\u201d script first, "
+          u"then re-run this tool.",
+        title   = "FLS Area Plan Creator \u2013 Missing Parameters",
+        exitscript = True
+    )
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# SECTION 2 – HELPER UTILITIES
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def _get_fls_param_value(element, param_name):
+    """
+    Read a custom parameter by name from any element.
+    Returns the string value (upper-cased & stripped) or "".
+    """
+    p = element.LookupParameter(param_name)
+    if p is None:
         return ""
-    return (param.AsString() or "").strip().upper()
+    return (p.AsString() or "").strip().upper()
 
 
 def _is_gross(room):
-    return "GROSS" in _occupancy(room)
+    """True when the room's FLS Area Measurement contains 'GROSS'."""
+    return "GROSS" in _get_fls_param_value(room, FLS_AREA_MEAS_PARAM)
 
 
 def _build_wall_room_map(rooms):
     """
-    Returns a dict  { wall_ElementId : [room, ...] }
-    mapping every wall that acts as a room boundary to the rooms
-    that share it.  Uses the Finish face option so we match the
-    same segments used for NET boundaries.
+    Returns  { wall_ElementId : [room, ...] }
+    mapping every bounding wall to the rooms that share it.
+    Uses the Finish-face boundary location to match NET boundaries.
     """
     opts = SpatialElementBoundaryOptions()
     opts.SpatialElementBoundaryLocation = SpatialElementBoundaryLocation.Finish
@@ -76,7 +127,6 @@ def _build_wall_room_map(rooms):
                         continue
                     if wid not in wall_map:
                         wall_map[wid] = []
-                    # avoid duplicating the same room
                     if not any(r.Id == room.Id for r in wall_map[wid]):
                         wall_map[wid].append(room)
         except Exception:
@@ -86,25 +136,22 @@ def _build_wall_room_map(rooms):
 
 def _outer_face_curve(center_curve, wall, room_pt):
     """
-    Translate a wall centre-line curve to the exterior face of the wall
-    (i.e. away from the given room_pt).
+    Offset a wall centre-line curve to the wall's exterior face
+    (the face pointing away from room_pt).
 
-    The translation vector is: wall.Orientation (or its negation)
-    scaled by half the wall thickness.
+    Translation distance = wall.Width / 2  (Revit internal feet).
     """
     try:
-        half_width  = wall.Width / 2.0          # Revit internal units (feet)
-        wall_normal = wall.Orientation           # unit XY vector ⊥ to wall
+        half_width  = wall.Width / 2.0
+        wall_normal = wall.Orientation          # unit vector ⊥ to wall axis
 
-        # Vector from wall midpoint toward the room
         wall_mid = center_curve.Evaluate(0.5, True)
         to_room  = XYZ(room_pt.X - wall_mid.X,
                        room_pt.Y - wall_mid.Y,
                        0.0)
 
-        # If the room is on the "positive" side of wall_normal,
-        # the exterior face is in the opposite direction.
-        dot = to_room.DotProduct(wall_normal)
+        # Room is on the "positive-normal" side → exterior is the negated normal
+        dot     = to_room.DotProduct(wall_normal)
         outward = wall_normal.Negate() if dot > 0 else wall_normal
 
         offset    = XYZ(outward.X * half_width,
@@ -114,17 +161,17 @@ def _outer_face_curve(center_curve, wall, room_pt):
         return center_curve.CreateTransformed(transform)
 
     except Exception:
-        return center_curve          # fallback: stay on centre-line
+        return center_curve          # safe fallback
 
 
 def _get_boundary_curves(room, gross_ids, wall_map, doc):
     """
-    Return a flat list of Revit Curve objects representing the area
-    boundary for this room, applying the NET / GROSS rules.
+    Return a flat list of Curve objects for the room's area boundary.
 
-    NET  → Finish-face curves (standard room boundary, no offset)
-    GROSS, shared wall with another GROSS room → Centre-line curve
-    GROSS, all other walls → Outer-face curve (centre + half-width offset)
+    Decision tree per wall segment:
+      NET  room             → Finish-face curve    (wall interior face)
+      GROSS, GROSS neighbour → Centre-line curve   (shared wall midpoint)
+      GROSS, other boundary  → Outer-face curve    (wall exterior face)
     """
     opts_finish = SpatialElementBoundaryOptions()
     opts_finish.SpatialElementBoundaryLocation = SpatialElementBoundaryLocation.Finish
@@ -149,28 +196,26 @@ def _get_boundary_curves(room, gross_ids, wall_map, doc):
             wid      = seg.ElementId
             wall_elm = doc.GetElement(wid)
 
-            # ── NET room  OR  non-wall boundary  ──────────────────────
+            # ── NET room  OR  non-wall segment (separator, etc.) ──
             if not gross or not isinstance(wall_elm, Wall):
                 curves.append(seg.GetCurve())
                 continue
 
-            # ── GROSS room, wall boundary ──────────────────────────────
-            # Safely retrieve the matching centre-line segment
+            # ── GROSS room on a wall segment ──────────────────────
             try:
                 center_crv = center_loops[li][si].GetCurve()
             except Exception:
-                center_crv = seg.GetCurve()
+                center_crv = seg.GetCurve()          # fallback to finish face
 
-            # Check whether the neighbouring room is also GROSS
-            adj_rooms  = wall_map.get(wid, [])
-            adj_gross  = [r for r in adj_rooms
-                          if r.Id != room.Id and r.Id in gross_ids]
+            adj_rooms = wall_map.get(wid, [])
+            adj_gross = [r for r in adj_rooms
+                         if r.Id != room.Id and r.Id in gross_ids]
 
             if adj_gross:
-                # Shared GROSS ↔ GROSS wall → use centre-line
+                # GROSS ↔ GROSS: shared wall → centre-line
                 curves.append(center_crv)
             else:
-                # Exterior or NET neighbour → use outer face
+                # GROSS facing exterior or NET neighbour → outer face
                 if room_pt:
                     curves.append(_outer_face_curve(center_crv, wall_elm, room_pt))
                 else:
@@ -180,7 +225,7 @@ def _get_boundary_curves(room, gross_ids, wall_map, doc):
 
 
 def _project_to_z(curve, z):
-    """Translate a curve so both endpoints sit at the given Z elevation."""
+    """Translate a curve vertically so it sits exactly at elevation z."""
     try:
         z_current = curve.GetEndPoint(0).Z
         if abs(z_current - z) < 1e-6:
@@ -192,7 +237,7 @@ def _project_to_z(curve, z):
 
 
 def _are_duplicates(c1, c2, tol=0.01):
-    """True when c1 and c2 share the same end-points (either orientation)."""
+    """True when two curves share the same endpoints (within tol, either order)."""
     try:
         s1, e1 = c1.GetEndPoint(0), c1.GetEndPoint(1)
         s2, e2 = c2.GetEndPoint(0), c2.GetEndPoint(1)
@@ -204,7 +249,7 @@ def _are_duplicates(c1, c2, tol=0.01):
 
 
 def _deduplicate(curves):
-    """Remove exact duplicate curves (same endpoints within tolerance)."""
+    """Remove exact duplicate curves (same two endpoints within tolerance)."""
     unique = []
     for c in curves:
         if not any(_are_duplicates(c, u) for u in unique):
@@ -212,11 +257,27 @@ def _deduplicate(curves):
     return unique
 
 
+def _copy_fls_params(src_room, tgt_area):
+    """
+    Copy both FLS custom parameter values from a Room onto the new Area.
+    Both elements must have the parameters bound to their categories.
+    """
+    for pname in (FLS_OCCUPANCY_PARAM, FLS_AREA_MEAS_PARAM):
+        src_p = src_room.LookupParameter(pname)
+        tgt_p = tgt_area.LookupParameter(pname)
+        if src_p and tgt_p:
+            val = src_p.AsString() or ""
+            try:
+                tgt_p.Set(val)
+            except Exception:
+                pass
+
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# SECTION 2 – USER PROMPTS
+# SECTION 3 – USER PROMPTS
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# ── 2a. Select Floor Plan views ────────────────────────────────
+# ── 3a. Select Floor Plan views ────────────────────────────────
 all_floor_plans = [
     v for v in FilteredElementCollector(doc)
                  .OfClass(ViewPlan)
@@ -232,17 +293,17 @@ fp_dict = {v.Name: v for v in sorted(all_floor_plans, key=lambda x: x.Name)}
 
 selected_view_names = forms.SelectFromList.show(
     sorted(fp_dict.keys()),
-    title="Step 1 of 2 – Select Floor Plan Views",
-    width=460,
-    multiselect=True,
-    button_name="Next →"
+    title    = u"Step 1 of 2 \u2013 Select Floor Plan Views",
+    width    = 460,
+    multiselect   = True,
+    button_name   = u"Next \u2192"
 )
 if not selected_view_names:
     script.exit()
 
 selected_plan_views = [fp_dict[n] for n in selected_view_names]
 
-# ── 2b. Select Area Scheme ─────────────────────────────────────
+# ── 3b. Select Area Scheme ─────────────────────────────────────
 all_schemes = list(
     FilteredElementCollector(doc).OfClass(AreaScheme).ToElements()
 )
@@ -253,15 +314,14 @@ scheme_dict = {s.Name: s for s in all_schemes}
 
 selected_scheme_name = forms.SelectFromList.show(
     sorted(scheme_dict.keys()),
-    title="Step 2 of 2 – Select Area Scheme",
-    width=340,
-    multiselect=False,
-    button_name="Create Area Plans"
+    title      = u"Step 2 of 2 \u2013 Select Area Scheme",
+    width      = 340,
+    multiselect     = False,
+    button_name     = "Create Area Plans"
 )
 if not selected_scheme_name:
     script.exit()
 
-# SelectFromList with multiselect=False may return a list or a string
 if isinstance(selected_scheme_name, list):
     selected_scheme_name = selected_scheme_name[0]
 
@@ -269,10 +329,10 @@ target_scheme = scheme_dict[selected_scheme_name]
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# SECTION 3 – PRE-CACHE EXISTING AREA PLAN VIEWS
+# SECTION 4 – PRE-CACHE EXISTING AREA PLAN VIEWS
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#   level_ElementId → existing AreaPlan ViewPlan for the chosen scheme
 
-# level_ElementId → existing ViewPlan (AreaPlan) for the chosen scheme
 existing_area_plans = {}
 
 for v in (FilteredElementCollector(doc)
@@ -291,20 +351,20 @@ for v in (FilteredElementCollector(doc)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# SECTION 4 – MAIN TRANSACTION
+# SECTION 5 – MAIN TRANSACTION
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-total_areas    = 0
-total_bounds   = 0
-skipped_views  = []
+total_areas   = 0
+total_bounds  = 0
+skipped_views = []
 
-t = Transaction(doc, "FLS Area Plans – Boundaries & Areas")
+t = Transaction(doc, u"FLS Area Plans \u2013 Boundaries & Areas")
 t.Start()
 
 try:
     for plan_view in selected_plan_views:
 
-        # ── Collect placed (non-zero area) rooms ───────────────
+        # ── Collect placed rooms (area > 0) ────────────────────
         rooms = [
             r for r in FilteredElementCollector(doc, plan_view.Id)
                          .OfCategory(BuiltInCategory.OST_Rooms)
@@ -314,16 +374,16 @@ try:
         ]
 
         if not rooms:
-            skipped_views.append(plan_view.Name)
+            skipped_views.append(plan_view.Name + " (no placed rooms)")
             continue
 
         gross_ids = set(r.Id for r in rooms if _is_gross(r))
         wall_map  = _build_wall_room_map(rooms)
 
-        # ── Get / create matching Area Plan view ───────────────
+        # ── Resolve the target Area Plan view ──────────────────
         level = plan_view.GenLevel
         if level is None:
-            skipped_views.append(plan_view.Name)
+            skipped_views.append(plan_view.Name + " (no associated level)")
             continue
 
         if level.Id in existing_area_plans:
@@ -334,10 +394,12 @@ try:
                     doc, target_scheme.Id, level.Id
                 )
                 existing_area_plans[level.Id] = area_view
-            except Exception as e:
-                skipped_views.append("{} (view creation failed: {})".format(
-                    plan_view.Name, str(e)
-                ))
+            except Exception as ex:
+                skipped_views.append(
+                    u"{} (area view creation failed: {})".format(
+                        plan_view.Name, str(ex)
+                    )
+                )
                 continue
 
         # ── Sketch plane at this level's elevation ─────────────
@@ -345,7 +407,7 @@ try:
         plane        = Plane.CreateByNormalAndOrigin(XYZ.BasisZ, XYZ(0.0, 0.0, elev))
         sketch_plane = SketchPlane.Create(doc, plane)
 
-        # ── Gather boundary curves for all rooms ───────────────
+        # ── Collect boundary curves for every room ─────────────
         raw_curves = []
         for room in rooms:
             try:
@@ -355,9 +417,9 @@ try:
             except Exception:
                 pass
 
-        # ── Deduplicate and place boundary lines ───────────────
-        # Boundaries must be placed BEFORE areas so areas can find
-        # their enclosing loops.
+        # ── Deduplicate then place boundary lines ──────────────
+        # Boundaries MUST be placed before NewArea() so that Revit
+        # can resolve the enclosing loop for each area tag point.
         unique_curves = _deduplicate(raw_curves)
 
         for crv in unique_curves:
@@ -368,18 +430,19 @@ try:
             except Exception:
                 pass
 
-        # ── Create areas at room locations ─────────────────────
+        # ── Place areas, set name / number / FLS params ────────
         for room in rooms:
             try:
                 loc = room.Location
                 if not isinstance(loc, LocationPoint):
                     continue
 
-                pt = loc.Point
+                pt       = loc.Point
                 new_area = doc.Create.NewArea(area_view, UV(pt.X, pt.Y))
                 if new_area is None:
                     continue
 
+                # ── Copy built-in Name & Number ────────────────
                 name_p = room.get_Parameter(BuiltInParameter.ROOM_NAME)
                 num_p  = room.get_Parameter(BuiltInParameter.ROOM_NUMBER)
 
@@ -391,6 +454,9 @@ try:
                 if area_num_p and num_p:
                     area_num_p.Set(num_p.AsString() or "")
 
+                # ── Copy FLS Occupancy & FLS Area Measurement ──
+                _copy_fls_params(room, new_area)
+
                 total_areas += 1
 
             except Exception:
@@ -398,13 +464,13 @@ try:
 
     t.Commit()
 
-    # ── Summary alert ──────────────────────────────────────────
+    # ── Summary dialog ─────────────────────────────────────────
     msg = (
-        "Area Plans created successfully!\n\n"
-        "  Area Scheme  :  {scheme}\n"
-        "  Views processed  :  {views}\n"
-        "  Boundary lines placed  :  {bounds}\n"
-        "  Areas created  :  {areas}"
+        u"Area Plans created successfully!\n\n"
+        u"  Area Scheme           :  {scheme}\n"
+        u"  Views processed       :  {views}\n"
+        u"  Boundary lines placed :  {bounds}\n"
+        u"  Areas created         :  {areas}"
     ).format(
         scheme = selected_scheme_name,
         views  = len(selected_plan_views) - len(skipped_views),
@@ -412,15 +478,16 @@ try:
         areas  = total_areas
     )
     if skipped_views:
-        msg += "\n\nSkipped views (no placed rooms or view creation failed):\n"
-        msg += "\n".join("  • " + n for n in skipped_views)
+        msg += u"\n\nSkipped views:\n"
+        msg += u"\n".join(u"  \u2022  " + n for n in skipped_views)
 
-    forms.alert(msg, title="FLS Area Plan Creator – Done")
+    forms.alert(msg, title=u"FLS Area Plan Creator \u2013 Done")
 
 except Exception as ex:
     t.RollBack()
     forms.alert(
-        "An error occurred and all changes were rolled back.\n\n"
-        "Details:\n{}".format(str(ex)),
-        title="FLS Area Plan Creator – Error"
+        u"An error occurred and all changes were rolled back.\n\nDetails:\n{}".format(
+            str(ex)
+        ),
+        title=u"FLS Area Plan Creator \u2013 Error"
     )
