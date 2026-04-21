@@ -1,371 +1,426 @@
 # -*- coding: utf-8 -*-
 """
-Create Shaft Function Parameter
---------------------------------
-Creates a Project Parameter named "Shaft Function" bound to
-Shaft Opening category as an Instance / Text / Identity Data parameter
-with "values can vary by group instances" enabled.
+FLS Area Plan Creator
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Creates Area Plans from selected Floor Plan views with automatic
+NET / GROSS boundary logic derived from room Occupancy values.
 
-Uses a temporary shared-parameter file under the hood (required by
-the Revit API to create project parameters programmatically).
+Boundary rules:
+  • NET  room  → boundary at interior finish face of wall
+  • GROSS room → boundary at exterior (outer) face of wall
+  • GROSS ↔ GROSS shared wall → boundary at wall centre-line
+
+After all boundaries are placed, duplicate / overlapping curves
+are removed for a clean result.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Author  : B_Dare95
+Version : 1.0.0
 """
-__title__   = "Create\nShaft Param"
-__author__  = "B_Dare95"
-__version__ = "1.0.0"
 
-# ── stdlib / CLR ────────────────────────────────────────────────────────────
-import os
+# ──────────────────────────────────────────────────────────────
+# IMPORTS
+# ──────────────────────────────────────────────────────────────
 import clr
+clr.AddReference('RevitAPI')
+clr.AddReference('RevitAPIUI')
 
-clr.AddReference("System.Windows.Forms")
-clr.AddReference("System.Drawing")
-
-import System
-from System.Windows.Forms import (
-    Form, Label, Button, PictureBox, PictureBoxSizeMode,
-    DialogResult, MessageBox, MessageBoxButtons, MessageBoxIcon,
-    FormStartPosition, FormBorderStyle, FlatStyle,
-    Application
-)
-from System.Drawing import (
-    Size, Point, Color, Font, FontStyle, SolidBrush,
-    Rectangle, Bitmap, Graphics
-)
-
-# ── pyRevit / Revit API ──────────────────────────────────────────────────────
-from pyrevit import revit, script
 from Autodesk.Revit.DB import (
-    Transaction, BuiltInCategory, ForgeTypeId
+    FilteredElementCollector, ViewPlan, ViewType,
+    AreaScheme, Transaction,
+    SpatialElementBoundaryOptions, SpatialElementBoundaryLocation,
+    Wall, LocationPoint,
+    Plane, SketchPlane, Transform, XYZ, UV, ElementId,
+    BuiltInParameter, BuiltInCategory
 )
+from pyrevit import forms, script
 
-# Identity Data parameter group  (replaces the deprecated BuiltInParameterGroup enum)
-IDENTITY_DATA_GROUP = ForgeTypeId("autodesk.parameter.group:identityData-1.0.0")
+# ──────────────────────────────────────────────────────────────
+# REVIT HANDLES
+# ──────────────────────────────────────────────────────────────
+uidoc = __revit__.ActiveUIDocument
+doc   = uidoc.Document
 
-doc = revit.doc
-app = doc.Application
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# SECTION 1 – HELPER UTILITIES
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# ════════════════════════════════════════════════════════════════════════════
-#  CONFIRMATION DIALOG
-# ════════════════════════════════════════════════════════════════════════════
+def _occupancy(room):
+    """Return the room's Occupancy value, upper-cased, or empty string."""
+    param = room.get_Parameter(BuiltInParameter.ROOM_OCCUPANCY)
+    if param is None:
+        return ""
+    return (param.AsString() or "").strip().upper()
 
-# Colour palette (matches the dark-themed pyRevit WinForms style)
-CLR_BG          = Color.FromArgb(30,  30,  30)
-CLR_PANEL       = Color.FromArgb(45,  45,  48)
-CLR_BORDER      = Color.FromArgb(63,  63,  70)
-CLR_ACCENT      = Color.FromArgb(0,   122, 204)
-CLR_ACCENT_HOV  = Color.FromArgb(28,  151, 234)
-CLR_WHITE       = Color.White
-CLR_MUTED       = Color.FromArgb(160, 160, 160)
-CLR_WARN_BG     = Color.FromArgb(50,  40,  10)
-CLR_WARN_BORDER = Color.FromArgb(200, 160, 0)
-CLR_WARN_TXT    = Color.FromArgb(240, 200, 60)
 
-PARAM_ROWS = [
-    ("Parameter Name",        "Shaft Function"),
-    ("Category",              "Shaft Openings"),
-    ("Parameter Type",        "Instance"),
-    ("Data Type",             "Text"),
-    ("Group Under",           "Identity Data"),
-    ("Values Vary by Group",  "Yes"),
+def _is_gross(room):
+    return "GROSS" in _occupancy(room)
+
+
+def _build_wall_room_map(rooms):
+    """
+    Returns a dict  { wall_ElementId : [room, ...] }
+    mapping every wall that acts as a room boundary to the rooms
+    that share it.  Uses the Finish face option so we match the
+    same segments used for NET boundaries.
+    """
+    opts = SpatialElementBoundaryOptions()
+    opts.SpatialElementBoundaryLocation = SpatialElementBoundaryLocation.Finish
+
+    wall_map = {}
+    for room in rooms:
+        try:
+            for loop in room.GetBoundarySegments(opts):
+                for seg in loop:
+                    wid = seg.ElementId
+                    if wid == ElementId.InvalidElementId:
+                        continue
+                    if wid not in wall_map:
+                        wall_map[wid] = []
+                    # avoid duplicating the same room
+                    if not any(r.Id == room.Id for r in wall_map[wid]):
+                        wall_map[wid].append(room)
+        except Exception:
+            pass
+    return wall_map
+
+
+def _outer_face_curve(center_curve, wall, room_pt):
+    """
+    Translate a wall centre-line curve to the exterior face of the wall
+    (i.e. away from the given room_pt).
+
+    The translation vector is: wall.Orientation (or its negation)
+    scaled by half the wall thickness.
+    """
+    try:
+        half_width  = wall.Width / 2.0          # Revit internal units (feet)
+        wall_normal = wall.Orientation           # unit XY vector ⊥ to wall
+
+        # Vector from wall midpoint toward the room
+        wall_mid = center_curve.Evaluate(0.5, True)
+        to_room  = XYZ(room_pt.X - wall_mid.X,
+                       room_pt.Y - wall_mid.Y,
+                       0.0)
+
+        # If the room is on the "positive" side of wall_normal,
+        # the exterior face is in the opposite direction.
+        dot = to_room.DotProduct(wall_normal)
+        outward = wall_normal.Negate() if dot > 0 else wall_normal
+
+        offset    = XYZ(outward.X * half_width,
+                        outward.Y * half_width,
+                        0.0)
+        transform = Transform.CreateTranslation(offset)
+        return center_curve.CreateTransformed(transform)
+
+    except Exception:
+        return center_curve          # fallback: stay on centre-line
+
+
+def _get_boundary_curves(room, gross_ids, wall_map, doc):
+    """
+    Return a flat list of Revit Curve objects representing the area
+    boundary for this room, applying the NET / GROSS rules.
+
+    NET  → Finish-face curves (standard room boundary, no offset)
+    GROSS, shared wall with another GROSS room → Centre-line curve
+    GROSS, all other walls → Outer-face curve (centre + half-width offset)
+    """
+    opts_finish = SpatialElementBoundaryOptions()
+    opts_finish.SpatialElementBoundaryLocation = SpatialElementBoundaryLocation.Finish
+
+    opts_center = SpatialElementBoundaryOptions()
+    opts_center.SpatialElementBoundaryLocation = SpatialElementBoundaryLocation.Center
+
+    finish_loops = room.GetBoundarySegments(opts_finish)
+    if not finish_loops:
+        return []
+
+    gross        = _is_gross(room)
+    center_loops = room.GetBoundarySegments(opts_center) if gross else None
+
+    loc     = room.Location
+    room_pt = loc.Point if isinstance(loc, LocationPoint) else None
+
+    curves = []
+
+    for li, loop in enumerate(finish_loops):
+        for si, seg in enumerate(loop):
+            wid      = seg.ElementId
+            wall_elm = doc.GetElement(wid)
+
+            # ── NET room  OR  non-wall boundary  ──────────────────────
+            if not gross or not isinstance(wall_elm, Wall):
+                curves.append(seg.GetCurve())
+                continue
+
+            # ── GROSS room, wall boundary ──────────────────────────────
+            # Safely retrieve the matching centre-line segment
+            try:
+                center_crv = center_loops[li][si].GetCurve()
+            except Exception:
+                center_crv = seg.GetCurve()
+
+            # Check whether the neighbouring room is also GROSS
+            adj_rooms  = wall_map.get(wid, [])
+            adj_gross  = [r for r in adj_rooms
+                          if r.Id != room.Id and r.Id in gross_ids]
+
+            if adj_gross:
+                # Shared GROSS ↔ GROSS wall → use centre-line
+                curves.append(center_crv)
+            else:
+                # Exterior or NET neighbour → use outer face
+                if room_pt:
+                    curves.append(_outer_face_curve(center_crv, wall_elm, room_pt))
+                else:
+                    curves.append(center_crv)
+
+    return curves
+
+
+def _project_to_z(curve, z):
+    """Translate a curve so both endpoints sit at the given Z elevation."""
+    try:
+        z_current = curve.GetEndPoint(0).Z
+        if abs(z_current - z) < 1e-6:
+            return curve
+        t = Transform.CreateTranslation(XYZ(0.0, 0.0, z - z_current))
+        return curve.CreateTransformed(t)
+    except Exception:
+        return curve
+
+
+def _are_duplicates(c1, c2, tol=0.01):
+    """True when c1 and c2 share the same end-points (either orientation)."""
+    try:
+        s1, e1 = c1.GetEndPoint(0), c1.GetEndPoint(1)
+        s2, e2 = c2.GetEndPoint(0), c2.GetEndPoint(1)
+        close  = lambda a, b: a.DistanceTo(b) < tol
+        return ((close(s1, s2) and close(e1, e2)) or
+                (close(s1, e2) and close(e1, s2)))
+    except Exception:
+        return False
+
+
+def _deduplicate(curves):
+    """Remove exact duplicate curves (same endpoints within tolerance)."""
+    unique = []
+    for c in curves:
+        if not any(_are_duplicates(c, u) for u in unique):
+            unique.append(c)
+    return unique
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# SECTION 2 – USER PROMPTS
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# ── 2a. Select Floor Plan views ────────────────────────────────
+all_floor_plans = [
+    v for v in FilteredElementCollector(doc)
+                 .OfClass(ViewPlan)
+                 .WhereElementIsNotElementType()
+                 .ToElements()
+    if v.ViewType == ViewType.FloorPlan and not v.IsTemplate
 ]
 
-DIALOG_W = 480
-DIALOG_H = 390
+if not all_floor_plans:
+    forms.alert("No Floor Plan views found in the project.", exitscript=True)
 
+fp_dict = {v.Name: v for v in sorted(all_floor_plans, key=lambda x: x.Name)}
 
-def _make_label(text, font, color, loc, size):
-    lbl = Label()
-    lbl.Text      = text
-    lbl.Font      = font
-    lbl.ForeColor = color
-    lbl.Location  = Point(*loc)
-    lbl.Size      = Size(*size)
-    lbl.BackColor = Color.Transparent
-    return lbl
-
-
-class ConfirmDialog(Form):
-    def __init__(self):
-        # ── window chrome ────────────────────────────────────────────────
-        self.Text            = "Create Project Parameter"
-        self.ClientSize      = Size(DIALOG_W, DIALOG_H)
-        self.StartPosition   = FormStartPosition.CenterScreen
-        self.FormBorderStyle = FormBorderStyle.FixedDialog
-        self.MaximizeBox     = False
-        self.MinimizeBox     = False
-        self.BackColor       = CLR_BG
-
-        fnt_title   = Font("Segoe UI", 13, FontStyle.Bold)
-        fnt_sub     = Font("Segoe UI",  9, FontStyle.Regular)
-        fnt_key     = Font("Segoe UI",  9, FontStyle.Regular)
-        fnt_val     = Font("Segoe UI",  9, FontStyle.Bold)
-        fnt_warn    = Font("Segoe UI",  8, FontStyle.Italic)
-        fnt_btn     = Font("Segoe UI", 10, FontStyle.Regular)
-
-        # ── header ───────────────────────────────────────────────────────
-        self.Controls.Add(_make_label(
-            "Create Project Parameter",
-            fnt_title, CLR_WHITE, (24, 20), (380, 30)
-        ))
-        self.Controls.Add(_make_label(
-            "The following parameter will be added to this project:",
-            fnt_sub, CLR_MUTED, (24, 52), (420, 20)
-        ))
-
-        # ── info card ────────────────────────────────────────────────────
-        card_top = 82
-        card_h   = len(PARAM_ROWS) * 30 + 16
-        card     = _make_panel(24, card_top, DIALOG_W - 48, card_h,
-                               CLR_PANEL, CLR_BORDER)
-        self.Controls.Add(card)
-
-        for i, (key, val) in enumerate(PARAM_ROWS):
-            y = 8 + i * 30
-            card.Controls.Add(_make_label(
-                key + ":", fnt_key, CLR_MUTED, (14, y), (180, 22)
-            ))
-            card.Controls.Add(_make_label(
-                val, fnt_val, CLR_WHITE, (200, y), (card.Width - 215, 22)
-            ))
-
-        # ── warning note ─────────────────────────────────────────────────
-        note_top = card_top + card_h + 14
-        note     = _make_panel(24, note_top, DIALOG_W - 48, 46,
-                               CLR_WARN_BG, CLR_WARN_BORDER)
-        self.Controls.Add(note)
-        note.Controls.Add(_make_label(
-            u"\u26a0  A temporary shared-parameter file will be used internally "
-            u"by the Revit API. It will be deleted automatically after the "
-            u"parameter is created.",
-            fnt_warn, CLR_WARN_TXT, (10, 6), (note.Width - 20, 36)
-        ))
-
-        # ── buttons ──────────────────────────────────────────────────────
-        btn_top = note_top + 58
-
-        ok_btn = _make_button(
-            "OK  –  Create Parameter", fnt_btn,
-            CLR_WHITE, CLR_ACCENT, CLR_ACCENT_HOV,
-            DIALOG_W - 24 - 220, btn_top, 220, 36
-        )
-        ok_btn.DialogResult = DialogResult.OK
-        self.Controls.Add(ok_btn)
-
-        cancel_btn = _make_button(
-            "Cancel", fnt_btn,
-            CLR_MUTED, CLR_BORDER, CLR_PANEL,
-            DIALOG_W - 24 - 220 - 90 - 8, btn_top, 90, 36
-        )
-        cancel_btn.DialogResult = DialogResult.Cancel
-        self.Controls.Add(cancel_btn)
-
-        self.AcceptButton = ok_btn
-        self.CancelButton = cancel_btn
-
-
-# ── helper UI factories ──────────────────────────────────────────────────────
-
-def _make_panel(x, y, w, h, bg, border_color):
-    from System.Windows.Forms import Panel
-    p = Panel()
-    p.Location  = Point(x, y)
-    p.Size      = Size(w, h)
-    p.BackColor = bg
-
-    # Draw border via Paint event
-    _border_color = border_color   # capture for closure
-    def on_paint(sender, e):
-        pen = System.Drawing.Pen(_border_color, 1)
-        e.Graphics.DrawRectangle(pen, 0, 0, sender.Width - 1, sender.Height - 1)
-    p.Paint += on_paint
-    return p
-
-
-def _make_button(text, font, fg, bg, hover_bg, x, y, w, h):
-    btn = Button()
-    btn.Text      = text
-    btn.Font      = font
-    btn.ForeColor = fg
-    btn.BackColor = bg
-    btn.FlatStyle = FlatStyle.Flat
-    btn.FlatAppearance.BorderSize  = 0
-    btn.FlatAppearance.MouseOverBackColor = hover_bg
-    btn.Location  = Point(x, y)
-    btn.Size      = Size(w, h)
-    btn.Cursor    = System.Windows.Forms.Cursors.Hand
-    return btn
-
-
-# ════════════════════════════════════════════════════════════════════════════
-#  PARAMETER CREATION LOGIC
-# ════════════════════════════════════════════════════════════════════════════
-
-PARAM_NAME      = "Shaft Function"
-PARAM_GROUP_HDR = "ShaftFunctionParams"        # group name inside the temp SPF
-TEMP_SPF_NAME   = "_temp_shaft_function_spf.txt"
-
-
-def _parameter_already_exists():
-    """Return True if a parameter named 'Shaft Function' is already bound."""
-    it = doc.ParameterBindings.ForwardIterator()
-    while it.MoveNext():
-        if it.Key.Name == PARAM_NAME:
-            return True
-    return False
-
-
-def _build_temp_spf(path):
-    """Write a minimal valid Revit Shared Parameter File to *path*."""
-    guid = str(System.Guid.NewGuid())
-    lines = [
-        "# This is a Revit shared parameter file.",
-        "# Do not edit manually.",
-        "*META\tVERSION\tMINVERSION",
-        "META\t2\t1",
-        "*GROUP\tID\tNAME",
-        "GROUP\t1\t" + PARAM_GROUP_HDR,
-        "*PARAM\tGUID\tNAME\tDATATYPE\tDATACATEGORY\tGROUP\tVISIBLE"
-            "\tDESCRIPTION\tUSERMODIFIABLE\tHIDEWHENNOVALUE",
-        "PARAM\t{0}\t{1}\tTEXT\t\t1\t1\t\t1\t0".format(guid, PARAM_NAME),
-    ]
-    with open(path, "w") as fh:
-        fh.write("\n".join(lines))
-
-
-def create_shaft_function_parameter():
-    """
-    Creates the 'Shaft Function' project parameter.
-    Returns True on success, False if it already existed.
-    Raises Exception on any error.
-    """
-    if _parameter_already_exists():
-        return False    # caller will notify the user
-
-    temp_dir = os.environ.get("TEMP") or os.environ.get("TMP") or "C:\\Temp"
-    temp_spf  = os.path.join(temp_dir, TEMP_SPF_NAME)
-    original_spf = app.SharedParametersFilename   # may be "" if none set
-
-    try:
-        # 1 ─ Build temp shared-parameter file
-        _build_temp_spf(temp_spf)
-
-        # 2 ─ Point Revit at the temp file
-        app.SharedParametersFilename = temp_spf
-        sp_file = app.OpenSharedParameterFile()
-        if sp_file is None:
-            raise Exception(
-                "Revit could not open the temporary shared-parameter file:\n"
-                + temp_spf
-            )
-
-        # 3 ─ Retrieve the ExternalDefinition
-        grp = sp_file.Groups.get_Item(PARAM_GROUP_HDR)
-        if grp is None:
-            raise Exception("Parameter group '{0}' not found in temp SPF."
-                            .format(PARAM_GROUP_HDR))
-
-        ext_def = grp.Definitions.get_Item(PARAM_NAME)
-        if ext_def is None:
-            raise Exception("Definition '{0}' not found in temp SPF."
-                            .format(PARAM_NAME))
-
-        # 4 ─ Build category set  (Shaft Openings only)
-        cat_set      = app.Create.NewCategorySet()
-        shaft_cat    = doc.Settings.Categories.get_Item(
-                            BuiltInCategory.OST_ShaftOpening)
-        if shaft_cat is None:
-            raise Exception(
-                "The 'Shaft Opening' category could not be found in "
-                "this Revit project. Make sure you are running the script "
-                "in an Architectural or MEP model."
-            )
-        cat_set.Insert(shaft_cat)
-
-        # 5 ─ Instance binding
-        instance_binding = app.Create.NewInstanceBinding(cat_set)
-
-        # 6 ─ Insert inside a transaction
-        with Transaction(doc, "Create Shaft Function Parameter") as t:
-            t.Start()
-
-            success = doc.ParameterBindings.Insert(
-                ext_def,
-                instance_binding,
-                IDENTITY_DATA_GROUP
-            )
-
-            if not success:
-                t.RollBack()
-                raise Exception(
-                    "ParameterBindings.Insert() returned False.\n"
-                    "The parameter may already exist under a different binding."
-                )
-
-            # 7 ─ Enable "Values can vary by group instances"
-            it = doc.ParameterBindings.ForwardIterator()
-            while it.MoveNext():
-                internal_def = it.Key
-                if internal_def.Name == PARAM_NAME:
-                    try:
-                        internal_def.SetAllowVaryBetweenGroups(doc, True)
-                    except Exception:
-                        pass    # non-fatal – available in Revit 2019+
-                    break
-
-            t.Commit()
-
-        return True
-
-    finally:
-        # ── always restore the original SPF and clean up ─────────────────
-        try:
-            app.SharedParametersFilename = original_spf
-        except Exception:
-            pass
-        try:
-            if os.path.exists(temp_spf):
-                os.remove(temp_spf)
-        except Exception:
-            pass
-
-
-# ════════════════════════════════════════════════════════════════════════════
-#  ENTRY POINT
-# ════════════════════════════════════════════════════════════════════════════
-
-# ── Show confirmation dialog ─────────────────────────────────────────────────
-dlg = ConfirmDialog()
-if dlg.ShowDialog() != DialogResult.OK:
+selected_view_names = forms.SelectFromList.show(
+    sorted(fp_dict.keys()),
+    title="Step 1 of 2 – Select Floor Plan Views",
+    width=460,
+    multiselect=True,
+    button_name="Next →"
+)
+if not selected_view_names:
     script.exit()
 
-# ── Execute ──────────────────────────────────────────────────────────────────
-try:
-    created = create_shaft_function_parameter()
+selected_plan_views = [fp_dict[n] for n in selected_view_names]
 
-    if created:
-        MessageBox.Show(
-            u"Parameter \u2018Shaft Function\u2019 was created successfully!\n\n"
-            u"  \u2022 Category   : Shaft Openings\n"
-            u"  \u2022 Type       : Instance / Text\n"
-            u"  \u2022 Group      : Identity Data\n"
-            u"  \u2022 Vary by Group : Yes",
-            "Parameter Created",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Information
-        )
-    else:
-        MessageBox.Show(
-            u"The parameter \u2018Shaft Function\u2019 already exists in "
-            u"this project.\n\nNo changes were made.",
-            "Already Exists",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Information
-        )
+# ── 2b. Select Area Scheme ─────────────────────────────────────
+all_schemes = list(
+    FilteredElementCollector(doc).OfClass(AreaScheme).ToElements()
+)
+if not all_schemes:
+    forms.alert("No Area Schemes found in the project.", exitscript=True)
+
+scheme_dict = {s.Name: s for s in all_schemes}
+
+selected_scheme_name = forms.SelectFromList.show(
+    sorted(scheme_dict.keys()),
+    title="Step 2 of 2 – Select Area Scheme",
+    width=340,
+    multiselect=False,
+    button_name="Create Area Plans"
+)
+if not selected_scheme_name:
+    script.exit()
+
+# SelectFromList with multiselect=False may return a list or a string
+if isinstance(selected_scheme_name, list):
+    selected_scheme_name = selected_scheme_name[0]
+
+target_scheme = scheme_dict[selected_scheme_name]
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# SECTION 3 – PRE-CACHE EXISTING AREA PLAN VIEWS
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# level_ElementId → existing ViewPlan (AreaPlan) for the chosen scheme
+existing_area_plans = {}
+
+for v in (FilteredElementCollector(doc)
+          .OfClass(ViewPlan)
+          .WhereElementIsNotElementType()
+          .ToElements()):
+    if v.ViewType != ViewType.AreaPlan:
+        continue
+    try:
+        if v.AreaScheme.Id == target_scheme.Id:
+            lv = v.GenLevel
+            if lv is not None:
+                existing_area_plans[lv.Id] = v
+    except Exception:
+        pass
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# SECTION 4 – MAIN TRANSACTION
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+total_areas    = 0
+total_bounds   = 0
+skipped_views  = []
+
+t = Transaction(doc, "FLS Area Plans – Boundaries & Areas")
+t.Start()
+
+try:
+    for plan_view in selected_plan_views:
+
+        # ── Collect placed (non-zero area) rooms ───────────────
+        rooms = [
+            r for r in FilteredElementCollector(doc, plan_view.Id)
+                         .OfCategory(BuiltInCategory.OST_Rooms)
+                         .WhereElementIsNotElementType()
+                         .ToElements()
+            if r.Area > 0
+        ]
+
+        if not rooms:
+            skipped_views.append(plan_view.Name)
+            continue
+
+        gross_ids = set(r.Id for r in rooms if _is_gross(r))
+        wall_map  = _build_wall_room_map(rooms)
+
+        # ── Get / create matching Area Plan view ───────────────
+        level = plan_view.GenLevel
+        if level is None:
+            skipped_views.append(plan_view.Name)
+            continue
+
+        if level.Id in existing_area_plans:
+            area_view = existing_area_plans[level.Id]
+        else:
+            try:
+                area_view = ViewPlan.CreateAreaPlan(
+                    doc, target_scheme.Id, level.Id
+                )
+                existing_area_plans[level.Id] = area_view
+            except Exception as e:
+                skipped_views.append("{} (view creation failed: {})".format(
+                    plan_view.Name, str(e)
+                ))
+                continue
+
+        # ── Sketch plane at this level's elevation ─────────────
+        elev         = level.Elevation
+        plane        = Plane.CreateByNormalAndOrigin(XYZ.BasisZ, XYZ(0.0, 0.0, elev))
+        sketch_plane = SketchPlane.Create(doc, plane)
+
+        # ── Gather boundary curves for all rooms ───────────────
+        raw_curves = []
+        for room in rooms:
+            try:
+                raw_curves.extend(
+                    _get_boundary_curves(room, gross_ids, wall_map, doc)
+                )
+            except Exception:
+                pass
+
+        # ── Deduplicate and place boundary lines ───────────────
+        # Boundaries must be placed BEFORE areas so areas can find
+        # their enclosing loops.
+        unique_curves = _deduplicate(raw_curves)
+
+        for crv in unique_curves:
+            try:
+                crv_flat = _project_to_z(crv, elev)
+                doc.Create.NewAreaBoundaryLine(sketch_plane, crv_flat, area_view)
+                total_bounds += 1
+            except Exception:
+                pass
+
+        # ── Create areas at room locations ─────────────────────
+        for room in rooms:
+            try:
+                loc = room.Location
+                if not isinstance(loc, LocationPoint):
+                    continue
+
+                pt = loc.Point
+                new_area = doc.Create.NewArea(area_view, UV(pt.X, pt.Y))
+                if new_area is None:
+                    continue
+
+                name_p = room.get_Parameter(BuiltInParameter.ROOM_NAME)
+                num_p  = room.get_Parameter(BuiltInParameter.ROOM_NUMBER)
+
+                area_name_p = new_area.get_Parameter(BuiltInParameter.ROOM_NAME)
+                area_num_p  = new_area.get_Parameter(BuiltInParameter.ROOM_NUMBER)
+
+                if area_name_p and name_p:
+                    area_name_p.Set(name_p.AsString() or "")
+                if area_num_p and num_p:
+                    area_num_p.Set(num_p.AsString() or "")
+
+                total_areas += 1
+
+            except Exception:
+                pass
+
+    t.Commit()
+
+    # ── Summary alert ──────────────────────────────────────────
+    msg = (
+        "Area Plans created successfully!\n\n"
+        "  Area Scheme  :  {scheme}\n"
+        "  Views processed  :  {views}\n"
+        "  Boundary lines placed  :  {bounds}\n"
+        "  Areas created  :  {areas}"
+    ).format(
+        scheme = selected_scheme_name,
+        views  = len(selected_plan_views) - len(skipped_views),
+        bounds = total_bounds,
+        areas  = total_areas
+    )
+    if skipped_views:
+        msg += "\n\nSkipped views (no placed rooms or view creation failed):\n"
+        msg += "\n".join("  • " + n for n in skipped_views)
+
+    forms.alert(msg, title="FLS Area Plan Creator – Done")
 
 except Exception as ex:
-    MessageBox.Show(
-        u"An error occurred while creating the parameter:\n\n" + str(ex),
-        "Error",
-        MessageBoxButtons.OK,
-        MessageBoxIcon.Error
+    t.RollBack()
+    forms.alert(
+        "An error occurred and all changes were rolled back.\n\n"
+        "Details:\n{}".format(str(ex)),
+        title="FLS Area Plan Creator – Error"
     )

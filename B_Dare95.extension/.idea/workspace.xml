@@ -5,14 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="97e5514c-6192-402f-877a-0503c0f802f5" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Shafts.panel/col2.stack/Create Shaft Function.pushbutton/icon.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Shafts.panel/col2.stack/Create Shaft Function.pushbutton/script.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Shafts.panel/col2.stack/Export Shaft Schedule.pushbutton/icon.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Shafts.panel/col2.stack/Export Shaft Schedule.pushbutton/script.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Shafts.panel/col2.stack/Import Shaft Schedule.pushbutton/icon.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Shafts.panel/col2.stack/Import Shaft Schedule.pushbutton/script.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Shafts.panel/col1.stack/Shaft Tag.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Shafts.panel/col1.stack/Shaft Tag.pushbutton/script.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Test.pushbutton/script.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
