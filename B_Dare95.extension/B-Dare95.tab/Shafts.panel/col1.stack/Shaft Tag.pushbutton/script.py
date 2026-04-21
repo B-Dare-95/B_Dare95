@@ -56,7 +56,6 @@ SHAFT_FUNCTION_PARAM = "Shaft Function"
 # the shaft boundary rather than on its edge (in Revit feet).
 INSET_FT = 0.25
 
-
 # ═════════════════════════════════════════════════════════════════════
 # DATA COLLECTION
 # ═════════════════════════════════════════════════════════════════════
@@ -88,7 +87,6 @@ def get_all_shafts():
         .ToElements()
     )
 
-
 # ═════════════════════════════════════════════════════════════════════
 # PARAMETER READING
 # ═════════════════════════════════════════════════════════════════════
@@ -118,7 +116,6 @@ def validate_shaft_function_param(all_shafts):
             return True
     return False
 
-
 # ═════════════════════════════════════════════════════════════════════
 # SHAFT ELEVATION / VISIBILITY
 # ═════════════════════════════════════════════════════════════════════
@@ -144,7 +141,6 @@ def get_view_cut_elevation(view):
             return view.GenLevel.Elevation + 4.0
         except Exception:
             return 4.0
-
 
 def shaft_elevations(shaft):
     """Returns (base_elev_ft, top_elev_ft). top is None if unconnected."""
@@ -187,7 +183,6 @@ def shaft_visible_in_view(shaft, cut_elev):
         return base < cut_elev
     return base < cut_elev < top
 
-
 # ═════════════════════════════════════════════════════════════════════
 # TEXT NOTE PLACEMENT
 # ═════════════════════════════════════════════════════════════════════
@@ -195,10 +190,17 @@ def shaft_visible_in_view(shaft, cut_elev):
 def get_bottom_left_position(shaft, view):
     """
     Returns an XYZ point at the inner bottom-left corner of the shaft's
-    bounding box in the given view, offset inward by INSET_FT.
+    model-space bounding box, offset inward by INSET_FT.
+
+    IMPORTANT: We deliberately pass None (not the view) to get_BoundingBox.
+    Passing a non-active view forces Revit to regenerate graphics for that
+    view on every call, causing the 'Generating Graphics for View' infinite
+    loop. The model-space bbox gives identical X/Y results for a plan view
+    and requires no view regeneration.
+
     Returns None if no bounding box is available.
     """
-    bbox = shaft.get_BoundingBox(view) or shaft.get_BoundingBox(None)
+    bbox = shaft.get_BoundingBox(None)
     if not bbox:
         return None
 
@@ -206,7 +208,6 @@ def get_bottom_left_position(shaft, view):
     y    = bbox.Min.Y + INSET_FT
     elev = view.GenLevel.Elevation if view.GenLevel else 0.0
     return XYZ(x, y, elev)
-
 
 # ═════════════════════════════════════════════════════════════════════
 # PER-VIEW PROCESSING  (called inside an active Transaction)
@@ -258,24 +259,9 @@ def process_view(view, all_shafts, text_type_id):
 
     return placed, skipped_no_value, skipped_no_bbox
 
-# ─────────────────────────────────────────────────────────────────────
-# HELPER
-# ─────────────────────────────────────────────────────────────────────
-def hex_brush(hex_str):
-    h = hex_str.lstrip('#')
-    return SolidColorBrush(Color.FromRgb(int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)))
-
-
-
 # ═════════════════════════════════════════════════════════════════════
 # WPF FORM
 # ═════════════════════════════════════════════════════════════════════
-
-def hex_brush(hex_str):
-    h = hex_str.lstrip('#')
-    return SolidColorBrush(
-        Color.FromRgb(int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)))
-
 
 XAML = """
 <Window
@@ -298,13 +284,20 @@ XAML = """
 
     <Grid Margin="18">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>  <RowDefinition Height="Auto"/>  <RowDefinition Height="Auto"/>  <RowDefinition Height="*"/>     <RowDefinition Height="Auto"/>  <RowDefinition Height="Auto"/>  <RowDefinition Height="Auto"/>  </Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Margin="0,0,0,10">
             <TextBlock Text="SHAFT FUNCTION TAG" FontSize="16" FontWeight="Bold" Foreground="#F0A500"/>
         </StackPanel>
 
-        <TextBox Grid.Row="1" x:Name="SearchBox" Height="25" Margin="0,0,0,10" 
+        <TextBox Grid.Row="1" x:Name="SearchBox" Height="25" Margin="0,0,0,10"
                  Background="#181825" Foreground="White" BorderBrush="#45475A"
                  VerticalContentAlignment="Center" Padding="5,0,0,0"/>
 
@@ -337,18 +330,17 @@ XAML = """
 </Window>
 """
 
-
 def show_form(plan_views, text_note_types):
     stream = MemoryStream(Encoding.UTF8.GetBytes(XAML))
     window = Markup.XamlReader.Load(stream)
 
-    search_box = window.FindName('SearchBox')
-    views_panel = window.FindName('ViewsPanel')
-    tt_combo = window.FindName('TextTypeCombo')
-    apply_btn = window.FindName('ApplyBtn')
-    cancel_btn = window.FindName('CancelBtn')
+    search_box     = window.FindName('SearchBox')
+    views_panel    = window.FindName('ViewsPanel')
+    tt_combo       = window.FindName('TextTypeCombo')
+    apply_btn      = window.FindName('ApplyBtn')
+    cancel_btn     = window.FindName('CancelBtn')
     select_all_btn = window.FindName('SelectAllBtn')
-    clear_all_btn = window.FindName('ClearAllBtn')
+    clear_all_btn  = window.FindName('ClearAllBtn')
 
     view_checkboxes = []
     for v in plan_views:
@@ -357,18 +349,15 @@ def show_form(plan_views, text_note_types):
         view_checkboxes.append(cb)
         views_panel.Children.Add(cb)
 
-    # --- Search Logic ---
     def on_search_changed(s, e):
         search_text = search_box.Text.lower()
         for cb in view_checkboxes:
-            if search_text in cb.Content.lower():
-                cb.Visibility = Visibility.Visible
-            else:
-                cb.Visibility = Visibility.Collapsed
+            cb.Visibility = (Visibility.Visible
+                             if search_text in cb.Content.lower()
+                             else Visibility.Collapsed)
 
     search_box.TextChanged += on_search_changed
 
-    # --- Existing Event Handlers ---
     def on_select_all(s, e):
         for cb in view_checkboxes:
             if cb.Visibility == Visibility.Visible:
@@ -381,7 +370,8 @@ def show_form(plan_views, text_note_types):
     for tt in text_note_types:
         name = tt.get_Parameter(BuiltInParameter.ALL_MODEL_TYPE_NAME).AsString()
         tt_combo.Items.Add(name)
-    if tt_combo.Items.Count > 0: tt_combo.SelectedIndex = 0
+    if tt_combo.Items.Count > 0:
+        tt_combo.SelectedIndex = 0
 
     result = {'ok': False}
 
@@ -390,19 +380,18 @@ def show_form(plan_views, text_note_types):
         if not selected:
             forms.alert("Please tick at least one plan view.")
             return
-        result['ok'] = True
-        result['views'] = selected
+        result['ok']           = True
+        result['views']        = selected
         result['text_type_id'] = text_note_types[tt_combo.SelectedIndex].Id
         window.Close()
 
-    apply_btn.Click += on_apply
-    cancel_btn.Click += lambda s, e: window.Close()
+    apply_btn.Click    += on_apply
+    cancel_btn.Click   += lambda s, e: window.Close()
     select_all_btn.Click += on_select_all
-    clear_all_btn.Click += on_clear_all
+    clear_all_btn.Click  += on_clear_all
 
     window.ShowDialog()
     return result
-
 
 # ═════════════════════════════════════════════════════════════════════
 # MAIN
@@ -491,6 +480,5 @@ def main():
         summary += "\n\nFailed views:\n" + "\n".join("  • " + n for n in error_views)
 
     forms.alert(summary, title="Shaft Function Tag")
-
 
 main()
