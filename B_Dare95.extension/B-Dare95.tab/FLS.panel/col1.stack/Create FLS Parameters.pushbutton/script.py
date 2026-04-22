@@ -72,13 +72,16 @@ doc = __revit__.ActiveUIDocument.Document
 
 # ──────────────────────────────────────────────────────────────
 # CONSTANTS
+# (name, dialog_data_type_label, is_number)
 # ──────────────────────────────────────────────────────────────
-PARAM_NAMES = [
-    "FLS Occupancy",
-    "FLS Area Measurement",
-    "FLS Occupancy Factor",
-    "FLS Function of Space",
+PARAM_DEFS = [
+    ("FLS Occupancy",         "Text",   False),
+    ("FLS Area Measurement",  "Text",   False),
+    ("FLS Occupancy Factor",  "Number", True),
+    ("FLS Function of Space", "Text",   False),
 ]
+PARAM_NAMES = [p[0] for p in PARAM_DEFS]  # kept for skip-check loop
+
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # SECTION 1 – THEME CONSTANTS
@@ -154,11 +157,11 @@ class ConfirmDialog(WinForms.Form):
     COL_VALUE = 318
     ROW_H     = 28
 
-    ROWS = [
+    ROWS_TEMPLATE = [
         ("Parameter Name",  None),          # filled per-parameter
         ("Category",        "Rooms"),
         ("Parameter Type",  "Instance"),
-        ("Data Type",       "Text"),
+        ("Data Type",       None),          # filled per-parameter (Text / Number)
         ("Group Under",     "Identity Data"),
         ("Varies by Group", "Yes"),
     ]
@@ -210,9 +213,9 @@ class ConfirmDialog(WinForms.Form):
         y += 40
 
         # ── One info-card per parameter ───────────────────────
-        for pname in PARAM_NAMES:
+        for pname, dtype_label, _is_num in PARAM_DEFS:
 
-            table_h = len(self.ROWS) * self.ROW_H + 26   # 26 = accent header
+            table_h = len(self.ROWS_TEMPLATE) * self.ROW_H + 26
 
             # 1-px border shell
             border           = WinForms.Panel()
@@ -242,9 +245,11 @@ class ConfirmDialog(WinForms.Form):
             ))
 
             # Data rows
-            for ri, (field, value) in enumerate(self.ROWS):
+            for ri, (field, value) in enumerate(self.ROWS_TEMPLATE):
                 if field == "Parameter Name":
                     value = pname
+                elif field == "Data Type":
+                    value = dtype_label   # "Text" or "Number" per param
 
                 row_y  = 26 + ri * self.ROW_H
                 row_bg = CLR_ROW_A if ri % 2 == 0 else CLR_ROW_B
@@ -335,17 +340,19 @@ def _existing_param_names(doc):
     return names
 
 
-def _make_ext_def_options(name):
+def _make_ext_def_options(name, is_number=False):
     """
-    ExternalDefinitionCreationOptions for a Text parameter.
-    Tries SpecTypeId.String.Text (Revit 2022+) then ParameterType.Text (older).
+    ExternalDefinitionCreationOptions for a Text or Number parameter.
+    Tries SpecTypeId (Revit 2022+) first then falls back to ParameterType (older).
     """
     try:
         from Autodesk.Revit.DB import SpecTypeId
-        opts = ExternalDefinitionCreationOptions(name, SpecTypeId.String.Text)
+        spec = SpecTypeId.Number if is_number else SpecTypeId.String.Text
+        opts = ExternalDefinitionCreationOptions(name, spec)
     except Exception:
         from Autodesk.Revit.DB import ParameterType
-        opts = ExternalDefinitionCreationOptions(name, ParameterType.Text)
+        ptype = ParameterType.Number if is_number else ParameterType.Text
+        opts = ExternalDefinitionCreationOptions(name, ptype)
     opts.UserModifiable = True
     opts.Visible        = True
     return opts
@@ -370,8 +377,8 @@ def create_fls_parameters(doc, app):
     Returns (created_names, skipped_names).
     """
     existing  = _existing_param_names(doc)
-    to_create = [n for n in PARAM_NAMES if n not in existing]
-    skipped   = [n for n in PARAM_NAMES if n in existing]
+    to_create = [(n, is_num) for n, _lbl, is_num in PARAM_DEFS if n not in existing]
+    skipped   = [n          for n, _lbl, _num    in PARAM_DEFS if n in existing]
 
     if not to_create:
         return [], skipped
@@ -400,11 +407,9 @@ def create_fls_parameters(doc, app):
         created       = []
         created_guids = []
 
-        for name in to_create:
-            ext_def = grp.Definitions.Create(_make_ext_def_options(name))
+        for name, is_num in to_create:
+            ext_def = grp.Definitions.Create(_make_ext_def_options(name, is_num))
             binding = app.Create.NewInstanceBinding(cat_set)
-            # IDENTITY_DATA_GROUP is either GroupTypeId or BuiltInParameterGroup
-            # depending on which Revit version is running (resolved at startup above)
             doc.ParameterBindings.Insert(ext_def, binding, IDENTITY_DATA_GROUP)
             created.append(name)
             created_guids.append(ext_def.GUID)
