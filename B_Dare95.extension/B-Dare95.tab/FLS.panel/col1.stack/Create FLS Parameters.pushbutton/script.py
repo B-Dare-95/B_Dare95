@@ -2,12 +2,15 @@
 """
 FLS Parameter Creator
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Creates two project parameters in the active Revit document:
+Creates four project parameters in the active Revit document:
 
-  1.  FLS Occupancy
-  2.  FLS Area Measurement
+  1.  FLS Occupancy           – free-text occupancy description
+  2.  FLS Area Measurement    – "NET", "GROSS", or "N.O.SEATS"
+  3.  FLS Occupancy Factor    – load factor value (m²/person)
+  4.  FLS Function of Space   – key parameter for Room Key Schedule
+                                (linked to Table 1004.5 entries)
 
-Both parameters share identical settings:
+All parameters share identical settings:
   Category   : Rooms (only)
   Discipline : Common
   Data Type  : Text
@@ -18,7 +21,7 @@ Both parameters share identical settings:
 A confirmation dialog is shown before any change is made.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Author  : B_Dare95
-Version : 1.1.0
+Version : 1.2.0
 """
 
 # ──────────────────────────────────────────────────────────────
@@ -73,8 +76,9 @@ doc = __revit__.ActiveUIDocument.Document
 PARAM_NAMES = [
     "FLS Occupancy",
     "FLS Area Measurement",
+    "FLS Occupancy Factor",
+    "FLS Function of Space",
 ]
-
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # SECTION 1 – THEME CONSTANTS
