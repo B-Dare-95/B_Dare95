@@ -4,12 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="97e5514c-6192-402f-877a-0503c0f802f5" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/FLS.panel/Occupancy Calculator.pushbutton/Gross Areas_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/FLS.panel/Occupancy Calculator.pushbutton/Gross Areas_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/FLS.panel/col1.stack/Create FLS Key Schedule.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/FLS.panel/col1.stack/Create FLS Key Schedule.pushbutton/script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/FLS.panel/col1.stack/Create FLS Parameters.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/FLS.panel/col1.stack/Create FLS Parameters.pushbutton/script.py" afterDir="false" />
-    </list>
+    <list default="true" id="97e5514c-6192-402f-877a-0503c0f802f5" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -93,7 +88,8 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-python-sdk-4762d8aabb82-6d6dccd035ac-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-253.30387.173" />
+        <option value="bundled-js-predefined-d6986cc7102b-b598e85cdad2-JavaScript-PY-252.25557.178" />
+        <option value="bundled-python-sdk-ce6832f46686-7b97d883f26b-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-252.25557.178" />
       </set>
     </attachedChunks>
   </component>
@@ -129,6 +125,7 @@
       <workItem from="1776797673758" duration="736000" />
       <workItem from="1776799220145" duration="1444000" />
       <workItem from="1776801078909" duration="62000" />
+      <workItem from="1776880328041" duration="389000" />
     </task>
     <servers />
   </component>
