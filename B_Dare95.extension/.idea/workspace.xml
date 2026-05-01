@@ -5,14 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="97e5514c-6192-402f-877a-0503c0f802f5" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/Pin Manager.pushbutton/script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/col1.stack/Pin &amp; Unpin.pulldown/Levels,Grids &amp; Links.pushbutton/pin lvls_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/col1.stack/Levels,Grids &amp; Links.pushbutton/pin lvls_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/col1.stack/Pin &amp; Unpin.pulldown/Pin All in View.pushbutton/Pin All in View_script.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/col1.stack/Pin &amp; Unpin.pulldown/Pin By Category.pushbutton/Pin By Category_script.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/col1.stack/Pin &amp; Unpin.pulldown/Unpin All in View.pushbutton/Unpin in View_script.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/col1.stack/Pin &amp; Unpin.pulldown/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/Pin Manager.pushbutton/icon.png" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Test.pushbutton/script.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
