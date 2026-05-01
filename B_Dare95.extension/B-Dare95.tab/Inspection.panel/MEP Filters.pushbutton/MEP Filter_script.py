@@ -47,21 +47,21 @@ app         = __revit__.Application
 active_view = doc.ActiveView
 output      = script.get_output()
 
-# ── UI Theme ──────────────────────────────────────────────────────────────────
-DARK_BG    = Drawing.Color.FromArgb(28,  28,  28)
-ROW_A      = Drawing.Color.FromArgb(48,  48,  48)
-ROW_B      = Drawing.Color.FromArgb(43,  43,  43)
-HEADER_BG  = Drawing.Color.FromArgb(33,  33,  33)
-SECTION_BG = Drawing.Color.FromArgb(30,  60, 100)
-WARN_BG    = Drawing.Color.FromArgb(80,  55,  10)
-TEXT_FG    = Drawing.Color.FromArgb(220, 220, 220)
-DIM_FG     = Drawing.Color.FromArgb(150, 150, 150)
-ACCENT_FG  = Drawing.Color.FromArgb(100, 180, 255)
-WARN_FG    = Drawing.Color.FromArgb(255, 200,  80)
-INPUT_BG   = Drawing.Color.FromArgb(58,  58,  58)
-BTN_BG     = Drawing.Color.FromArgb(58,  58,  58)
-BTN_OK_BG  = Drawing.Color.FromArgb(0,   100, 180)
-BORDER_CLR = Drawing.Color.FromArgb(72,  72,  72)
+# ── UI Theme (Catppuccin Mocha) ───────────────────────────────────────────────
+DARK_BG    = Drawing.Color.FromArgb(30,  30,  46)   # #1E1E2E  base
+ROW_A      = Drawing.Color.FromArgb(49,  50,  68)   # #313244  surface
+ROW_B      = Drawing.Color.FromArgb(42,  42,  60)   # #2A2A3C  card
+HEADER_BG  = Drawing.Color.FromArgb(30,  30,  46)   # #1E1E2E  base
+SECTION_BG = Drawing.Color.FromArgb(69,  71,  90)   # #45475A  muted
+WARN_BG    = Drawing.Color.FromArgb(62,  48,  18)   # amber-tinted surface
+TEXT_FG    = Drawing.Color.FromArgb(205, 214, 244)  # #CDD6F4  text
+DIM_FG     = Drawing.Color.FromArgb(166, 173, 200)  # #A6ADC8  subtext
+ACCENT_FG  = Drawing.Color.FromArgb(240, 165,   0)  # #F0A500  accent
+WARN_FG    = Drawing.Color.FromArgb(249, 226, 175)  # #F9E2AF  yellow
+INPUT_BG   = Drawing.Color.FromArgb(49,  50,  68)   # #313244  surface
+BTN_BG     = Drawing.Color.FromArgb(69,  71,  90)   # #45475A  muted
+BTN_OK_BG  = Drawing.Color.FromArgb(240, 165,   0)  # #F0A500  accent
+BORDER_CLR = Drawing.Color.FromArgb(69,  71,  90)   # #45475A  muted
 
 FONT_NORM  = Drawing.Font("Segoe UI", 9)
 FONT_BOLD  = Drawing.Font("Segoe UI", 9, Drawing.FontStyle.Bold)
@@ -351,7 +351,7 @@ def show_filter_dialog(linked_classifications, fallback_used):
         "  MEP FILTER CONFIGURATION",
         0, 10, FORM_W, 36,
         font=FONT_TITLE, fg=ACCENT_FG,
-        bg=Drawing.Color.FromArgb(22, 22, 22)
+        bg=Drawing.Color.FromArgb(30, 30, 46)
     ))
 
     # Footer controls (positioned by relayout)
@@ -375,9 +375,9 @@ def show_filter_dialog(linked_classifications, fallback_used):
     btn_apply.Text      = "Apply Filters"
     btn_apply.Size      = Drawing.Size(128, 32)
     btn_apply.BackColor = BTN_OK_BG
-    btn_apply.ForeColor = Drawing.Color.White
+    btn_apply.ForeColor = Drawing.Color.FromArgb(30, 30, 46)
     btn_apply.FlatStyle = WinForms.FlatStyle.Flat
-    btn_apply.FlatAppearance.BorderColor = Drawing.Color.FromArgb(0, 140, 220)
+    btn_apply.FlatAppearance.BorderColor = Drawing.Color.FromArgb(255, 185, 20)
     btn_apply.Font      = FONT_BOLD
     btn_apply.Cursor    = WinForms.Cursors.Hand
     form.Controls.Add(btn_apply)
@@ -473,10 +473,10 @@ def show_filter_dialog(linked_classifications, fallback_used):
         del_btn.Text      = u"\u00d7"   # ×
         del_btn.Size      = Drawing.Size(DEL_W - 2, ROW_H - 10)
         del_btn.Location  = Drawing.Point(swatch_x + SWATCH_W, (ROW_H - del_btn.Height) // 2)
-        del_btn.BackColor = Drawing.Color.FromArgb(90,  35,  35)
-        del_btn.ForeColor = Drawing.Color.FromArgb(200, 80,  80)
+        del_btn.BackColor = Drawing.Color.FromArgb(58,  30,  40)   # dark red-tinted surface
+        del_btn.ForeColor = Drawing.Color.FromArgb(243, 139, 168)  # #F38BA8 Catppuccin red
         del_btn.FlatStyle = WinForms.FlatStyle.Flat
-        del_btn.FlatAppearance.BorderColor = Drawing.Color.FromArgb(120, 50, 50)
+        del_btn.FlatAppearance.BorderColor = Drawing.Color.FromArgb(100, 60, 75)
         del_btn.Font      = FONT_BOLD
         del_btn.Cursor    = WinForms.Cursors.Hand
 
@@ -534,7 +534,7 @@ def show_filter_dialog(linked_classifications, fallback_used):
         hdr.Controls.Add(_lbl(
             "  " + sec["title"], 0, 0, TOTAL_W, HDR_H,
             font=FONT_BOLD,
-            fg=Drawing.Color.FromArgb(180, 220, 255),
+            fg=Drawing.Color.FromArgb(180, 190, 254),   # #B4BEFE lavender
             bg=Drawing.Color.Transparent
         ))
         form.Controls.Add(hdr)
@@ -579,10 +579,10 @@ def show_filter_dialog(linked_classifications, fallback_used):
         add_btn = WinForms.Button()
         add_btn.Text      = "+"
         add_btn.Size      = Drawing.Size(26, 22)
-        add_btn.BackColor = Drawing.Color.FromArgb(0, 80, 140)
-        add_btn.ForeColor = Drawing.Color.White
+        add_btn.BackColor = Drawing.Color.FromArgb(69,  71,  90)   # #45475A muted
+        add_btn.ForeColor = Drawing.Color.FromArgb(240, 165,   0)  # #F0A500 accent
         add_btn.FlatStyle = WinForms.FlatStyle.Flat
-        add_btn.FlatAppearance.BorderColor = Drawing.Color.FromArgb(0, 120, 200)
+        add_btn.FlatAppearance.BorderColor = Drawing.Color.FromArgb(240, 165, 0)
         add_btn.Font      = FONT_BOLD
         add_btn.Cursor    = WinForms.Cursors.Hand
 

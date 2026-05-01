@@ -61,16 +61,17 @@ def show_main_dialog(room_map, workset_map, default_rgb, default_transparency):
     font_mono    = System.Drawing.Font("Consolas",  9)
     font_mono_lg = System.Drawing.Font("Consolas", 10, System.Drawing.FontStyle.Bold)
 
-    # ── Colors ────────────────────────────────
-    BG        = System.Drawing.Color.FromArgb(30,  30,  30)
-    BG_CTRL   = System.Drawing.Color.FromArgb(45,  45,  45)
-    BG_BTN    = System.Drawing.Color.FromArgb(60,  60,  60)
-    BG_ACCENT = System.Drawing.Color.FromArgb(0,  120, 215)
-    FG        = System.Drawing.Color.FromArgb(220, 220, 220)
-    FG_DIM    = System.Drawing.Color.FromArgb(140, 140, 140)
-    FG_LABEL  = System.Drawing.Color.FromArgb(160, 160, 160)
-    BORDER    = System.Drawing.Color.FromArgb(80,  80,  80)
-    DIVIDER   = System.Drawing.Color.FromArgb(65,  65,  65)
+    # ── Catppuccin Mocha palette ──────────────
+    BG        = System.Drawing.Color.FromArgb(30,  30,  46)   # #1E1E2E  base
+    BG_CARD   = System.Drawing.Color.FromArgb(42,  42,  60)   # #2A2A3C  card
+    BG_CTRL   = System.Drawing.Color.FromArgb(49,  50,  68)   # #313244  surface0
+    BG_BTN    = System.Drawing.Color.FromArgb(69,  71,  90)   # #45475A  surface1
+    BG_ACCENT = System.Drawing.Color.FromArgb(240, 165,  0)   # #F0A500  accent
+    FG        = System.Drawing.Color.FromArgb(205, 214, 244)   # #CDD6F4  text
+    FG_DIM    = System.Drawing.Color.FromArgb(166, 173, 200)   # #A6ADC8  subtext1
+    FG_LABEL  = System.Drawing.Color.FromArgb(166, 173, 200)   # #A6ADC8  subtext1
+    BORDER    = System.Drawing.Color.FromArgb(69,  71,  90)   # #45475A  surface1
+    DIVIDER   = System.Drawing.Color.FromArgb(42,  42,  60)   # #2A2A3C  card
 
     # ══════════════════════════════════════════
     # FORM
@@ -177,7 +178,7 @@ def show_main_dialog(room_map, workset_map, default_rgb, default_transparency):
         b.Font      = font_small
         b.FlatStyle = WinForms.FlatStyle.Flat
         b.BackColor = BG_BTN
-        b.ForeColor = System.Drawing.Color.FromArgb(200, 200, 200)
+        b.ForeColor = FG
         b.FlatAppearance.BorderColor = BORDER
         return b
 
@@ -231,7 +232,7 @@ def show_main_dialog(room_map, workset_map, default_rgb, default_transparency):
     lbl_swatch_hint = WinForms.Label()
     lbl_swatch_hint.Text      = "click to change"
     lbl_swatch_hint.Font      = font_small
-    lbl_swatch_hint.ForeColor = System.Drawing.Color.FromArgb(180, 180, 180)
+    lbl_swatch_hint.ForeColor = FG_DIM
     lbl_swatch_hint.BackColor = System.Drawing.Color.Transparent
     lbl_swatch_hint.TextAlign = System.Drawing.ContentAlignment.MiddleCenter
     lbl_swatch_hint.Dock      = WinForms.DockStyle.Fill
@@ -353,7 +354,7 @@ def show_main_dialog(room_map, workset_map, default_rgb, default_transparency):
     btn_cancel.Font            = font_normal
     btn_cancel.FlatStyle       = WinForms.FlatStyle.Flat
     btn_cancel.BackColor       = BG_BTN
-    btn_cancel.ForeColor       = System.Drawing.Color.FromArgb(200, 200, 200)
+    btn_cancel.ForeColor       = FG
     btn_cancel.DialogResult    = WinForms.DialogResult.Cancel
     btn_cancel.FlatAppearance.BorderColor = BORDER
 
