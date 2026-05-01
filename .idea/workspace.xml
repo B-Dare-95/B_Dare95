@@ -5,8 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="09d0a4df-0748-4405-a48e-7586ee4f5c90" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/MEP Filters.pushbutton/MEP Filter_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/MEP Filters.pushbutton/MEP Filter_script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/.idea/.name" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/.idea/.name" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -51,7 +51,7 @@
     "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
     "git-widget-placeholder": "main",
     "junie.onboarding.icon.badge.shown": "true",
-    "last_opened_file_path": "C:/Users/mohamed.bedair.SDCNT/Documents/GitHub/B_Dare95",
+    "last_opened_file_path": "E:/Github/B_Dare95",
     "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable",
     "to.speed.mode.migration.done": "true"
   }
@@ -72,7 +72,7 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-python-sdk-4762d8aabb82-6d6dccd035ac-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-253.30387.173" />
+        <option value="bundled-python-sdk-ce6832f46686-7b97d883f26b-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-252.25557.178" />
       </set>
     </attachedChunks>
   </component>

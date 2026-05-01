@@ -4,7 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="97e5514c-6192-402f-877a-0503c0f802f5" name="Changes" comment="" />
+    <list default="true" id="97e5514c-6192-402f-877a-0503c0f802f5" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/../.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Test.pushbutton/script.py" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -88,7 +92,6 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-js-predefined-d6986cc7102b-b598e85cdad2-JavaScript-PY-252.25557.178" />
         <option value="bundled-python-sdk-ce6832f46686-7b97d883f26b-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-252.25557.178" />
       </set>
     </attachedChunks>
@@ -126,6 +129,8 @@
       <workItem from="1776799220145" duration="1444000" />
       <workItem from="1776801078909" duration="62000" />
       <workItem from="1776880328041" duration="389000" />
+      <workItem from="1776964837533" duration="964000" />
+      <workItem from="1777565874406" duration="12000" />
     </task>
     <servers />
   </component>

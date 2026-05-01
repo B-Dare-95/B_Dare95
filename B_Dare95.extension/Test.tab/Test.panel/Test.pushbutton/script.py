@@ -1,503 +1,652 @@
 # -*- coding: utf-8 -*-
-"""
-FLS Area Plan Creator  v2.1.0
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Creates Area Plans from selected Floor Plan views with automatic
-NET / GROSS boundary logic driven by the custom FLS parameters.
+__title__   = "Pin / Unpin Manager"
+__author__  = "Mohamed Bedair"
+__version__ = "1.0.0"
+__doc__     = """Version = 1.0.0
 
-Reads from rooms:
-  FLS Occupancy         → copied verbatim onto the new Area
-  FLS Area Measurement  → drives NET / GROSS boundary logic
+Description:
+Unified Pin / Unpin Manager. Combines all pin/unpin workflows
+into a single configurable tool.
 
-Boundary rules:
-  • NET  room  → boundary at interior finish face of wall
-  • GROSS room → boundary at exterior (outer) face of wall
-  • GROSS ↔ GROSS shared wall → boundary at wall centre-line
+How-to:
+1. Select Action      ->  Pin  or  Unpin
+2. Select Scope       ->  Current View / Selected Views / Entire Project
+3. (Optional) Enable Category Filter and pick model categories
+4. Click Run
 
-After all boundaries are placed duplicate / overlapping curves
-are removed for a clean result.
+Author: Mohamed Bedair"""
 
-Prerequisites  (all three must be present before running):
-  1. Area Scheme "FLS"          → run FLS Area Scheme Creator
-  2. Parameter "FLS Occupancy"  → run FLS Parameter Creator
-  3. Parameter "FLS Area Measurement" → run FLS Parameter Creator
-
-The script performs a preflight check for all three at startup
-and reports any that are missing in a single alert before exiting.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Author  : B_Dare95
-Version : 2.1.0
-"""
-
-# ──────────────────────────────────────────────────────────────
-# IMPORTS
-# ──────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 import clr
-clr.AddReference('RevitAPI')
-clr.AddReference('RevitAPIUI')
+clr.AddReference('PresentationFramework')
+clr.AddReference('PresentationCore')
+clr.AddReference('WindowsBase')
+
+from System.Windows import (
+    Visibility, MessageBox, MessageBoxButton, MessageBoxImage
+)
+from System.Windows.Controls import ListBoxItem
+from System.Windows.Markup   import XamlReader
 
 from Autodesk.Revit.DB import (
-    FilteredElementCollector, ViewPlan, ViewType,
-    AreaScheme, Transaction,
-    SpatialElementBoundaryOptions, SpatialElementBoundaryLocation,
-    Wall, LocationPoint,
-    Plane, SketchPlane, Transform, XYZ, UV, ElementId,
-    BuiltInParameter, BuiltInCategory
+    FilteredElementCollector, Transaction, View, ViewType, CategoryType
 )
-from pyrevit import forms, script
+from pyrevit import script
 
-# ──────────────────────────────────────────────────────────────
-# REVIT HANDLES
-# ──────────────────────────────────────────────────────────────
-uidoc = __revit__.ActiveUIDocument
-doc   = uidoc.Document
+doc = __revit__.ActiveUIDocument.Document
 
-# ──────────────────────────────────────────────────────────────
-# FLS CONSTANTS  (must match the names used by the creator scripts)
-# ──────────────────────────────────────────────────────────────
-FLS_SCHEME_NAME     = "FLS"                  # Area Scheme name
-FLS_OCCUPANCY_PARAM = "FLS Occupancy"        # descriptive occupancy label
-FLS_AREA_MEAS_PARAM = "FLS Area Measurement" # "NET" or "GROSS"
+# ── Data Collection ───────────────────────────────────────────────────────────
+_SKIP_VT = {
+    int(ViewType.SystemBrowser),
+    int(ViewType.ProjectBrowser),
+    int(ViewType.Undefined),
+    int(ViewType.Internal),
+}
 
+def collect_views():
+    result = []
+    for v in FilteredElementCollector(doc).OfClass(View).ToElements():
+        if not v.IsTemplate and int(v.ViewType) not in _SKIP_VT:
+            result.append(v)
+    return sorted(result, key=lambda v: (str(v.ViewType), v.Name))
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# SECTION 1 – PREFLIGHT: VERIFY ALL THREE FLS PREREQUISITES
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#
-# All checks run up-front. If anything is missing one combined
-# alert lists every problem and names the script that fixes it,
-# then exits – no partial runs.
-
-def _get_bound_param_names(doc):
-    """Return a set of all parameter names currently bound in the project."""
-    names = set()
-    it = doc.ParameterBindings.ForwardIterator()
-    while it.MoveNext():
+def collect_model_cats():
+    names = []
+    for cat in doc.Settings.Categories:
         try:
-            names.add(it.Key.Name)
+            if cat.CategoryType == CategoryType.Model:
+                names.append(cat.Name)
         except Exception:
             pass
-    return names
+    return sorted(names)
 
+ALL_VIEWS = collect_views()
+ALL_CATS  = collect_model_cats()
 
-# ── Check 1: FLS Area Scheme ───────────────────────────────────
-target_scheme = None
-for _s in (FilteredElementCollector(doc)
-           .OfClass(AreaScheme)
-           .ToElements()):
-    if _s.Name == FLS_SCHEME_NAME:
-        target_scheme = _s
-        break
+# ── XAML ──────────────────────────────────────────────────────────────────────
+XAML = """
+<Window
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Pin / Unpin Manager"
+    Width="420"
+    SizeToContent="Height"
+    WindowStartupLocation="CenterScreen"
+    Background="#1E1E2E"
+    ResizeMode="NoResize"
+    FontFamily="Segoe UI"
+    FontSize="13">
 
-# ── Check 2 & 3: FLS project parameters ───────────────────────
-_bound_params   = _get_bound_param_names(doc)
-_missing_params = [
-    p for p in (FLS_OCCUPANCY_PARAM, FLS_AREA_MEAS_PARAM)
-    if p not in _bound_params
-]
+  <Window.Resources>
 
-# ── Build a single combined error message if anything is absent ─
-_problems = []
+    <!-- ── Radio-style toggle button ── -->
+    <Style x:Key="TogBtn" TargetType="ToggleButton">
+      <Setter Property="Background"      Value="#313244"/>
+      <Setter Property="Foreground"      Value="#CDD6F4"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding"         Value="10,8"/>
+      <Setter Property="Cursor"          Value="Hand"/>
+      <Setter Property="FontSize"        Value="12"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ToggleButton">
+            <Border x:Name="bd"
+                    Background="{TemplateBinding Background}"
+                    CornerRadius="5"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center"
+                                VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter Property="Background" Value="#F0A500"/>
+                <Setter Property="Foreground" Value="#1E1E2E"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+              </Trigger>
+              <MultiTrigger>
+                <MultiTrigger.Conditions>
+                  <Condition Property="IsMouseOver" Value="True"/>
+                  <Condition Property="IsChecked"   Value="False"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="#45475A"/>
+              </MultiTrigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
 
-if target_scheme is None:
-    _problems.append(
-        u'  \u2022  Area Scheme "{}" not found\n'
-        u'       \u2192 Run: FLS Area Scheme Creator'.format(FLS_SCHEME_NAME)
-    )
+    <!-- ── Pill-style ON/OFF toggle ── -->
+    <Style x:Key="PillTogBtn" TargetType="ToggleButton">
+      <Setter Property="Background"      Value="#45475A"/>
+      <Setter Property="Foreground"      Value="#A6ADC8"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding"         Value="10,3"/>
+      <Setter Property="Cursor"          Value="Hand"/>
+      <Setter Property="FontSize"        Value="10"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ToggleButton">
+            <Border Background="{TemplateBinding Background}"
+                    CornerRadius="10"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center"
+                                VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter Property="Background" Value="#F0A500"/>
+                <Setter Property="Foreground" Value="#1E1E2E"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
 
-for _p in _missing_params:
-    _problems.append(
-        u'  \u2022  Project Parameter "{}" not found\n'
-        u'       \u2192 Run: FLS Parameter Creator'.format(_p)
-    )
+    <!-- ── Section card ── -->
+    <Style x:Key="Card" TargetType="Border">
+      <Setter Property="Background"   Value="#2A2A3C"/>
+      <Setter Property="CornerRadius" Value="8"/>
+      <Setter Property="Padding"      Value="14"/>
+      <Setter Property="Margin"       Value="0,0,0,10"/>
+    </Style>
 
-if _problems:
-    forms.alert(
-        u"The following prerequisites are missing in this project:\n\n"
-        + u"\n\n".join(_problems)
-        + u"\n\nPlease run the indicated scripts first, then re-run this tool.",
-        title      = u"FLS Area Plan Creator \u2013 Prerequisites Missing",
-        exitscript = True
-    )
+    <!-- ── Section heading ── -->
+    <Style x:Key="SHead" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="#F0A500"/>
+      <Setter Property="FontSize"   Value="10"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Margin"     Value="0,0,0,10"/>
+    </Style>
 
+    <!-- ── Sub-label ── -->
+    <Style x:Key="Sub" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="#A6ADC8"/>
+      <Setter Property="FontSize"   Value="11"/>
+      <Setter Property="Margin"     Value="0,0,0,6"/>
+    </Style>
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# SECTION 2 – HELPER UTILITIES
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    <!-- ── Dark ListBox ── -->
+    <Style x:Key="DarkList" TargetType="ListBox">
+      <Setter Property="Background"      Value="#1E1E2E"/>
+      <Setter Property="BorderBrush"     Value="#45475A"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Foreground"      Value="#CDD6F4"/>
+      <Setter Property="Padding"         Value="2"/>
+      <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+    </Style>
 
-def _get_fls_param_value(element, param_name):
+    <Style TargetType="ListBoxItem">
+      <Setter Property="Padding"    Value="8,5"/>
+      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Style.Triggers>
+        <Trigger Property="IsSelected"  Value="True">
+          <Setter Property="Background" Value="#F0A500"/>
+          <Setter Property="Foreground" Value="#1E1E2E"/>
+        </Trigger>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="Background" Value="#313244"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+
+    <!-- ── Primary (Run) button ── -->
+    <Style x:Key="RunBtn" TargetType="Button">
+      <Setter Property="Background"      Value="#F0A500"/>
+      <Setter Property="Foreground"      Value="#1E1E2E"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="FontWeight"      Value="Bold"/>
+      <Setter Property="Cursor"          Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border Background="{TemplateBinding Background}"
+                    CornerRadius="5" Padding="0">
+              <ContentPresenter HorizontalAlignment="Center"
+                                VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="#D99300"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- ── Secondary (Cancel) button ── -->
+    <Style x:Key="SecBtn" TargetType="Button">
+      <Setter Property="Background"      Value="#313244"/>
+      <Setter Property="Foreground"      Value="#CDD6F4"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Cursor"          Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border Background="{TemplateBinding Background}"
+                    CornerRadius="5" Padding="0">
+              <ContentPresenter HorizontalAlignment="Center"
+                                VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="#45475A"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+  </Window.Resources>
+
+  <StackPanel Margin="14,14,14,12">
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!--  SECTION 1 · ACTION                                               -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <Border Style="{StaticResource Card}">
+      <StackPanel>
+        <TextBlock Text="ACTION" Style="{StaticResource SHead}"/>
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="8"/>
+            <ColumnDefinition Width="*"/>
+          </Grid.ColumnDefinitions>
+          <ToggleButton x:Name="btn_pin"
+                        Grid.Column="0"
+                        Content="&#x1F4CC;  PIN"
+                        Style="{StaticResource TogBtn}"
+                        IsChecked="True"/>
+          <ToggleButton x:Name="btn_unpin"
+                        Grid.Column="2"
+                        Content="&#x1F4CD;  UNPIN"
+                        Style="{StaticResource TogBtn}"/>
+        </Grid>
+      </StackPanel>
+    </Border>
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!--  SECTION 2 · SCOPE                                                -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <Border Style="{StaticResource Card}">
+      <StackPanel>
+        <TextBlock Text="SCOPE" Style="{StaticResource SHead}"/>
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="6"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="6"/>
+            <ColumnDefinition Width="*"/>
+          </Grid.ColumnDefinitions>
+          <ToggleButton x:Name="btn_cur"
+                        Grid.Column="0"
+                        Content="Current View"
+                        Style="{StaticResource TogBtn}"
+                        IsChecked="True"/>
+          <ToggleButton x:Name="btn_sel"
+                        Grid.Column="2"
+                        Content="Selected Views"
+                        Style="{StaticResource TogBtn}"/>
+          <ToggleButton x:Name="btn_proj"
+                        Grid.Column="4"
+                        Content="Entire Project"
+                        Style="{StaticResource TogBtn}"/>
+        </Grid>
+
+        <!-- View list — shown only when Selected Views is active -->
+        <Border x:Name="pnl_views" Visibility="Collapsed" Margin="0,10,0,0">
+          <StackPanel>
+            <TextBlock Text="Select views  (hold Ctrl for multiple):"
+                       Style="{StaticResource Sub}"/>
+            <ListBox x:Name="lst_views"
+                     Height="140"
+                     Style="{StaticResource DarkList}"
+                     SelectionMode="Extended"/>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </Border>
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!--  SECTION 3 · CATEGORY FILTER                                      -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <Border Style="{StaticResource Card}">
+      <StackPanel>
+        <StackPanel Orientation="Horizontal">
+          <TextBlock Text="CATEGORY FILTER"
+                     Style="{StaticResource SHead}"
+                     VerticalAlignment="Center"
+                     Margin="0,0,10,0"/>
+          <ToggleButton x:Name="btn_cat_tog"
+                        Content="OFF"
+                        Style="{StaticResource PillTogBtn}"
+                        Width="44" Height="20"/>
+        </StackPanel>
+
+        <!-- Category list — shown only when filter is ON -->
+        <Border x:Name="pnl_cats" Visibility="Collapsed" Margin="0,10,0,0">
+          <StackPanel>
+            <TextBlock Text="Select categories  (hold Ctrl for multiple):"
+                       Style="{StaticResource Sub}"/>
+            <ListBox x:Name="lst_cats"
+                     Height="170"
+                     Style="{StaticResource DarkList}"
+                     SelectionMode="Extended"/>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </Border>
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!--  FOOTER                                                           -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+      <Button x:Name="btn_cancel"
+              Content="Cancel"
+              Width="90" Height="32"
+              Style="{StaticResource SecBtn}"
+              Margin="0,0,8,0"/>
+      <Button x:Name="btn_run"
+              Content="&#x25B6;  Run"
+              Width="90" Height="32"
+              Style="{StaticResource RunBtn}"/>
+    </StackPanel>
+
+  </StackPanel>
+</Window>
+"""
+
+# ── Dialog Class ──────────────────────────────────────────────────────────────
+class PinUnpinDialog(object):
     """
-    Read a custom parameter by name from any element.
-    Returns the string value (upper-cased & stripped) or "".
+    WPF dialog for the Pin / Unpin Manager.
+
+    Radio-toggle behaviour is implemented entirely in Python:
+      _radio()  – mutually excludes buttons within a group
+      _guard()  – prevents the user from unchecking the active button
+                  (IronPython mutable-list trick for closure state)
     """
-    p = element.LookupParameter(param_name)
-    if p is None:
-        return ""
-    return (p.AsString() or "").strip().upper()
+
+    def __init__(self):
+        self.result = None
+        self._lock  = [False]   # mutable single-element list → shared across closures
+
+        self.win = XamlReader.Parse(XAML)
+
+        # ── Named controls ────────────────────────────────────────────────
+        self.btn_pin     = self.win.FindName('btn_pin')
+        self.btn_unpin   = self.win.FindName('btn_unpin')
+
+        self.btn_cur     = self.win.FindName('btn_cur')
+        self.btn_sel     = self.win.FindName('btn_sel')
+        self.btn_proj    = self.win.FindName('btn_proj')
+        self.pnl_views   = self.win.FindName('pnl_views')
+        self.lst_views   = self.win.FindName('lst_views')
+
+        self.btn_cat_tog = self.win.FindName('btn_cat_tog')
+        self.pnl_cats    = self.win.FindName('pnl_cats')
+        self.lst_cats    = self.win.FindName('lst_cats')
+
+        self.btn_cancel  = self.win.FindName('btn_cancel')
+        self.btn_run     = self.win.FindName('btn_run')
+
+        # ── Populate view list ────────────────────────────────────────────
+        for v in ALL_VIEWS:
+            it = ListBoxItem()
+            it.Content = u"[{}]  {}".format(str(v.ViewType), v.Name)
+            it.Tag     = v.Id
+            self.lst_views.Items.Add(it)
+
+        # ── Populate category list ────────────────────────────────────────
+        for name in ALL_CATS:
+            it = ListBoxItem()
+            it.Content = name
+            self.lst_cats.Items.Add(it)
+
+        # ── Wire events ───────────────────────────────────────────────────
+        # Action group
+        self.btn_pin.Checked     += self._on_action
+        self.btn_unpin.Checked   += self._on_action
+        self.btn_pin.Unchecked   += self._guard
+        self.btn_unpin.Unchecked += self._guard
+
+        # Scope group
+        self.btn_cur.Checked    += self._on_scope
+        self.btn_sel.Checked    += self._on_scope
+        self.btn_proj.Checked   += self._on_scope
+        self.btn_cur.Unchecked  += self._guard
+        self.btn_sel.Unchecked  += self._guard
+        self.btn_proj.Unchecked += self._guard
+
+        # Category toggle
+        self.btn_cat_tog.Checked   += self._on_cat_tog
+        self.btn_cat_tog.Unchecked += self._on_cat_tog
+
+        # Footer
+        self.btn_cancel.Click += self._cancel
+        self.btn_run.Click    += self._run
+
+    # ── Helpers ───────────────────────────────────────────────────────────────
+    def _radio(self, group, active):
+        """Keep only `active` checked in `group`; suppress re-entrant calls."""
+        if self._lock[0]:
+            return
+        self._lock[0] = True
+        for btn in group:
+            btn.IsChecked = (btn is active)
+        self._lock[0] = False
+
+    def _guard(self, sender, e):
+        """Prevent the user from unchecking the currently active radio toggle."""
+        if not self._lock[0]:
+            # Re-check: this fires Checked, which calls _on_action / _on_scope,
+            # but _lock is still False so the radio handler runs cleanly.
+            sender.IsChecked = True
+
+    # ── Event handlers ────────────────────────────────────────────────────────
+    def _on_action(self, sender, e):
+        if self._lock[0]:
+            return
+        self._radio([self.btn_pin, self.btn_unpin], sender)
+
+    def _on_scope(self, sender, e):
+        if self._lock[0]:
+            return
+        self._radio([self.btn_cur, self.btn_sel, self.btn_proj], sender)
+        # Show the view-picker only for "Selected Views"
+        self.pnl_views.Visibility = (
+            Visibility.Visible if sender is self.btn_sel else Visibility.Collapsed
+        )
+
+    def _on_cat_tog(self, sender, e):
+        on = bool(sender.IsChecked)
+        sender.Content           = "ON"  if on else "OFF"
+        self.pnl_cats.Visibility = Visibility.Visible if on else Visibility.Collapsed
+
+    def _cancel(self, sender, e):
+        self.win.Close()
+
+    def _run(self, sender, e):
+        # ── Determine scope ───────────────────────────────────────────────
+        if   self.btn_cur.IsChecked:  scope = 'current'
+        elif self.btn_sel.IsChecked:  scope = 'views'
+        else:                         scope = 'project'
+
+        # ── Validate view selection ───────────────────────────────────────
+        sel_view_ids = []
+        if scope == 'views':
+            for it in self.lst_views.SelectedItems:
+                sel_view_ids.append(it.Tag)
+            if not sel_view_ids:
+                MessageBox.Show(
+                    "Please select at least one view.",
+                    "Pin / Unpin Manager",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning
+                )
+                return
+
+        # ── Validate category selection ───────────────────────────────────
+        use_cats = bool(self.btn_cat_tog.IsChecked)
+        sel_cats = []
+        if use_cats:
+            for it in self.lst_cats.SelectedItems:
+                sel_cats.append(str(it.Content))
+            if not sel_cats:
+                MessageBox.Show(
+                    "Category filter is ON but no categories are selected.\n"
+                    "Please pick at least one category, or turn the filter OFF.",
+                    "Pin / Unpin Manager",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning
+                )
+                return
+
+        self.result = {
+            'pin'      : bool(self.btn_pin.IsChecked),
+            'scope'    : scope,
+            'view_ids' : sel_view_ids,
+            'use_cats' : use_cats,
+            'cats'     : sel_cats,
+        }
+        self.win.Close()
+
+    def show(self):
+        self.win.ShowDialog()
+        return self.result
 
 
-def _is_gross(room):
-    """True when the room's FLS Area Measurement contains 'GROSS'."""
-    return "GROSS" in _get_fls_param_value(room, FLS_AREA_MEAS_PARAM)
+# ── Launch UI ─────────────────────────────────────────────────────────────────
+dlg = PinUnpinDialog()
+cfg = dlg.show()
 
+if cfg is None:
+    script.exit()
 
-def _build_wall_room_map(rooms):
-    """
-    Returns  { wall_ElementId : [room, ...] }
-    mapping every bounding wall to the rooms that share it.
-    Uses the Finish-face boundary location to match NET boundaries.
-    """
-    opts = SpatialElementBoundaryOptions()
-    opts.SpatialElementBoundaryLocation = SpatialElementBoundaryLocation.Finish
+pin_val  = cfg['pin']
+scope    = cfg['scope']
+view_ids = set(cfg['view_ids'])
+use_cats = cfg['use_cats']
+cats     = set(cfg['cats'])
+label    = "Pin" if pin_val else "Unpin"
 
-    wall_map = {}
-    for room in rooms:
-        try:
-            for loop in room.GetBoundarySegments(opts):
-                for seg in loop:
-                    wid = seg.ElementId
-                    if wid == ElementId.InvalidElementId:
-                        continue
-                    if wid not in wall_map:
-                        wall_map[wid] = []
-                    if not any(r.Id == room.Id for r in wall_map[wid]):
-                        wall_map[wid].append(room)
-        except Exception:
-            pass
-    return wall_map
-
-
-def _outer_face_curve(center_curve, wall, room_pt):
-    """
-    Offset a wall centre-line curve to the wall's exterior face
-    (the face pointing away from room_pt).
-
-    Translation distance = wall.Width / 2  (Revit internal feet).
-    """
+# ── Element Collection ────────────────────────────────────────────────────────
+def passes_cat_filter(elem):
+    """True when the element's category is in the selected set (or filter is off)."""
+    if not use_cats:
+        return True
     try:
-        half_width  = wall.Width / 2.0
-        wall_normal = wall.Orientation          # unit vector ⊥ to wall axis
-
-        wall_mid = center_curve.Evaluate(0.5, True)
-        to_room  = XYZ(room_pt.X - wall_mid.X,
-                       room_pt.Y - wall_mid.Y,
-                       0.0)
-
-        # Room is on the "positive-normal" side → exterior is the negated normal
-        dot     = to_room.DotProduct(wall_normal)
-        outward = wall_normal.Negate() if dot > 0 else wall_normal
-
-        offset    = XYZ(outward.X * half_width,
-                        outward.Y * half_width,
-                        0.0)
-        transform = Transform.CreateTranslation(offset)
-        return center_curve.CreateTransformed(transform)
-
-    except Exception:
-        return center_curve          # safe fallback
-
-
-def _get_boundary_curves(room, gross_ids, wall_map, doc):
-    """
-    Return a flat list of Curve objects for the room's area boundary.
-
-    Decision tree per wall segment:
-      NET  room             → Finish-face curve    (wall interior face)
-      GROSS, GROSS neighbour → Centre-line curve   (shared wall midpoint)
-      GROSS, other boundary  → Outer-face curve    (wall exterior face)
-    """
-    opts_finish = SpatialElementBoundaryOptions()
-    opts_finish.SpatialElementBoundaryLocation = SpatialElementBoundaryLocation.Finish
-
-    opts_center = SpatialElementBoundaryOptions()
-    opts_center.SpatialElementBoundaryLocation = SpatialElementBoundaryLocation.Center
-
-    finish_loops = room.GetBoundarySegments(opts_finish)
-    if not finish_loops:
-        return []
-
-    gross        = _is_gross(room)
-    center_loops = room.GetBoundarySegments(opts_center) if gross else None
-
-    loc     = room.Location
-    room_pt = loc.Point if isinstance(loc, LocationPoint) else None
-
-    curves = []
-
-    for li, loop in enumerate(finish_loops):
-        for si, seg in enumerate(loop):
-            wid      = seg.ElementId
-            wall_elm = doc.GetElement(wid)
-
-            # ── NET room  OR  non-wall segment (separator, etc.) ──
-            if not gross or not isinstance(wall_elm, Wall):
-                curves.append(seg.GetCurve())
-                continue
-
-            # ── GROSS room on a wall segment ──────────────────────
-            try:
-                center_crv = center_loops[li][si].GetCurve()
-            except Exception:
-                center_crv = seg.GetCurve()          # fallback to finish face
-
-            adj_rooms = wall_map.get(wid, [])
-            adj_gross = [r for r in adj_rooms
-                         if r.Id != room.Id and r.Id in gross_ids]
-
-            if adj_gross:
-                # GROSS ↔ GROSS: shared wall → centre-line
-                curves.append(center_crv)
-            else:
-                # GROSS facing exterior or NET neighbour → outer face
-                if room_pt:
-                    curves.append(_outer_face_curve(center_crv, wall_elm, room_pt))
-                else:
-                    curves.append(center_crv)
-
-    return curves
-
-
-def _project_to_z(curve, z):
-    """Translate a curve vertically so it sits exactly at elevation z."""
-    try:
-        z_current = curve.GetEndPoint(0).Z
-        if abs(z_current - z) < 1e-6:
-            return curve
-        t = Transform.CreateTranslation(XYZ(0.0, 0.0, z - z_current))
-        return curve.CreateTransformed(t)
-    except Exception:
-        return curve
-
-
-def _are_duplicates(c1, c2, tol=0.01):
-    """True when two curves share the same endpoints (within tol, either order)."""
-    try:
-        s1, e1 = c1.GetEndPoint(0), c1.GetEndPoint(1)
-        s2, e2 = c2.GetEndPoint(0), c2.GetEndPoint(1)
-        close  = lambda a, b: a.DistanceTo(b) < tol
-        return ((close(s1, s2) and close(e1, e2)) or
-                (close(s1, e2) and close(e1, s2)))
+        return elem.Category is not None and elem.Category.Name in cats
     except Exception:
         return False
 
+def elements_in_view(view_id):
+    """All non-type elements visible in a given view."""
+    try:
+        return list(
+            FilteredElementCollector(doc, view_id)
+            .WhereElementIsNotElementType()
+            .ToElements()
+        )
+    except Exception:
+        return []
 
-def _deduplicate(curves):
-    """Remove exact duplicate curves (same two endpoints within tolerance)."""
-    unique = []
-    for c in curves:
-        if not any(_are_duplicates(c, u) for u in unique):
-            unique.append(c)
-    return unique
+elements = []
 
+# ── Current View ──────────────────────────────────────────────────────────────
+if scope == 'current':
+    elements = [
+        e for e in elements_in_view(doc.ActiveView.Id)
+        if passes_cat_filter(e)
+    ]
 
-def _copy_fls_params(src_room, tgt_area):
-    """
-    Copy both FLS custom parameter values from a Room onto the new Area.
-    Both elements must have the parameters bound to their categories.
-    """
-    for pname in (FLS_OCCUPANCY_PARAM, FLS_AREA_MEAS_PARAM):
-        src_p = src_room.LookupParameter(pname)
-        tgt_p = tgt_area.LookupParameter(pname)
-        if src_p and tgt_p:
-            val = src_p.AsString() or ""
+# ── Selected Views (deduplicated by element id) ───────────────────────────────
+elif scope == 'views':
+    seen = set()
+    for v in ALL_VIEWS:
+        if v.Id not in view_ids:
+            continue
+        for e in elements_in_view(v.Id):
+            eid = e.Id
+            if eid not in seen:
+                seen.add(eid)
+                if passes_cat_filter(e):
+                    elements.append(e)
+
+# ── Entire Project ────────────────────────────────────────────────────────────
+elif scope == 'project':
+    if use_cats:
+        # Use per-BuiltInCategory collectors → fast + precise
+        seen    = set()
+        cat_map = {c.Name: c for c in doc.Settings.Categories}
+        for cname in cats:
+            cat = cat_map.get(cname)
+            if cat is None:
+                continue
             try:
-                tgt_p.Set(val)
+                bic   = cat.BuiltInCategory
+                elems = (
+                    FilteredElementCollector(doc)
+                    .OfCategory(bic)
+                    .WhereElementIsNotElementType()
+                    .ToElements()
+                )
+                for e in elems:
+                    eid = e.Id.IntegerValue
+                    if eid not in seen:
+                        seen.add(eid)
+                        elements.append(e)
             except Exception:
                 pass
+    else:
+        # No category filter → grab everything
+        elements = list(
+            FilteredElementCollector(doc)
+            .WhereElementIsNotElementType()
+            .ToElements()
+        )
 
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# SECTION 3 – USER PROMPT: SELECT FLOOR PLAN VIEWS
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# The FLS Area Scheme is now resolved in preflight (no user selection).
-# The only choice the user makes is which Floor Plan views to process.
-
-all_floor_plans = [
-    v for v in FilteredElementCollector(doc)
-                 .OfClass(ViewPlan)
-                 .WhereElementIsNotElementType()
-                 .ToElements()
-    if v.ViewType == ViewType.FloorPlan and not v.IsTemplate
-]
-
-if not all_floor_plans:
-    forms.alert("No Floor Plan views found in the project.", exitscript=True)
-
-fp_dict = {v.Name: v for v in sorted(all_floor_plans, key=lambda x: x.Name)}
-
-selected_view_names = forms.SelectFromList.show(
-    sorted(fp_dict.keys()),
-    title       = u"Select Floor Plan Views \u2013 FLS Area Plan Creator",
-    width       = 460,
-    multiselect = True,
-    button_name = u"Create FLS Area Plans"
-)
-if not selected_view_names:
-    script.exit()
-
-selected_plan_views = [fp_dict[n] for n in selected_view_names]
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# SECTION 4 – PRE-CACHE EXISTING AREA PLAN VIEWS
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#   level_ElementId → existing AreaPlan ViewPlan for the chosen scheme
-
-existing_area_plans = {}
-
-for v in (FilteredElementCollector(doc)
-          .OfClass(ViewPlan)
-          .WhereElementIsNotElementType()
-          .ToElements()):
-    if v.ViewType != ViewType.AreaPlan:
-        continue
-    try:
-        if v.AreaScheme.Id == target_scheme.Id:
-            lv = v.GenLevel
-            if lv is not None:
-                existing_area_plans[lv.Id] = v
-    except Exception:
-        pass
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# SECTION 5 – MAIN TRANSACTION
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-total_areas   = 0
-total_bounds  = 0
-skipped_views = []
-
-t = Transaction(doc, u"FLS Area Plans \u2013 Boundaries & Areas")
+# ── Transaction ───────────────────────────────────────────────────────────────
+t = Transaction(doc, "{} — Pin/Unpin Manager".format(label))
 t.Start()
 
-try:
-    for plan_view in selected_plan_views:
+ok_count   = 0
+skip_count = 0
 
-        # ── Collect placed rooms (area > 0) ────────────────────
-        rooms = [
-            r for r in FilteredElementCollector(doc, plan_view.Id)
-                         .OfCategory(BuiltInCategory.OST_Rooms)
-                         .WhereElementIsNotElementType()
-                         .ToElements()
-            if r.Area > 0
-        ]
+for e in elements:
+    try:
+        e.Pinned = pin_val
+        ok_count += 1
+    except Exception:
+        skip_count += 1
 
-        if not rooms:
-            skipped_views.append(plan_view.Name + " (no placed rooms)")
-            continue
+t.Commit()
 
-        gross_ids = set(r.Id for r in rooms if _is_gross(r))
-        wall_map  = _build_wall_room_map(rooms)
+# ── Output ────────────────────────────────────────────────────────────────────
+out = script.get_output()
 
-        # ── Resolve the target Area Plan view ──────────────────
-        level = plan_view.GenLevel
-        if level is None:
-            skipped_views.append(plan_view.Name + " (no associated level)")
-            continue
+scope_display = {
+    'current': u'Current View  ({})'.format(doc.ActiveView.Name),
+    'views'  : u'Selected Views',
+    'project': u'Entire Project',
+}[scope]
 
-        if level.Id in existing_area_plans:
-            area_view = existing_area_plans[level.Id]
-        else:
-            try:
-                area_view = ViewPlan.CreateAreaPlan(
-                    doc, target_scheme.Id, level.Id
-                )
-                existing_area_plans[level.Id] = area_view
-            except Exception as ex:
-                skipped_views.append(
-                    u"{} (area view creation failed: {})".format(
-                        plan_view.Name, str(ex)
-                    )
-                )
-                continue
-
-        # ── Sketch plane at this level's elevation ─────────────
-        elev         = level.Elevation
-        plane        = Plane.CreateByNormalAndOrigin(XYZ.BasisZ, XYZ(0.0, 0.0, elev))
-        sketch_plane = SketchPlane.Create(doc, plane)
-
-        # ── Collect boundary curves for every room ─────────────
-        raw_curves = []
-        for room in rooms:
-            try:
-                raw_curves.extend(
-                    _get_boundary_curves(room, gross_ids, wall_map, doc)
-                )
-            except Exception:
-                pass
-
-        # ── Deduplicate then place boundary lines ──────────────
-        # Boundaries MUST be placed before NewArea() so that Revit
-        # can resolve the enclosing loop for each area tag point.
-        unique_curves = _deduplicate(raw_curves)
-
-        for crv in unique_curves:
-            try:
-                crv_flat = _project_to_z(crv, elev)
-                doc.Create.NewAreaBoundaryLine(sketch_plane, crv_flat, area_view)
-                total_bounds += 1
-            except Exception:
-                pass
-
-        # ── Place areas, set name / number / FLS params ────────
-        for room in rooms:
-            try:
-                loc = room.Location
-                if not isinstance(loc, LocationPoint):
-                    continue
-
-                pt       = loc.Point
-                new_area = doc.Create.NewArea(area_view, UV(pt.X, pt.Y))
-                if new_area is None:
-                    continue
-
-                # ── Copy built-in Name & Number ────────────────
-                name_p = room.get_Parameter(BuiltInParameter.ROOM_NAME)
-                num_p  = room.get_Parameter(BuiltInParameter.ROOM_NUMBER)
-
-                area_name_p = new_area.get_Parameter(BuiltInParameter.ROOM_NAME)
-                area_num_p  = new_area.get_Parameter(BuiltInParameter.ROOM_NUMBER)
-
-                if area_name_p and name_p:
-                    area_name_p.Set(name_p.AsString() or "")
-                if area_num_p and num_p:
-                    area_num_p.Set(num_p.AsString() or "")
-
-                # ── Copy FLS Occupancy & FLS Area Measurement ──
-                _copy_fls_params(room, new_area)
-
-                total_areas += 1
-
-            except Exception:
-                pass
-
-    t.Commit()
-
-    # ── Summary dialog ─────────────────────────────────────────
-    msg = (
-        u"Area Plans created successfully!\n\n"
-        u"  Area Scheme           :  {scheme}\n"
-        u"  Views processed       :  {views}\n"
-        u"  Boundary lines placed :  {bounds}\n"
-        u"  Areas created         :  {areas}"
-    ).format(
-        scheme = FLS_SCHEME_NAME,
-        views  = len(selected_plan_views) - len(skipped_views),
-        bounds = total_bounds,
-        areas  = total_areas
-    )
-    if skipped_views:
-        msg += u"\n\nSkipped views:\n"
-        msg += u"\n".join(u"  \u2022  " + n for n in skipped_views)
-
-    forms.alert(msg, title=u"FLS Area Plan Creator \u2013 Done")
-
-except Exception as ex:
-    t.RollBack()
-    forms.alert(
-        u"An error occurred and all changes were rolled back.\n\nDetails:\n{}".format(
-            str(ex)
-        ),
-        title=u"FLS Area Plan Creator \u2013 Error"
-    )
+out.print_md(u"## {} {} Complete".format(
+    u"\U0001F4CC" if pin_val else u"\U0001F4CD", label
+))
+out.print_md(u"| | |")
+out.print_md(u"|---|---|")
+out.print_md(u"| **Action** | {} |".format(label))
+out.print_md(u"| **Scope** | {} |".format(scope_display))
+if use_cats:
+    out.print_md(u"| **Categories** | {} |".format(u', '.join(sorted(cats))))
+out.print_md(u"| **Processed** | {} elements |".format(ok_count))
+if skip_count:
+    out.print_md(u"| **Skipped** | {} (not pinnable) |".format(skip_count))
