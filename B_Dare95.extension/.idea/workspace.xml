@@ -5,7 +5,18 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="97e5514c-6192-402f-877a-0503c0f802f5" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/Pin Manager.splitpushbutton/bundle.yaml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/col1.stack/Wipe Unplaced.pushbutton/script.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/Pin Manager.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/Pin Manager.splitpushbutton/Pin Manager.pushbutton/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/Pin Manager.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/Pin Manager.splitpushbutton/Pin Manager.pushbutton/script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/col1.stack/Levels,Grids &amp; Links.pushbutton/pin lvls_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/Pin Manager.splitpushbutton/Levels,Grids &amp; Links.pushbutton/pin lvls_script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/col1.stack/Wipe.pulldown/Unplaced Areas.pushbutton/icon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/col1.stack/Wipe.pulldown/Unplaced Areas.pushbutton/script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/col1.stack/Wipe.pulldown/Unplaced Rooms.pushbutton/Button_script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/col1.stack/Wipe.pulldown/Unplaced Rooms.pushbutton/icon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/col1.stack/Wipe.pulldown/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/col1.stack/Wipe Unplaced.pushbutton/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/col1.stack/bundle.yaml" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Test.pushbutton/script.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -50,28 +61,28 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
-    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;C:/Users/mohamed.bedair.SDCNT/Documents/GitHub/B_Dare95/B_Dare95.extension/B-Dare95.tab/FLS.panel/col1.stack/Create FLS Key Schedule.pushbutton&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;,
-    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "RunOnceActivity.MCP Project settings loaded": "true",
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
+    "git-widget-placeholder": "main",
+    "ignore.virus.scanning.warn.message": "true",
+    "junie.onboarding.icon.badge.shown": "true",
+    "last_opened_file_path": "E:/Github/B_Dare95/B_Dare95.extension/B-Dare95.tab/QoL.panel/Pin Manager.splitpushbutton",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable",
+    "to.speed.mode.migration.done": "true",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="C:\Users\mohamed.bedair.SDCNT\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\FLS.panel\col1.stack\Create FLS Key Schedule.pushbutton" />
@@ -81,11 +92,11 @@
       <recent name="C:\Users\mohamed.bedair.SDCNT\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Shafts.panel\col2.stack\Create Shaft Function.pushbutton" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="E:\Github\B_Dare95\B_Dare95.extension\B-Dare95.tab\QoL.panel\col1.stack\Wipe Unplaced.pushbutton" />
       <recent name="E:\Github\B_Dare95\B_Dare95.extension\B-Dare95.tab\QoL.panel\Pin Manager.pushbutton" />
       <recent name="E:\Github\B_Dare95\B_Dare95.extension\B-Dare95.tab\QoL.panel\col1.stack" />
       <recent name="E:\Github\B_Dare95\B_Dare95.extension\B-Dare95.tab\FLS.panel\col1.stack" />
       <recent name="E:\Github\B_Dare95\B_Dare95.extension\B-Dare95.tab\Shafts.panel\col1.stack\Open Above.pushbutton" />
-      <recent name="E:\Github\B_Dare95\B_Dare95.extension\B-Dare95.tab\Shafts.panel\col1.stack" />
     </key>
   </component>
   <component name="SharedIndexes">
