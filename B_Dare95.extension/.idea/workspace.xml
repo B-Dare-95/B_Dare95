@@ -6,8 +6,7 @@
   <component name="ChangeListManager">
     <list default="true" id="97e5514c-6192-402f-877a-0503c0f802f5" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/MEP Tracer.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/MEP Tracer.pushbutton/script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/col1.stack/Highlight MEP.pushbutton/toggle_state.json" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/col1.stack/Highlight MEP.pushbutton/toggle_state.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Shafts.panel/3D Shafts.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Shafts.panel/3D Shafts.pushbutton/script.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
