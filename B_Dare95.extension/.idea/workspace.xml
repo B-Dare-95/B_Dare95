@@ -5,8 +5,12 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="97e5514c-6192-402f-877a-0503c0f802f5" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/Pre-Filter Selection.splitpushbutton/Pre-Filter by Parameter.pushbutton/icon.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/Pre-Filter Selection.splitpushbutton/Pre-Filter by Parameter.pushbutton/script.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/Pre-Filter Selection.splitpushbutton/bundle.yaml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Shafts.panel/3D Shafts.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Shafts.panel/3D Shafts.pushbutton/script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/Pre-Filter Selection.pushbutton/Button_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/Pre-Filter Selection.splitpushbutton/Pre-Filter Selection.pushbutton/Button_script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/Pre-Filter Selection.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/QoL.panel/Pre-Filter Selection.splitpushbutton/Pre-Filter Selection.pushbutton/icon.png" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -14,7 +18,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="2108" />
+    <option name="cachedIndexableFilesCount" value="2111" />
     <option name="fileBasedEmbeddingIndicesEnabled" value="true" />
   </component>
   <component name="FileTemplateManagerImpl">
@@ -61,7 +65,7 @@
     &quot;git-widget-placeholder&quot;: &quot;main&quot;,
     &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
     &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;E:/Github/B_Dare95/B_Dare95.extension/B-Dare95.tab/QoL.panel/Pin Manager.splitpushbutton&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/mohamed.bedair.SDCNT/Documents/GitHub/B_Dare95/B_Dare95.extension/B-Dare95.tab/QoL.panel/Pre-Filter Selection.splitpushbutton&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
@@ -74,18 +78,18 @@
 }</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\Users\mohamed.bedair.SDCNT\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\QoL.panel\Pre-Filter Selection.splitpushbutton" />
+      <recent name="C:\Users\mohamed.bedair.SDCNT\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\QoL.panel\Pre-Filter Selection.splitpushbutton\Pre-Filter by Parameter.pushbutton" />
       <recent name="C:\Users\mohamed.bedair.SDCNT\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\FLS.panel\col1.stack\Create FLS Key Schedule.pushbutton" />
       <recent name="E:\Github\B_Dare95\B_Dare95.extension\B-Dare95.tab\FLS.panel\col1.stack\Create FLS Scheme.pushbutton" />
       <recent name="E:\Github\B_Dare95\B_Dare95.extension\B-Dare95.tab\FLS.panel\Area Plan.pulldown\Create FLS Plans.pushbutton" />
-      <recent name="E:\Github\B_Dare95\B_Dare95.extension\B-Dare95.tab\FLS.panel\Create FLS Parameters.pushbutton" />
-      <recent name="C:\Users\mohamed.bedair.SDCNT\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Shafts.panel\col2.stack\Create Shaft Function.pushbutton" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\mohamed.bedair.SDCNT\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\QoL.panel\Pre-Filter Selection.splitpushbutton\Pre-Filter by Parameter.pushbutton" />
+      <recent name="C:\Users\mohamed.bedair.SDCNT\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\QoL.panel\Pre-Filter Selection.splitpushbutton" />
       <recent name="E:\Github\B_Dare95\B_Dare95.extension\B-Dare95.tab\QoL.panel\col1.stack\Wipe Unplaced.pushbutton" />
       <recent name="E:\Github\B_Dare95\B_Dare95.extension\B-Dare95.tab\QoL.panel\Pin Manager.pushbutton" />
       <recent name="E:\Github\B_Dare95\B_Dare95.extension\B-Dare95.tab\QoL.panel\col1.stack" />
-      <recent name="E:\Github\B_Dare95\B_Dare95.extension\B-Dare95.tab\FLS.panel\col1.stack" />
-      <recent name="E:\Github\B_Dare95\B_Dare95.extension\B-Dare95.tab\Shafts.panel\col1.stack\Open Above.pushbutton" />
     </key>
   </component>
   <component name="SharedIndexes">
