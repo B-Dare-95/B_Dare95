@@ -1,14 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-Universal Element Colorizer  —  Graphical Overrides
-═════════════════════════════════════════════════════
+Universal Element Colorizer  —  View Filters (ParameterFilterElement)
+══════════════════════════════════════════════════════════════════════
 1. Pick a category from the left list.
 2. Pick a parameter (Instance or Type).
 3. Colour-coded values appear automatically on the right.
 4. Click any colour swatch to change it, then press Apply.
 
-Right-click the button → Reset (config mode): clears all overrides
-for elements of the currently selected category.
+Filters are named  WPC_<Category>_<Parameter>_<Value>  and are stored
+inside the Revit document. The Reset button removes all WPC_ filters
+created by this tool from the active view.
+
+Note: not all categories support View Filters. The tool will warn you
+if the selected category cannot be used with ParameterFilterElement.
 """
 
 import clr
@@ -31,11 +35,14 @@ from System.Windows.Forms import (
 from System.Drawing import (
     Color as DC, Size, Font, FontStyle, SolidBrush, Rectangle,
 )
+from System.Collections.Generic import List
 from Autodesk.Revit.DB import (
     FilteredElementCollector, FillPatternElement,
     OverrideGraphicSettings, Transaction,
     StorageType, ElementId, CategoryType,
     Color as RC,
+    ParameterFilterElement, ParameterFilterRuleFactory,
+    ElementParameterFilter, FilterRule,
 )
 from pyrevit import EXEC_PARAMS
 
@@ -49,32 +56,34 @@ _pats         = FilteredElementCollector(doc).OfClass(FillPatternElement).ToElem
 SOLID_PATTERN = next((p for p in _pats if p.GetFillPattern().IsSolidFill), None)
 
 # ── Catppuccin dark palette ───────────────────────────────────────────────────
-BG      = DC.FromArgb(0x1E, 0x1E, 0x2E)   # base
-CARD    = DC.FromArgb(0x2A, 0x2A, 0x3C)   # mantle
-SURFACE = DC.FromArgb(0x31, 0x32, 0x44)   # surface0
-MUTED   = DC.FromArgb(0x45, 0x47, 0x5A)   # surface1
-TEXT    = DC.FromArgb(0xCD, 0xD6, 0xF4)   # text
-SUBTEXT = DC.FromArgb(0xA6, 0xAD, 0xC8)   # subtext0
-ACCENT  = DC.FromArgb(0xF0, 0xA5, 0x00)   # yellow accent
+BG      = DC.FromArgb(0x1E, 0x1E, 0x2E)
+CARD    = DC.FromArgb(0x2A, 0x2A, 0x3C)
+SURFACE = DC.FromArgb(0x31, 0x32, 0x44)
+MUTED   = DC.FromArgb(0x45, 0x47, 0x5A)
+TEXT    = DC.FromArgb(0xCD, 0xD6, 0xF4)
+SUBTEXT = DC.FromArgb(0xA6, 0xAD, 0xC8)
+ACCENT  = DC.FromArgb(0xF0, 0xA5, 0x00)
 
 PALETTE = [
-    DC.FromArgb(243, 139, 168),  # red
-    DC.FromArgb(250, 179, 135),  # peach
-    DC.FromArgb(249, 226, 175),  # yellow
-    DC.FromArgb(166, 227, 161),  # green
-    DC.FromArgb(137, 180, 250),  # blue
-    DC.FromArgb(203, 166, 247),  # mauve
-    DC.FromArgb(148, 226, 213),  # teal
-    DC.FromArgb(116, 199, 236),  # sky
-    DC.FromArgb(245, 194, 231),  # pink
-    DC.FromArgb(180, 190, 254),  # lavender
+    DC.FromArgb(243, 139, 168),
+    DC.FromArgb(250, 179, 135),
+    DC.FromArgb(249, 226, 175),
+    DC.FromArgb(166, 227, 161),
+    DC.FromArgb(137, 180, 250),
+    DC.FromArgb(203, 166, 247),
+    DC.FromArgb(148, 226, 213),
+    DC.FromArgb(116, 199, 236),
+    DC.FromArgb(245, 194, 231),
+    DC.FromArgb(180, 190, 254),
 ]
+
+WPC_PREFIX = "WPC_"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _eid(eid):
-    try:    return str(eid.Value)           # Revit 2025+
-    except: return str(eid.IntegerValue)    # Revit 2024 and earlier
+    try:    return str(eid.Value)
+    except: return str(eid.IntegerValue)
 
 
 def pval(param):
@@ -100,7 +109,6 @@ def pval(param):
 
 
 def all_model_cats():
-    """Return all model categories, sorted by name."""
     cats = []
     for c in doc.Settings.Categories:
         try:
@@ -112,7 +120,6 @@ def all_model_cats():
 
 
 def get_instances(cat_id):
-    """Return all non-type elements for the given category in the active view."""
     try:
         return list(
             FilteredElementCollector(doc, active_view.Id)
@@ -125,7 +132,6 @@ def get_instances(cat_id):
 
 
 def get_unique_types(instances):
-    """Return unique type elements for a set of instance elements."""
     seen, types = set(), []
     for inst in instances:
         try:
@@ -141,31 +147,133 @@ def get_unique_types(instances):
     return types
 
 
-def collect_params(elems):
-    """Return {param_name: sorted([val_str, ...])} for the given elements."""
-    pd = {}
+def collect_params_with_meta(elems):
+    """
+    Return a dict:
+      {
+        param_name: {
+          'values'  : [sorted display strings],
+          'storage' : StorageType,
+          'pid'     : ElementId,   ← parameter definition ElementId
+          'raw'     : {display_str: raw_value}
+        }
+      }
+    raw_value type matches StorageType:
+      String  → str   (empty string for <Empty>)
+      Integer → int
+      Double  → float (full precision AsDouble())
+      ElementId → ElementId
+    """
+    meta = {}
+
     for el in elems:
         for p in el.Parameters:
             try:
                 if p.Definition is None:
                     continue
-                n = p.Definition.Name
-                v = pval(p)
-                if n not in pd:
-                    pd[n] = set()
-                pd[n].add(v)
+                n  = p.Definition.Name
+                st = p.StorageType
+
+                if n not in meta:
+                    meta[n] = {
+                        'values' : set(),
+                        'storage': st,
+                        'pid'    : p.Id,
+                        'raw'    : {},
+                    }
+
+                display = pval(p)
+
+                # Extract raw value for filter rule creation
+                if display not in meta[n]['raw']:
+                    if not p.HasValue:
+                        raw = None  # <No Value>
+                    elif st == StorageType.String:
+                        raw = p.AsString() or ""
+                    elif st == StorageType.Integer:
+                        raw = p.AsInteger()
+                    elif st == StorageType.Double:
+                        raw = p.AsDouble()
+                    elif st == StorageType.ElementId:
+                        raw = p.AsElementId()
+                    else:
+                        raw = None
+                    meta[n]['raw'][display] = raw
+
+                meta[n]['values'].add(display)
+
             except:
                 pass
-    return {k: sorted(v) for k, v in sorted(pd.items())}
+
+    # Sort values and return
+    return {k: dict(v, values=sorted(v['values'])) for k, v in sorted(meta.items())}
+
+
+def make_filter_name(cat_name, param_name, val_str):
+    """Build a short, filesystem-safe WPC_ filter name (max 200 chars)."""
+    def _safe(s, maxlen):
+        import re
+        s = re.sub(r'[^\w\-]', '_', s)
+        return s[:maxlen]
+    return "{0}{1}_{2}_{3}".format(
+        WPC_PREFIX,
+        _safe(cat_name, 24),
+        _safe(param_name, 24),
+        _safe(val_str, 40),
+    )
+
+
+def find_filter_by_name(name):
+    """Return ParameterFilterElement with the given name, or None."""
+    for el in FilteredElementCollector(doc).OfClass(ParameterFilterElement).ToElements():
+        try:
+            if el.Name == name:
+                return el
+        except:
+            pass
+    return None
+
+
+def make_rule(param_id, storage_type, display_str, raw_value):
+    """
+    Build a ParameterFilterRule for a single value.
+    Returns None if the rule cannot be created for this value.
+    """
+    try:
+        # <No Value> → has-no-value rule
+        if display_str == "<No Value>" or raw_value is None:
+            try:
+                return ParameterFilterRuleFactory.CreateHasNoValueRule(param_id)
+            except:
+                return None  # Not all Revit versions support HasNoValueRule
+
+        if storage_type == StorageType.String:
+            val = "" if display_str == "<Empty>" else str(raw_value)
+            return ParameterFilterRuleFactory.CreateEqualsRule(param_id, val, False)
+
+        if storage_type == StorageType.Integer:
+            return ParameterFilterRuleFactory.CreateEqualsRule(param_id, int(raw_value))
+
+        if storage_type == StorageType.Double:
+            return ParameterFilterRuleFactory.CreateEqualsRule(
+                param_id, float(raw_value), 1e-9)
+
+        if storage_type == StorageType.ElementId:
+            if isinstance(raw_value, ElementId):
+                return ParameterFilterRuleFactory.CreateEqualsRule(param_id, raw_value)
+
+    except:
+        pass
+    return None
 
 
 # ── Form ──────────────────────────────────────────────────────────────────────
 
-class ColorizerForm(Form):
+class FilterColorizerForm(Form):
 
     def __init__(self):
         Form.__init__(self)
-        self.Text            = "Universal Element Colorizer  —  Graphical Overrides"
+        self.Text            = "Universal Element Colorizer  —  View Filters"
         self.Size            = Size(1000, 660)
         self.MinimumSize     = Size(780, 520)
         self.StartPosition   = FormStartPosition.CenterScreen
@@ -173,10 +281,10 @@ class ColorizerForm(Form):
         self.BackColor       = BG
 
         # ── state ─────────────────────────────────────────────────────────────
-        self._all_cats  = all_model_cats()   # [Category]
-        self._instances = []                 # current view instances
-        self._pd        = {}                 # {param_name: [val_str]}
-        self._colors    = {}                 # {val_str: DC}
+        self._all_cats  = all_model_cats()
+        self._instances = []
+        self._pmeta     = {}     # full param metadata (with raw values)
+        self._colors    = {}     # {val_str: DC}
         self._pal_idx   = 0
         self._busy      = False
 
@@ -212,28 +320,28 @@ class ColorizerForm(Form):
             b.Click += fn
             return b
 
-        bar.Controls.Add(mk_btn("Cancel",      self._cancel))
-        bar.Controls.Add(mk_btn("Reset View",  self._reset))
-        bar.Controls.Add(mk_btn("Apply",       self._apply, accent=True))
+        bar.Controls.Add(mk_btn("Cancel",         self._cancel))
+        bar.Controls.Add(mk_btn("Remove Filters", self._reset))
+        bar.Controls.Add(mk_btn("Apply",          self._apply, accent=True))
 
         # ── SplitContainer ────────────────────────────────────────────────────
         sc           = SplitContainer()
         sc.Dock      = DockStyle.Fill
-        sc.BackColor = MUTED      # splitter bar colour
+        sc.BackColor = MUTED
         self._sc     = sc
 
         # ═══════════════════════════════════════════════
-        # LEFT PANEL  — Category picker + Parameter picker
+        # LEFT PANEL  — Category + Parameter
         # ═══════════════════════════════════════════════
         lp           = Panel()
         lp.Dock      = DockStyle.Fill
-        lp.Padding   = Padding(10, 10, 6, 8)
+        lp.Padding   = Padding(20, 20, 10, 10)
         lp.BackColor = BG
 
-        # ── Parameter section  (pinned to bottom) ─────────────────────────────
+        # ── Parameter section (pinned bottom) ─────────────────────────────────
         pp           = Panel()
         pp.Dock      = DockStyle.Bottom
-        pp.Height    =130
+        pp.Height    =120
         pp.BackColor = BG
         pp.Padding   = Padding(0, 4, 0, 2)
 
@@ -245,21 +353,20 @@ class ColorizerForm(Form):
         lbl_param.Height    = 20
         lbl_param.Font      = Font(self.Font.FontFamily, 8, FontStyle.Bold)
 
-        # Instance / Type radio buttons
         rp           = Panel()
         rp.Dock      = DockStyle.Top
         rp.Height    = 32
         rp.BackColor = BG
 
-        self.rb_inst         = RadioButton()
-        self.rb_inst.Text    = "Instance"
+        self.rb_inst           = RadioButton()
+        self.rb_inst.Text      = "Instance"
         self.rb_inst.ForeColor = TEXT
         self.rb_inst.BackColor = BG
-        self.rb_inst.Left    = 0
-        self.rb_inst.Top     = 3
-        self.rb_inst.Width   = 90
-        self.rb_inst.Height  = 22
-        self.rb_inst.Checked = True
+        self.rb_inst.Left      = 0
+        self.rb_inst.Top       = 3
+        self.rb_inst.Width     = 90
+        self.rb_inst.Height    = 22
+        self.rb_inst.Checked   = True
         self.rb_inst.CheckedChanged += self._on_toggle
 
         self.rb_type           = RadioButton()
@@ -283,16 +390,14 @@ class ColorizerForm(Form):
         self.cb_param.ForeColor     = TEXT
         self.cb_param.SelectedIndexChanged += self._on_param
 
-        # add top-down inside pp
         pp.Controls.Add(self.cb_param)
         pp.Controls.Add(rp)
         pp.Controls.Add(lbl_param)
 
-        # ── Category section  (fills remaining left space) ────────────────────
+        # ── Category section (fills remaining) ────────────────────────────────
         cp           = Panel()
         cp.Dock      = DockStyle.Fill
         cp.BackColor = BG
-        cp.Padding = Padding(0, 0, 0, 6)
 
         lbl_cat           = Label()
         lbl_cat.Text      = "CATEGORY"
@@ -319,21 +424,20 @@ class ColorizerForm(Form):
         self.lb.SelectionMode = SelectionMode.One
         self.lb.SelectedIndexChanged += self._on_cat
 
-        # add top-down inside cp
         cp.Controls.Add(self.lb)
         cp.Controls.Add(self.tb_search)
         cp.Controls.Add(lbl_cat)
+        cp.Padding = Padding(0, 0, 0, 6)
 
-        # pp (Bottom) must be added BEFORE cp (Fill) so layout resolves correctly
         lp.Controls.Add(cp)
         lp.Controls.Add(pp)
 
         sc.Panel1.BackColor = BG
         sc.Panel1.Controls.Add(lp)
 
-        # ═══════════════════════════════════════════
-        # RIGHT PANEL  — Colour Assignments (DGV)
-        # ═══════════════════════════════════════════
+        # ═══════════════════════════════════════
+        # RIGHT PANEL  — Colour assignments DGV
+        # ═══════════════════════════════════════
         rr           = Panel()
         rr.Dock      = DockStyle.Fill
         rr.Padding   = Padding(6, 10, 10, 10)
@@ -375,7 +479,6 @@ class ColorizerForm(Form):
         self.dgv.CellBorderStyle       = self.dgv.CellBorderStyle.SingleHorizontal
         self.dgv.EnableHeadersVisualStyles = False
 
-        # Catppuccin cell styles
         self.dgv.DefaultCellStyle.BackColor          = SURFACE
         self.dgv.DefaultCellStyle.ForeColor          = TEXT
         self.dgv.DefaultCellStyle.SelectionBackColor = MUTED
@@ -385,7 +488,6 @@ class ColorizerForm(Form):
         self.dgv.ColumnHeadersDefaultCellStyle.SelectionBackColor = CARD
         self.dgv.AlternatingRowsDefaultCellStyle.BackColor = CARD
 
-        # Columns
         c0            = DataGridViewTextBoxColumn()
         c0.HeaderText = "Value"
         c0.FillWeight = 76
@@ -403,17 +505,14 @@ class ColorizerForm(Form):
         self.dgv.CellClick    += self._on_cell_click
         self.dgv.CellPainting += self._on_cell_paint
 
-        # add top-down inside rr
-        rr.Controls.Add(self.dgv)
-        rr.Controls.Add(self.lbl_hint)
+        rr.Controls.Add(self.dgv)  # Fill first
+        rr.Controls.Add(self.lbl_hint)  # Then top controls
         rr.Controls.Add(lbl_head)
-
         self.lbl_hint.BringToFront()
 
         sc.Panel2.BackColor = BG
         sc.Panel2.Controls.Add(rr)
 
-        # ── Assemble form ──────────────────────────────────────────────────────
         self.Controls.Add(bar)
         self.Controls.Add(sc)
 
@@ -455,11 +554,11 @@ class ColorizerForm(Form):
         elems = (get_unique_types(self._instances)
                  if self.rb_type.Checked
                  else self._instances)
-        self._pd = collect_params(elems)
+        self._pmeta = collect_params_with_meta(elems)
 
         self._busy = True
         self.cb_param.Items.Clear()
-        for name in sorted(self._pd.keys()):
+        for name in sorted(self._pmeta.keys()):
             self.cb_param.Items.Add(name)
         self._busy = False
 
@@ -483,7 +582,9 @@ class ColorizerForm(Form):
             self.lbl_hint.Visible = True
             return
 
-        vals = self._pd.get(str(self.cb_param.SelectedItem), [])
+        meta = self._pmeta.get(str(self.cb_param.SelectedItem), {})
+        vals = meta.get('values', [])
+
         if not vals:
             self.lbl_hint.Text    = "No values found for this parameter."
             self.lbl_hint.Visible = True
@@ -495,31 +596,26 @@ class ColorizerForm(Form):
             self._pal_idx   += 1
             self.dgv.Rows.Add(v, "")
 
-    # ── Event handlers ────────────────────────────────────────────────────────
+    # ── Events ────────────────────────────────────────────────────────────────
 
     def _on_cat_search(self, s, e):
-        if self._busy:
-            return
+        if self._busy: return
         self._fill_cat_list(self.tb_search.Text)
 
     def _on_cat(self, s, e):
-        if self._busy:
-            return
+        if self._busy: return
         self._load_params()
 
     def _on_toggle(self, s, e):
-        if self._busy or not s.Checked:
-            return
+        if self._busy or not s.Checked: return
         self._load_params()
 
     def _on_param(self, s, e):
-        if self._busy:
-            return
+        if self._busy: return
         self._fill_dgv()
 
     def _on_cell_click(self, s, e):
-        if e.ColumnIndex != 1 or e.RowIndex < 0:
-            return
+        if e.ColumnIndex != 1 or e.RowIndex < 0: return
         val = str(self.dgv.Rows[e.RowIndex].Cells[0].Value)
         dlg = ColorDialog()
         dlg.Color = self._colors.get(val, DC.White)
@@ -528,8 +624,7 @@ class ColorizerForm(Form):
             self.dgv.InvalidateRow(e.RowIndex)
 
     def _on_cell_paint(self, s, e):
-        if e.ColumnIndex != 1 or e.RowIndex < 0:
-            return
+        if e.ColumnIndex != 1 or e.RowIndex < 0: return
         e.PaintBackground(e.CellBounds, True)
         val = str(self.dgv.Rows[e.RowIndex].Cells[0].Value)
         col = self._colors.get(val)
@@ -567,41 +662,91 @@ class ColorizerForm(Form):
             return
 
         pname    = str(self.cb_param.SelectedItem)
-        use_type = self.rb_type.Checked
         cat      = self._selected_cat()
+        meta     = self._pmeta.get(pname, {})
+        param_id = meta.get('pid')
+        storage  = meta.get('storage')
+        raw_map  = meta.get('raw', {})
 
-        # Build value → OverrideGraphicSettings map
-        val_ogs   = {}
-        reset_ogs = OverrideGraphicSettings()
+        if param_id is None:
+            MessageBox.Show(
+                "Could not find parameter definition for '{0}'.".format(pname),
+                "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            return
 
-        for val, col in self._colors.items():
-            ogs = OverrideGraphicSettings()
-            rc  = RC(col.R, col.G, col.B)
-            ogs.SetSurfaceForegroundPatternId(SOLID_PATTERN.Id)
-            ogs.SetSurfaceForegroundPatternColor(rc)
-            ogs.SetCutForegroundPatternId(SOLID_PATTERN.Id)
-            ogs.SetCutForegroundPatternColor(rc)
-            val_ogs[val] = ogs
+        # Category ID list for ParameterFilterElement
+        cat_ids = List[ElementId]()
+        cat_ids.Add(cat.Id)
 
-        applied = 0
-        t = Transaction(doc, "Colorize {0} — {1}".format(cat.Name, pname))
+        applied    = 0
+        skipped    = []
+        first_fail = [None]    # mutable container for closure
+
+        t = Transaction(doc, "Filter Colorize: {0} — {1}".format(cat.Name, pname))
         t.Start()
         try:
-            for inst in self._instances:
-                active_view.SetElementOverrides(inst.Id, reset_ogs)
-                el    = doc.GetElement(inst.GetTypeId()) if use_type else inst
-                param = el.LookupParameter(pname) if el else None
-                if param is None:
+            for val, col in self._colors.items():
+                fname = make_filter_name(cat.Name, pname, val)
+
+                # Build the filter rule
+                rule = make_rule(param_id, storage, val, raw_map.get(val))
+                if rule is None:
+                    skipped.append(val)
                     continue
-                v = pval(param)
-                if v in val_ogs:
-                    active_view.SetElementOverrides(inst.Id, val_ogs[v])
-                    applied += 1
+
+                rules_list = List[FilterRule]()
+                rules_list.Add(rule)
+                elem_filter = ElementParameterFilter(rules_list)
+
+                # Get or create the ParameterFilterElement
+                pfe = find_filter_by_name(fname)
+                if pfe is None:
+                    try:
+                        pfe = ParameterFilterElement.Create(
+                            doc, fname, cat_ids, elem_filter)
+                    except Exception as ce:
+                        if first_fail[0] is None:
+                            first_fail[0] = str(ce)
+                        skipped.append(val)
+                        continue
+                else:
+                    # Update the element filter on the existing PFE
+                    try:
+                        pfe.SetElementFilter(elem_filter)
+                    except:
+                        pass
+
+                # Add to the active view if not already present
+                view_filter_ids = set(_eid(fid) for fid in active_view.GetFilters())
+                if _eid(pfe.Id) not in view_filter_ids:
+                    active_view.AddFilter(pfe.Id)
+
+                # Apply graphic overrides
+                ogs = OverrideGraphicSettings()
+                rc  = RC(col.R, col.G, col.B)
+                ogs.SetSurfaceForegroundPatternId(SOLID_PATTERN.Id)
+                ogs.SetSurfaceForegroundPatternColor(rc)
+                ogs.SetCutForegroundPatternId(SOLID_PATTERN.Id)
+                ogs.SetCutForegroundPatternColor(rc)
+                active_view.SetFilterOverrides(pfe.Id, ogs)
+                active_view.SetFilterVisibility(pfe.Id, True)
+                applied += 1
+
             t.Commit()
-            MessageBox.Show(
-                "Overrides applied to {0} of {1} elements.".format(
-                    applied, len(self._instances)),
-                "Done", MessageBoxButtons.OK, MessageBoxIcon.Information)
+
+            # ── Result message ────────────────────────────────────────────────
+            msg = "Applied {0} view filter(s) for category '{1}'.".format(
+                applied, cat.Name)
+            if skipped:
+                msg += "\n\nSkipped values ({0}):\n  {1}".format(
+                    len(skipped), "\n  ".join(skipped[:10]))
+            if first_fail[0]:
+                msg += ("\n\nNote: the selected category may have limited support "
+                        "for View Filters.\nFirst error: " + first_fail[0])
+
+            MessageBox.Show(msg, "Done", MessageBoxButtons.OK,
+                            MessageBoxIcon.Information if applied else MessageBoxIcon.Warning)
+
         except Exception as ex:
             try: t.RollBack()
             except: pass
@@ -611,23 +756,41 @@ class ColorizerForm(Form):
     # ── Reset ─────────────────────────────────────────────────────────────────
 
     def _reset(self, s, e):
-        if not self._instances:
+        """Remove all WPC_ filters from the active view (and delete orphaned ones)."""
+        view_filter_ids = list(active_view.GetFilters())
+        wpc_ids = []
+        for fid in view_filter_ids:
+            el = doc.GetElement(fid)
+            if el is not None:
+                try:
+                    if el.Name.startswith(WPC_PREFIX):
+                        wpc_ids.append(fid)
+                except:
+                    pass
+
+        if not wpc_ids:
             MessageBox.Show(
-                "No category selected or no elements found.",
-                "Nothing to Reset",
-                MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                "No WPC_ filters found in the active view.",
+                "Nothing to Remove",
+                MessageBoxButtons.OK, MessageBoxIcon.Information)
             return
 
-        reset_ogs = OverrideGraphicSettings()
-        t = Transaction(doc, "Reset Element Overrides")
+        t = Transaction(doc, "Remove WPC_ View Filters")
         t.Start()
         try:
-            for inst in self._instances:
-                active_view.SetElementOverrides(inst.Id, reset_ogs)
+            for fid in wpc_ids:
+                try:
+                    active_view.RemoveFilter(fid)
+                except:
+                    pass
+                # Attempt to delete the filter element if unused elsewhere
+                try:
+                    doc.Delete(fid)
+                except:
+                    pass
             t.Commit()
             MessageBox.Show(
-                "All graphic overrides cleared for {0} elements.".format(
-                    len(self._instances)),
+                "Removed {0} WPC_ filter(s) from the active view.".format(len(wpc_ids)),
                 "Done", MessageBoxButtons.OK, MessageBoxIcon.Information)
         except Exception as ex:
             try: t.RollBack()
@@ -642,21 +805,28 @@ class ColorizerForm(Form):
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if EXEC_PARAMS.config_mode:
-    # Config mode: silently clear overrides for all elements visible in the view
-    reset_ogs = OverrideGraphicSettings()
-    t = Transaction(doc, "Reset All Element Overrides")
-    t.Start()
-    try:
-        for el in (FilteredElementCollector(doc, active_view.Id)
-                   .WhereElementIsNotElementType()
-                   .ToElements()):
+    # Config mode: remove all WPC_ filters from the active view
+    wpc_ids = []
+    for fid in active_view.GetFilters():
+        el = doc.GetElement(fid)
+        if el is not None:
             try:
-                active_view.SetElementOverrides(el.Id, reset_ogs)
+                if el.Name.startswith(WPC_PREFIX):
+                    wpc_ids.append(fid)
             except:
                 pass
-        t.Commit()
-    except:
-        try: t.RollBack()
-        except: pass
+    if wpc_ids:
+        t = Transaction(doc, "Remove WPC_ Filters (config)")
+        t.Start()
+        try:
+            for fid in wpc_ids:
+                try: active_view.RemoveFilter(fid)
+                except: pass
+                try: doc.Delete(fid)
+                except: pass
+            t.Commit()
+        except:
+            try: t.RollBack()
+            except: pass
 else:
-    ColorizerForm().ShowDialog()
+    FilterColorizerForm().ShowDialog()
