@@ -5,9 +5,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="97e5514c-6192-402f-877a-0503c0f802f5" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Automations.panel/col2.stack/Colorize.pulldown/As Filters.pushbutton/script.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Automations.panel/col2.stack/Colorize Elements.pushbutton/script.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Walls.panel/col1.stack/Color Walls.pulldown/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Automations.panel/col2.stack/Colorize.pulldown/As Filters.pushbutton/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Automations.panel/col2.stack/Colorize.pulldown/As Filters.pushbutton/icon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Automations.panel/col2.stack/Colorize.pulldown/As Filters.pushbutton/script.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Test.pushbutton/script.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -82,11 +83,11 @@
       <recent name="E:\Github\B_Dare95\B_Dare95.extension\B-Dare95.tab\FLS.panel\Area Plan.pulldown\Create FLS Plans.pushbutton" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\mohamed.bedair.SDCNT\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Automations.panel\col2.stack\Colorize Elements.pushbutton" />
       <recent name="C:\Users\mohamed.bedair.SDCNT\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Automations.panel\col2.stack\Colorize.pulldown\As Filters.pushbutton" />
       <recent name="C:\Users\mohamed.bedair.SDCNT\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Automations.panel\col2.stack\Colorize.pulldown" />
       <recent name="C:\Users\mohamed.bedair.SDCNT\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\QoL.panel\Pre-Filter Selection.splitpushbutton\Pre-Filter by Parameter.pushbutton" />
       <recent name="C:\Users\mohamed.bedair.SDCNT\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\QoL.panel\Pre-Filter Selection.splitpushbutton" />
-      <recent name="E:\Github\B_Dare95\B_Dare95.extension\B-Dare95.tab\QoL.panel\col1.stack\Wipe Unplaced.pushbutton" />
     </key>
   </component>
   <component name="SharedIndexes">
