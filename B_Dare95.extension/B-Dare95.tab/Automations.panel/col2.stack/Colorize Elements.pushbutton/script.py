@@ -309,6 +309,7 @@ class ColorizerForm(Form):
         mode_bar           = Panel()
         mode_bar.Dock      = DockStyle.Top
         mode_bar.Height    = 46
+        mode_bar.Padding = Padding(0, 0, 0, 4)
         mode_bar.BackColor = CARD
 
         # Vertical separator accent line on the left
@@ -367,23 +368,33 @@ class ColorizerForm(Form):
         mode_bar.Controls.Add(mode_info)
 
         # ── SplitContainer ────────────────────────────────────────────────────
-        sc           = SplitContainer()
-        sc.Dock      = DockStyle.Fill
+        sc = SplitContainer()
+        sc.Dock = DockStyle.Fill
         sc.BackColor = MUTED
-        self._sc     = sc
+
+        # Add spacing below the MODE bar
+        sc.Padding = Padding(0, 6, 0, 0)
+        sc.Panel1.Padding = Padding(0)
+        sc.Panel2.Padding = Padding(0)
+
+        # Remove ugly border overlap
+        sc.BorderStyle = WFBorderStyle.None
+        sc.SplitterWidth = 8
+
+        self._sc = sc
 
         # ═══════════════════════════════════════════════════
         # LEFT PANEL  — Category + Parameter
         # ═══════════════════════════════════════════════════
         lp           = Panel()
         lp.Dock      = DockStyle.Fill
-        lp.Padding   = Padding(20, 20, 10, 10)
+        lp.Padding   = Padding(16, 60, 10, 10)
         lp.BackColor = BG
 
         # ── Parameter section (pinned at bottom) ──────────────────────────────
         pp           = Panel()
         pp.Dock      = DockStyle.Bottom
-        pp.Height    = 120
+        pp.Height    = 140
         pp.BackColor = BG
         pp.Padding   = Padding(0, 4, 0, 2)
 
@@ -567,9 +578,19 @@ class ColorizerForm(Form):
         sc.Panel2.Controls.Add(rr)
 
         # ── Assemble form ─────────────────────────────────────────────────────
-        self.Controls.Add(bar)       # DockStyle.Bottom  → bottom strip
-        self.Controls.Add(mode_bar)  # DockStyle.Top     → top strip
-        self.Controls.Add(sc)        # DockStyle.Fill    → middle
+        # IMPORTANT:
+        # Add Fill FIRST, then Top/Bottom docked controls.
+        # This prevents the SplitContainer from extending underneath
+        # the top mode bar and bottom action bar.
+
+        self.Controls.Add(sc)  # Fill area first
+        self.Controls.Add(mode_bar)  # Top dock
+        self.Controls.Add(bar)  # Bottom dock
+
+        # Force proper z-order
+        self.Controls.SetChildIndex(sc, 2)
+        self.Controls.SetChildIndex(mode_bar, 1)
+        self.Controls.SetChildIndex(bar, 0)
 
         self.Load += self._on_load
         self.ResumeLayout(True)

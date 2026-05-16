@@ -5,11 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="97e5514c-6192-402f-877a-0503c0f802f5" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/B-Dare95.tab/Automations.panel/col2.stack/Colorize Elements.pushbutton/script.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Automations.panel/col2.stack/Colorize.pulldown/As Filters.pushbutton/icon.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Automations.panel/col2.stack/Colorize.pulldown/As Filters.pushbutton/script.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.tab/Test.panel/Test.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.tab/Test.panel/Test.pushbutton/script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B-Dare95.tab/Automations.panel/col2.stack/Colorize Elements.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B-Dare95.tab/Automations.panel/col2.stack/Colorize Elements.pushbutton/script.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -31,7 +28,7 @@
   </component>
   <component name="HighlightingSettingsPerFile">
     <setting file="file://$PROJECT_DIR$/Archved Code/Auto Doors/Auto Doors_script.py" root0="SKIP_INSPECTION" />
-    <setting file="file://$PROJECT_DIR$/B-Dare95.tab/FLS.panel/Area Plan.pulldown/Area from Rooms.pushbutton/Area from Rooms_script.py" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Automations.panel/col2.stack/Colorize Elements.pushbutton/script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Inspection.panel/Add Issue VIew.pushbutton/Add Issue View_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/B-Dare95.tab/Links.panel/col1.stack/Levels &amp; Grids Check.pushbutton/Lvls &amp; Grids_script.py" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/Test.tab/Test.panel/Test.pushbutton/script.py" root0="SKIP_INSPECTION" />
@@ -93,7 +90,7 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-python-sdk-1aa8deef9a7b-6d6dccd035ac-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-253.32098.104" />
+        <option value="bundled-python-sdk-ce6832f46686-7b97d883f26b-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-252.25557.178" />
       </set>
     </attachedChunks>
   </component>
