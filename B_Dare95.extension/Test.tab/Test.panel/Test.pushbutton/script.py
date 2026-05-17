@@ -1,1041 +1,1157 @@
 # -*- coding: utf-8 -*-
-"""
-Universal Element Colorizer
-════════════════════════════
-Two colorize modes selectable via the MODE toggle at the top:
+__title__ = "Pre-Filter by Parameter"
+__author__ = "Mohamed Bedair"
+__version__ = '2.0.0'
+__doc__ = """
 
-  • By View Filter     — creates ParameterFilterElement objects (WPC_ prefix)
-                         stored in the document and applied to the active view.
-  • By Graphic Override — applies per-element solid surface/cut fill overrides
-                         directly on each instance in the active view.
+Description:
+Finds all Revit elements in the document matching a selected category
+and optional parameter-value filters (AND logic). Displays results in a
+modeless window showing [Name, ID, Level] for each match. Clicking a row
+opens a suitable view containing that element and zooms to it.
 
-Workflow
-────────
-1. Pick a MODE at the top (Filter or Override).
-2. Pick a category from the left list  (use the search box to narrow).
-3. Toggle Instance / Type to control which parameters are shown.
-4. Pick a parameter from the dropdown.
-5. All unique values appear on the right with auto-assigned palette colours.
-   • Click a colour swatch to open the colour picker.
-   • Click the ON / OFF pill to exclude that value from being colourised.
-6. Press Apply.
+How-to:
+-> Run the script
+-> Select a single category from the list
+-> (Optional) Pick a parameter and value from the filter row
+-> (Optional) Click "+ Add Filter" to stack more constraints
+-> Click "Find Elements"
+-> Click any row in the results to navigate to that element in Revit
+-> Click "Done" or close the results window when finished
 
-Reset button
-   Filter mode  → removes all WPC_ filters from the active view.
-   Override mode → clears overrides on every loaded element.
-
-Config-mode (right-click the button) also removes WPC_ filters.
+Author: Mohamed Bedair
 """
 
+# ─── IMPORTS ──────────────────────────────────────────────────────────────────
+import System
 import clr
-clr.AddReference('System.Windows.Forms')
-clr.AddReference('System.Drawing')
+clr.AddReference("PresentationFramework")
+clr.AddReference("PresentationCore")
+clr.AddReference("WindowsBase")
 
-from System.Windows.Forms import (
-    Form, SplitContainer, FixedPanel,
-    FlowLayoutPanel, FlowDirection,
-    Panel, Label, RadioButton,
-    ComboBox, ComboBoxStyle, TextBox, ListBox, SelectionMode,
-    Button, FlatStyle, ColorDialog,
-    DataGridView, DataGridViewTextBoxColumn,
-    DataGridViewAutoSizeColumnsMode, DataGridViewSelectionMode,
-    DataGridViewColumnSortMode,
-    DockStyle, Padding, FormStartPosition, FormBorderStyle,
-    BorderStyle as WFBorderStyle,
-    MessageBox, MessageBoxButtons, MessageBoxIcon, DialogResult,
-)
-from System.Drawing import (
-    Color as DC, Size, Font, FontStyle,
-    SolidBrush, Rectangle, RectangleF, StringFormat, StringAlignment,
-)
 from System.Collections.Generic import List
+from System.Windows.Threading import Dispatcher, DispatcherFrame
 from Autodesk.Revit.DB import (
-    FilteredElementCollector, FillPatternElement,
-    OverrideGraphicSettings, Transaction,
-    StorageType, ElementId, CategoryType,
-    Color as RC,
-    ParameterFilterElement, ParameterFilterRuleFactory,
-    ElementParameterFilter, FilterRule,
+    FilteredElementCollector, ElementCategoryFilter,
+    CategoryType, ElementId, StorageType
 )
-from pyrevit import EXEC_PARAMS
+from Autodesk.Revit.UI import TaskDialog
+from pyrevit import script
 
-# ── Revit context ─────────────────────────────────────────────────────────────
+import System.Windows
+import System.Windows.Controls as Controls
+import System.Windows.Media as Media
+import System.Windows.Input as WinInput
+from System.Windows import (
+    Thickness, CornerRadius, GridLength, GridUnitType, Visibility
+)
+from System.Windows.Markup import XamlReader
 
-uidoc       = __revit__.ActiveUIDocument
-doc         = uidoc.Document
-active_view = doc.ActiveView
+# ─── REVIT HANDLES ────────────────────────────────────────────────────────────
+doc   = __revit__.ActiveUIDocument.Document
+uidoc = __revit__.ActiveUIDocument
 
-_pats         = FilteredElementCollector(doc).OfClass(FillPatternElement).ToElements()
-SOLID_PATTERN = next((p for p in _pats if p.GetFillPattern().IsSolidFill), None)
+# ─── THEME ────────────────────────────────────────────────────────────────────
+BG      = "#1E1E2E"
+CARD    = "#2A2A3C"
+SURFACE = "#313244"
+MUTED   = "#45475A"
+TEXT    = "#CDD6F4"
+SUBTEXT = "#000000"    # ComboBox popup item text (light background)
+HINT    = "#A6ADC8"    # muted hint / status text
+ACCENT  = "#F0A500"
+HOVER   = "#3D3D5C"    # row hover highlight in results window
 
-# ── Catppuccin Mocha palette ──────────────────────────────────────────────────
+def _brush(hex_str):
+    h = hex_str.lstrip('#')
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return Media.SolidColorBrush(Media.Color.FromRgb(r, g, b))
 
-BG      = DC.FromArgb(0x1E, 0x1E, 0x2E)
-CARD    = DC.FromArgb(0x2A, 0x2A, 0x3C)
-SURFACE = DC.FromArgb(0x31, 0x32, 0x44)
-MUTED   = DC.FromArgb(0x45, 0x47, 0x5A)
-TEXT    = DC.FromArgb(0xCD, 0xD6, 0xF4)
-SUBTEXT = DC.FromArgb(0xA6, 0xAD, 0xC8)
-ACCENT  = DC.FromArgb(0xF0, 0xA5, 0x00)
-GREEN   = DC.FromArgb(166, 227, 161)   # Catppuccin green  – ON  state
-DARK    = DC.FromArgb(0x1E, 0x1E, 0x2E)  # base – ON label text
+SURFACE_BRUSH = _brush(SURFACE)
+MUTED_BRUSH   = _brush(MUTED)
+TEXT_BRUSH    = _brush(TEXT)
+HINT_BRUSH    = _brush(HINT)
+DARK_BRUSH    = Media.SolidColorBrush(Media.Color.FromRgb(20, 20, 20))
+TRANS_BRUSH   = Media.Brushes.Transparent
+ACCENT_BRUSH  = _brush(ACCENT)
+CARD_BRUSH    = _brush(CARD)
+HOVER_BRUSH   = _brush(HOVER)
 
-PALETTE = [
-    DC.FromArgb(243, 139, 168),
-    DC.FromArgb(250, 179, 135),
-    DC.FromArgb(249, 226, 175),
-    DC.FromArgb(166, 227, 161),
-    DC.FromArgb(137, 180, 250),
-    DC.FromArgb(203, 166, 247),
-    DC.FromArgb(148, 226, 213),
-    DC.FromArgb(116, 199, 236),
-    DC.FromArgb(245, 194, 231),
-    DC.FromArgb(180, 190, 254),
-]
+# ─── PICKER XAML ──────────────────────────────────────────────────────────────
+# Same as original but the confirm button now reads "Find Elements".
 
-WPC_PREFIX = "WPC_"
+PICKER_XAML = """
+<Window
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Pre-Filter by Parameter"
+    Width="390" MinHeight="120" MaxHeight="750"
+    SizeToContent="Height"
+    WindowStartupLocation="CenterScreen"
+    ResizeMode="NoResize"
+    Background="{BG}"
+    Foreground="{TEXT}"
+    FontFamily="Segoe UI"
+    FontSize="13">
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+    <Window.Resources>
 
-def _eid(eid):
-    try:    return str(eid.Value)
-    except: return str(eid.IntegerValue)
+        <!-- ── Slim ScrollBar ── -->
+        <Style x:Key="ScrollThumbStyle" TargetType="Thumb">
+            <Setter Property="Background" Value="{MUTED}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="3"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{SUBTEXT}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style TargetType="ScrollBar">
+            <Setter Property="Background" Value="{CARD}"/>
+            <Setter Property="Width" Value="6"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid Background="{CARD}">
+                            <Track Name="PART_Track" IsDirectionReversed="True">
+                                <Track.Thumb>
+                                    <Thumb Style="{StaticResource ScrollThumbStyle}"/>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ── RadioButton (category row) ── -->
+        <Style TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{TEXT}"/>
+            <Setter Property="Margin"     Value="0,2,0,2"/>
+            <Setter Property="Cursor"     Value="Hand"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="18"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="Ring"
+                                    Grid.Column="0"
+                                    Width="14" Height="14"
+                                    CornerRadius="7"
+                                    Background="{SURFACE}"
+                                    BorderBrush="{MUTED}"
+                                    BorderThickness="1.5"
+                                    VerticalAlignment="Center"/>
+                            <Ellipse x:Name="Dot"
+                                     Grid.Column="0"
+                                     Width="6" Height="6"
+                                     Fill="{BG}"
+                                     HorizontalAlignment="Center"
+                                     VerticalAlignment="Center"
+                                     Visibility="Collapsed"/>
+                            <ContentPresenter Grid.Column="1"
+                                              Margin="8,0,0,0"
+                                              VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Ring" Property="Background"  Value="{ACCENT}"/>
+                                <Setter TargetName="Ring" Property="BorderBrush" Value="{ACCENT}"/>
+                                <Setter TargetName="Dot"  Property="Visibility"  Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Ring" Property="BorderBrush" Value="{ACCENT}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ── Accent (confirm) button ── -->
+        <Style x:Key="AccentButton" TargetType="Button">
+            <Setter Property="Background"      Value="{ACCENT}"/>
+            <Setter Property="Foreground"      Value="{BG}"/>
+            <Setter Property="FontWeight"      Value="SemiBold"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="Height"          Value="36"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.7"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ── Ghost button (+ Add Filter) ── -->
+        <Style x:Key="GhostButton" TargetType="Button">
+            <Setter Property="Background"      Value="Transparent"/>
+            <Setter Property="Foreground"      Value="{TEXT}"/>
+            <Setter Property="FontSize"        Value="12"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="Padding"         Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <TextBlock x:Name="Tb"
+                                   Text="{TemplateBinding Content}"
+                                   Foreground="{TemplateBinding Foreground}"
+                                   FontSize="{TemplateBinding FontSize}"
+                                   VerticalAlignment="Center"/>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Tb" Property="Foreground" Value="{ACCENT}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Tb" Property="Opacity" Value="0.35"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+    </Window.Resources>
+
+    <Border Padding="16" Background="{BG}">
+        <StackPanel>
+
+            <!-- Header -->
+            <TextBlock Text="Choose Category"
+                       FontSize="15" FontWeight="SemiBold"
+                       Foreground="{TEXT}"
+                       Margin="0,0,0,10"/>
+
+            <!-- Search box -->
+            <Border Background="{SURFACE}" CornerRadius="6" Margin="0,0,0,10"
+                    BorderBrush="{MUTED}" BorderThickness="1">
+                <TextBox x:Name="SearchBox"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         Foreground="{TEXT}"
+                         CaretBrush="{ACCENT}"
+                         Padding="8,6"
+                         FontSize="12"
+                         ToolTip="Filter categories..."/>
+            </Border>
+
+            <!-- Category list (RadioButtons) -->
+            <Border Background="{CARD}" CornerRadius="8"
+                    Padding="10,8" Margin="0,0,0,14">
+                <ScrollViewer MaxHeight="300"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Padding="0,0,4,0">
+                    <StackPanel x:Name="CategoryPanel"/>
+                </ScrollViewer>
+            </Border>
+
+            <!-- Divider -->
+            <Border Height="1" Background="{MUTED}" Opacity="0.4" Margin="0,0,0,12"/>
+
+            <!-- Parameter Filters header -->
+            <DockPanel Margin="0,0,0,8" LastChildFill="False">
+                <TextBlock Text="PARAMETER FILTERS"
+                           Foreground="{TEXT}" FontSize="10" FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           DockPanel.Dock="Left"/>
+                <Button x:Name="AddRowBtn"
+                        Content="+ Add Filter"
+                        Style="{StaticResource GhostButton}"
+                        DockPanel.Dock="Right"
+                        IsEnabled="False"/>
+            </DockPanel>
+
+            <!-- Column labels — widths mirror the row grid -->
+            <Grid Margin="0,0,0,5">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="10"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="34"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Parameter"
+                           Foreground="{TEXT}" FontSize="11" Margin="4,0,0,0"/>
+                <TextBlock Grid.Column="2" Text="Value"
+                           Foreground="{TEXT}" FontSize="11" Margin="4,0,0,0"/>
+            </Grid>
+
+            <!-- Dynamic filter rows injected by Python -->
+            <StackPanel x:Name="RowsPanel" Margin="0,0,0,12"/>
+
+            <!-- Confirm / search button -->
+            <Button x:Name="ConfirmBtn"
+                    Content="Find Elements"
+                    Style="{StaticResource AccentButton}"
+                    IsEnabled="False"/>
+
+        </StackPanel>
+    </Border>
+</Window>
+""".replace("{BG}", BG).replace("{CARD}", CARD).replace("{SURFACE}", SURFACE) \
+   .replace("{MUTED}", MUTED).replace("{TEXT}", TEXT).replace("{SUBTEXT}", SUBTEXT) \
+   .replace("{ACCENT}", ACCENT)
 
 
-def pval(param):
-    """Return a display string for a parameter value."""
-    if param is None or not param.HasValue:
-        return "<No Value>"
-    st = param.StorageType
-    if st == StorageType.String:
-        v = param.AsString()
-        return v if v else "<Empty>"
-    if st == StorageType.Integer:
-        return str(param.AsInteger())
-    if st == StorageType.Double:
-        return str(round(param.AsDouble(), 4))
-    if st == StorageType.ElementId:
-        eid = param.AsElementId()
-        if eid == ElementId.InvalidElementId:
-            return "<None>"
-        el = doc.GetElement(eid)
-        try:   return el.Name if el else _eid(eid)
-        except: return _eid(eid)
-    return "<Unknown>"
+# ─── RESULTS XAML ─────────────────────────────────────────────────────────────
+# Modeless window: header, search box, column headers, scrollable rows, Done btn.
+
+RESULTS_XAML = """
+<Window
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Found Elements"
+    Width="560" Height="640"
+    MinWidth="440" MinHeight="320"
+    WindowStartupLocation="CenterScreen"
+    ResizeMode="CanResize"
+    Background="{BG}"
+    Foreground="{TEXT}"
+    FontFamily="Segoe UI"
+    FontSize="13">
+
+    <Window.Resources>
+
+        <!-- ── Slim ScrollBar ── -->
+        <Style x:Key="ScrollThumbStyle" TargetType="Thumb">
+            <Setter Property="Background" Value="{MUTED}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="3"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{ACCENT}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style TargetType="ScrollBar">
+            <Setter Property="Background" Value="{CARD}"/>
+            <Setter Property="Width" Value="6"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid Background="{CARD}">
+                            <Track Name="PART_Track" IsDirectionReversed="True">
+                                <Track.Thumb>
+                                    <Thumb Style="{StaticResource ScrollThumbStyle}"/>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ── Accent (Done) button ── -->
+        <Style x:Key="AccentButton" TargetType="Button">
+            <Setter Property="Background"      Value="{ACCENT}"/>
+            <Setter Property="Foreground"      Value="{BG}"/>
+            <Setter Property="FontWeight"      Value="SemiBold"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="Height"          Value="36"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.7"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+    </Window.Resources>
+
+    <Border Padding="16">
+        <DockPanel LastChildFill="True">
+
+            <!-- ── Header ── -->
+            <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+                <TextBlock x:Name="CountLabel"
+                           FontSize="15" FontWeight="SemiBold"
+                           Foreground="{TEXT}"/>
+                <TextBlock Text="Click a row to open and zoom to that element"
+                           Foreground="{HINT}"
+                           FontSize="11" Margin="0,3,0,0"/>
+            </StackPanel>
+
+            <!-- ── Search / filter box ── -->
+            <Border DockPanel.Dock="Top"
+                    Background="{SURFACE}" CornerRadius="6"
+                    Margin="0,0,0,10"
+                    BorderBrush="{MUTED}" BorderThickness="1">
+                <TextBox x:Name="SearchBox"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         Foreground="{TEXT}"
+                         CaretBrush="{ACCENT}"
+                         Padding="8,6"
+                         FontSize="12"
+                         ToolTip="Filter results by name or level..."/>
+            </Border>
+
+            <!-- ── Done button (bottom) ── -->
+            <Button x:Name="DoneBtn"
+                    DockPanel.Dock="Bottom"
+                    Content="Done"
+                    Style="{StaticResource AccentButton}"
+                    Margin="0,10,0,0"/>
+
+            <!-- ── Status label (above Done button) ── -->
+            <TextBlock x:Name="StatusLabel"
+                       DockPanel.Dock="Bottom"
+                       Foreground="{HINT}"
+                       FontSize="11"
+                       TextAlignment="Center"
+                       Margin="0,8,0,0"
+                       Text=" "/>
+
+            <!-- ── Column headers ── -->
+            <Grid DockPanel.Dock="Top" Margin="2,0,8,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="86"/>
+                    <ColumnDefinition Width="110"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="NAME"
+                           Foreground="{HINT}" FontSize="10" FontWeight="SemiBold"
+                           Margin="10,0,0,0"/>
+                <TextBlock Grid.Column="1" Text="ELEMENT ID"
+                           Foreground="{HINT}" FontSize="10" FontWeight="SemiBold"
+                           Margin="4,0,0,0"/>
+                <TextBlock Grid.Column="2" Text="LEVEL"
+                           Foreground="{HINT}" FontSize="10" FontWeight="SemiBold"
+                           Margin="4,0,0,0"/>
+            </Grid>
+            <Border DockPanel.Dock="Top"
+                    Height="1" Background="{MUTED}" Opacity="0.4" Margin="0,0,0,4"/>
+
+            <!-- ── Scrollable rows area ── -->
+            <Border Background="{CARD}" CornerRadius="8" Padding="2">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Padding="0,0,4,0">
+                    <StackPanel x:Name="RowsPanel" Margin="2,4,2,4"/>
+                </ScrollViewer>
+            </Border>
+
+        </DockPanel>
+    </Border>
+</Window>
+""".replace("{BG}", BG).replace("{CARD}", CARD).replace("{SURFACE}", SURFACE) \
+   .replace("{MUTED}", MUTED).replace("{TEXT}", TEXT).replace("{HINT}", HINT) \
+   .replace("{ACCENT}", ACCENT)
 
 
-def all_model_cats():
-    cats = []
-    for c in doc.Settings.Categories:
-        try:
-            if c.CategoryType == CategoryType.Model:
-                cats.append(c)
-        except:
-            pass
-    return sorted(cats, key=lambda c: c.Name)
+# ─── REVIT HELPERS ────────────────────────────────────────────────────────────
 
-
-def get_instances(cat_id):
+def _eid_int(eid):
+    """Read ElementId integer safely across Revit versions."""
     try:
-        return list(
-            FilteredElementCollector(doc, active_view.Id)
-            .OfCategoryId(cat_id)
-            .WhereElementIsNotElementType()
-            .ToElements()
-        )
-    except:
+        return eid.Value          # Revit 2025+ (Int64)
+    except AttributeError:
+        return eid.IntegerValue   # Revit < 2025
+
+
+def get_all_category_names(doc):
+    return sorted(
+        cat.Name for cat in doc.Settings.Categories
+        if cat.CategoryType == CategoryType.Model
+    )
+
+
+def get_category_by_name(doc, name):
+    for cat in doc.Settings.Categories:
+        if cat.Name == name:
+            return cat
+    return None
+
+
+def get_param_value_string(param):
+    """Convert any parameter value to a readable string, or None."""
+    try:
+        if param is None or not param.HasValue:
+            return None
+        st = param.StorageType
+        if st == StorageType.String:
+            v = param.AsString()
+            return v if v else None
+        elif st == StorageType.Integer:
+            vs = param.AsValueString()
+            return vs if vs else str(param.AsInteger())
+        elif st == StorageType.Double:
+            vs = param.AsValueString()
+            return vs if vs else str(round(param.AsDouble(), 6))
+        elif st == StorageType.ElementId:
+            eid = param.AsElementId()
+            if eid is None or _eid_int(eid) < 0:
+                return None
+            try:
+                e = doc.GetElement(eid)
+                if e is not None and hasattr(e, 'Name') and e.Name:
+                    return e.Name
+            except Exception:
+                pass
+            return str(_eid_int(eid))
+        return None
+    except Exception:
+        return None
+
+
+def get_params_for_category(category_name):
+    """Sorted list of every parameter name (instance + type) for *category_name*."""
+    cat_obj = get_category_by_name(doc, category_name)
+    if cat_obj is None:
+        return []
+
+    params         = set()
+    seen_type_ints = set()
+
+    try:
+        col = (FilteredElementCollector(doc)
+               .WherePasses(ElementCategoryFilter(cat_obj.Id))
+               .WhereElementIsNotElementType())
+        for elem in col:
+            for p in elem.Parameters:
+                if p.Definition:
+                    params.add(p.Definition.Name)
+            try:
+                tid = elem.GetTypeId()
+                if tid and _eid_int(tid) > 0:
+                    k = _eid_int(tid)
+                    if k not in seen_type_ints:
+                        seen_type_ints.add(k)
+                        etype = doc.GetElement(tid)
+                        if etype:
+                            for p in etype.Parameters:
+                                if p.Definition:
+                                    params.add(p.Definition.Name)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    return sorted(params)
+
+
+def get_values_for_param(category_name, param_name):
+    """Sorted list of unique human-readable values for *param_name*."""
+    cat_obj = get_category_by_name(doc, category_name)
+    if cat_obj is None:
+        return []
+
+    values         = set()
+    seen_type_ints = set()
+
+    try:
+        col = (FilteredElementCollector(doc)
+               .WherePasses(ElementCategoryFilter(cat_obj.Id))
+               .WhereElementIsNotElementType())
+        for elem in col:
+            p = elem.LookupParameter(param_name)
+            if p:
+                v = get_param_value_string(p)
+                if v is not None:
+                    values.add(v)
+            try:
+                tid = elem.GetTypeId()
+                if tid and _eid_int(tid) > 0:
+                    k = _eid_int(tid)
+                    if k not in seen_type_ints:
+                        seen_type_ints.add(k)
+                        etype = doc.GetElement(tid)
+                        if etype:
+                            p = etype.LookupParameter(param_name)
+                            if p:
+                                v = get_param_value_string(p)
+                                if v is not None:
+                                    values.add(v)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    return sorted(values)
+
+
+def element_matches_single_param(elem, param_name, param_value):
+    """True if elem or its type has *param_name* equal to *param_value*."""
+    try:
+        p = elem.LookupParameter(param_name)
+        if p and get_param_value_string(p) == param_value:
+            return True
+    except Exception:
+        pass
+    try:
+        tid = elem.GetTypeId()
+        if tid and _eid_int(tid) > 0:
+            etype = doc.GetElement(tid)
+            if etype:
+                p = etype.LookupParameter(param_name)
+                if p and get_param_value_string(p) == param_value:
+                    return True
+    except Exception:
+        pass
+    return False
+
+
+def element_matches_all_filters(elem, param_filters):
+    """True if elem satisfies every (param_name, param_value) pair (AND logic)."""
+    if not param_filters:
+        return True
+    for pname, pval in param_filters:
+        if not element_matches_single_param(elem, pname, pval):
+            return False
+    return True
+
+
+def collect_matching_elements(category_name, param_filters):
+    """
+    Return every non-type element whose category is *category_name* and that
+    satisfies all *param_filters*.  Returns a list of Revit Element objects.
+    """
+    cat_obj = get_category_by_name(doc, category_name)
+    if cat_obj is None:
+        return []
+    try:
+        col = (FilteredElementCollector(doc)
+               .WherePasses(ElementCategoryFilter(cat_obj.Id))
+               .WhereElementIsNotElementType()
+               .ToElements())
+        if not param_filters:
+            return list(col)
+        return [e for e in col if element_matches_all_filters(e, param_filters)]
+    except Exception:
         return []
 
 
-def get_unique_types(instances):
-    seen, types = set(), []
-    for inst in instances:
-        try:
-            tid = inst.GetTypeId()
-            k   = _eid(tid)
-            if k not in seen and tid != ElementId.InvalidElementId:
-                seen.add(k)
-                t = doc.GetElement(tid)
-                if t:
-                    types.append(t)
-        except:
-            pass
-    return types
-
-
-def collect_params_with_meta(elems):
+def get_element_display_name(elem):
     """
-    Returns:
-      { param_name: {
-          'values'  : [sorted display strings],
-          'storage' : StorageType,
-          'pid'     : ElementId,   ← parameter definition ID
-          'raw'     : {display_str: raw_value}
-      }}
+    Best human-readable name for *elem*.
+    Priority: elem.Name → Mark param → type name → category name.
     """
-    meta = {}
-    for el in elems:
-        for p in el.Parameters:
-            try:
-                if p.Definition is None:
-                    continue
-                n  = p.Definition.Name
-                st = p.StorageType
-                if n not in meta:
-                    meta[n] = {'values': set(), 'storage': st, 'pid': p.Id, 'raw': {}}
-                display = pval(p)
-                if display not in meta[n]['raw']:
-                    if not p.HasValue:
-                        raw = None
-                    elif st == StorageType.String:
-                        raw = p.AsString() or ""
-                    elif st == StorageType.Integer:
-                        raw = p.AsInteger()
-                    elif st == StorageType.Double:
-                        raw = p.AsDouble()
-                    elif st == StorageType.ElementId:
-                        raw = p.AsElementId()
-                    else:
-                        raw = None
-                    meta[n]['raw'][display] = raw
-                meta[n]['values'].add(display)
-            except:
-                pass
-    return {k: dict(v, values=sorted(v['values'])) for k, v in sorted(meta.items())}
-
-
-def make_filter_name(cat_name, param_name, val_str):
-    def _safe(s, maxlen):
-        import re
-        return re.sub(r'[^\w\-]', '_', s)[:maxlen]
-    return "{0}{1}_{2}_{3}".format(
-        WPC_PREFIX, _safe(cat_name, 24), _safe(param_name, 24), _safe(val_str, 40))
-
-
-def find_filter_by_name(name):
-    for el in FilteredElementCollector(doc).OfClass(ParameterFilterElement).ToElements():
-        try:
-            if el.Name == name:
-                return el
-        except:
-            pass
-    return None
-
-
-def make_rule(param_id, storage_type, display_str, raw_value):
-    """Build a ParameterFilterRule for a single value. Returns None on failure."""
     try:
-        if display_str == "<No Value>" or raw_value is None:
-            try:
-                return ParameterFilterRuleFactory.CreateHasNoValueRule(param_id)
-            except:
-                return None
-        if storage_type == StorageType.String:
-            val = "" if display_str == "<Empty>" else str(raw_value)
-            return ParameterFilterRuleFactory.CreateEqualsRule(param_id, val, False)
-        if storage_type == StorageType.Integer:
-            return ParameterFilterRuleFactory.CreateEqualsRule(param_id, int(raw_value))
-        if storage_type == StorageType.Double:
-            return ParameterFilterRuleFactory.CreateEqualsRule(
-                param_id, float(raw_value), 1e-9)
-        if storage_type == StorageType.ElementId:
-            if isinstance(raw_value, ElementId):
-                return ParameterFilterRuleFactory.CreateEqualsRule(param_id, raw_value)
-    except:
+        n = elem.Name
+        if n and n.strip():
+            return n.strip()
+    except Exception:
         pass
-    return None
+    try:
+        p = elem.LookupParameter("Mark")
+        if p and p.HasValue:
+            v = get_param_value_string(p)
+            if v:
+                return v
+    except Exception:
+        pass
+    try:
+        tid = elem.GetTypeId()
+        if tid and _eid_int(tid) > 0:
+            t = doc.GetElement(tid)
+            if t and hasattr(t, 'Name') and t.Name:
+                return t.Name
+    except Exception:
+        pass
+    try:
+        return elem.Category.Name if elem.Category else u"Unknown"
+    except Exception:
+        return u"Unknown"
 
 
-# ── Form ──────────────────────────────────────────────────────────────────────
+def get_element_level_name(elem):
+    """
+    Best level string for *elem*.
+    Priority: LevelId lookup → Level parameter → em-dash fallback.
+    """
+    try:
+        lid = elem.LevelId
+        if lid is not None and _eid_int(lid) > 0:
+            lv = doc.GetElement(lid)
+            if lv and hasattr(lv, 'Name') and lv.Name:
+                return lv.Name
+    except Exception:
+        pass
+    try:
+        p = elem.LookupParameter("Level")
+        if p and p.HasValue:
+            v = p.AsValueString() or p.AsString()
+            if v:
+                return v
+    except Exception:
+        pass
+    return u"\u2014"   # em dash
 
-class ColorizerForm(Form):
 
-    def __init__(self):
-        Form.__init__(self)
-        self.Text            = "Universal Element Colorizer"
-        self.Size            = Size(1020, 720)
-        self.MinimumSize     = Size(800, 560)
-        self.StartPosition   = FormStartPosition.CenterScreen
-        self.FormBorderStyle = FormBorderStyle.Sizable
-        self.BackColor       = BG
+# ─── UI HELPERS ───────────────────────────────────────────────────────────────
 
-        # ── State ─────────────────────────────────────────────────────────────
-        self._all_cats  = all_model_cats()
-        self._instances = []
-        self._pmeta     = {}
-        self._colors    = {}     # {val_str: DC}
-        self._enabled   = {}     # {val_str: bool}   ← ON / OFF per value
-        self._pal_idx   = 0
-        self._busy      = False
+def _combo_item(text):
+    """ComboBoxItem with dark text — readable in the default white popup."""
+    item = Controls.ComboBoxItem()
+    item.Content    = text
+    item.Foreground = DARK_BRUSH
+    item.Padding    = Thickness(6, 4, 6, 4)
+    return item
 
-        self._build_ui()
-        self._fill_cat_list("")
 
-    # ── UI construction ───────────────────────────────────────────────────────
-
-    def _build_ui(self):
-        self.SuspendLayout()
-
-        # ── Bottom action bar ─────────────────────────────────────────────────
-        bar               = FlowLayoutPanel()
-        bar.Dock          = DockStyle.Bottom
-        bar.Height        = 54
-        bar.FlowDirection = FlowDirection.RightToLeft
-        bar.WrapContents  = False
-        bar.Padding       = Padding(8, 10, 8, 0)
-        bar.BackColor     = CARD
-
-        def mk_btn(text, fn, accent=False, w=120):
-            b = Button()
-            b.Text      = text
-            b.Width     = w
-            b.Height    = 32
-            b.Margin    = Padding(6, 0, 0, 0)
-            b.FlatStyle = FlatStyle.Flat
-            b.BackColor = ACCENT if accent else SURFACE
-            b.ForeColor = BG if accent else TEXT
-            b.Font      = Font(self.Font.FontFamily, 9, FontStyle.Regular)
-            b.FlatAppearance.BorderColor = MUTED
-            b.FlatAppearance.BorderSize  = 1
-            b.Click += fn
-            return b
-
-        bar.Controls.Add(mk_btn("Cancel",         self._cancel, w=100))
-        self._btn_reset = mk_btn("Remove Filters", self._reset, w=140)
-        bar.Controls.Add(self._btn_reset)
-        bar.Controls.Add(mk_btn("Apply",           self._apply, accent=True, w=110))
-
-        # ── MODE toggle strip (top) ───────────────────────────────────────────
-        mode_bar           = Panel()
-        mode_bar.Dock      = DockStyle.Top
-        mode_bar.Height    = 46
-        mode_bar.BackColor = CARD
-
-        # Vertical separator accent line on the left
-        accent_line           = Panel()
-        accent_line.Left      = 0
-        accent_line.Top       = 0
-        accent_line.Width     = 4
-        accent_line.Height    = 46
-        accent_line.BackColor = ACCENT
-
-        lbl_mode           = Label()
-        lbl_mode.Text      = "MODE"
-        lbl_mode.ForeColor = ACCENT
-        lbl_mode.BackColor = CARD
-        lbl_mode.Font      = Font(self.Font.FontFamily, 8, FontStyle.Bold)
-        lbl_mode.Left      = 18
-        lbl_mode.Top       = 15
-        lbl_mode.AutoSize  = True
-
-        self.rb_filter           = RadioButton()
-        self.rb_filter.Text      = "By View Filter"
-        self.rb_filter.ForeColor = TEXT
-        self.rb_filter.BackColor = CARD
-        self.rb_filter.Checked   = True
-        self.rb_filter.Left      = 78
-        self.rb_filter.Top       = 12
-        self.rb_filter.Width     = 130
-        self.rb_filter.Height    = 22
-        self.rb_filter.Font      = Font(self.Font.FontFamily, 9, FontStyle.Regular)
-        self.rb_filter.CheckedChanged += self._on_mode_change
-
-        self.rb_override           = RadioButton()
-        self.rb_override.Text      = "By Graphic Override"
-        self.rb_override.ForeColor = TEXT
-        self.rb_override.BackColor = CARD
-        self.rb_override.Left      = 218
-        self.rb_override.Top       = 12
-        self.rb_override.Width     = 180
-        self.rb_override.Height    = 22
-        self.rb_override.Font      = Font(self.Font.FontFamily, 9, FontStyle.Regular)
-        self.rb_override.CheckedChanged += self._on_mode_change
-
-        mode_info           = Label()
-        mode_info.Text      = "Filter: creates WPC_ view filters   |   Override: per-element surface colour"
-        mode_info.ForeColor = SUBTEXT
-        mode_info.BackColor = CARD
-        mode_info.Font      = Font(self.Font.FontFamily, 7.5, FontStyle.Italic)
-        mode_info.Left      = 410
-        mode_info.Top       = 15
-        mode_info.AutoSize  = True
-
-        mode_bar.Controls.Add(accent_line)
-        mode_bar.Controls.Add(lbl_mode)
-        mode_bar.Controls.Add(self.rb_filter)
-        mode_bar.Controls.Add(self.rb_override)
-        mode_bar.Controls.Add(mode_info)
-
-        # ── SplitContainer ────────────────────────────────────────────────────
-        sc           = SplitContainer()
-        sc.Dock      = DockStyle.Fill
-        sc.BackColor = MUTED
-        self._sc     = sc
-
-        # ═══════════════════════════════════════════════════
-        # LEFT PANEL  — Category + Parameter
-        # ═══════════════════════════════════════════════════
-        lp           = Panel()
-        lp.Dock      = DockStyle.Fill
-        lp.Padding   = Padding(20, 20, 10, 10)
-        lp.BackColor = BG
-
-        # ── Parameter section (pinned at bottom) ──────────────────────────────
-        pp           = Panel()
-        pp.Dock      = DockStyle.Bottom
-        pp.Height    = 120
-        pp.BackColor = BG
-        pp.Padding   = Padding(0, 4, 0, 2)
-
-        lbl_param           = Label()
-        lbl_param.Text      = "PARAMETER"
-        lbl_param.ForeColor = ACCENT
-        lbl_param.BackColor = BG
-        lbl_param.Dock      = DockStyle.Top
-        lbl_param.Height    = 20
-        lbl_param.Font      = Font(self.Font.FontFamily, 8, FontStyle.Bold)
-
-        rp           = Panel()
-        rp.Dock      = DockStyle.Top
-        rp.Height    = 32
-        rp.BackColor = BG
-
-        self.rb_inst           = RadioButton()
-        self.rb_inst.Text      = "Instance"
-        self.rb_inst.ForeColor = TEXT
-        self.rb_inst.BackColor = BG
-        self.rb_inst.Left      = 0
-        self.rb_inst.Top       = 3
-        self.rb_inst.Width     = 90
-        self.rb_inst.Height    = 22
-        self.rb_inst.Checked   = True
-        self.rb_inst.CheckedChanged += self._on_toggle
-
-        self.rb_type           = RadioButton()
-        self.rb_type.Text      = "Type"
-        self.rb_type.ForeColor = TEXT
-        self.rb_type.BackColor = BG
-        self.rb_type.Left      = 94
-        self.rb_type.Top       = 3
-        self.rb_type.Width     = 70
-        self.rb_type.Height    = 22
-        self.rb_type.CheckedChanged += self._on_toggle
-
-        rp.Controls.Add(self.rb_inst)
-        rp.Controls.Add(self.rb_type)
-
-        self.cb_param               = ComboBox()
-        self.cb_param.Dock          = DockStyle.Top
-        self.cb_param.Height        = 30
-        self.cb_param.DropDownStyle = ComboBoxStyle.DropDownList
-        self.cb_param.BackColor     = SURFACE
-        self.cb_param.ForeColor     = TEXT
-        self.cb_param.SelectedIndexChanged += self._on_param
-
-        pp.Controls.Add(self.cb_param)
-        pp.Controls.Add(rp)
-        pp.Controls.Add(lbl_param)
-
-        # ── Category section (fills remaining) ────────────────────────────────
-        cp           = Panel()
-        cp.Dock      = DockStyle.Fill
-        cp.BackColor = BG
-        cp.Padding   = Padding(0, 0, 0, 6)
-
-        lbl_cat           = Label()
-        lbl_cat.Text      = "CATEGORY"
-        lbl_cat.ForeColor = ACCENT
-        lbl_cat.BackColor = BG
-        lbl_cat.Dock      = DockStyle.Top
-        lbl_cat.Height    = 20
-        lbl_cat.Font      = Font(self.Font.FontFamily, 8, FontStyle.Bold)
-
-        self.tb_search             = TextBox()
-        self.tb_search.Dock        = DockStyle.Top
-        self.tb_search.Height      = 26
-        self.tb_search.BackColor   = SURFACE
-        self.tb_search.ForeColor   = TEXT
-        self.tb_search.BorderStyle = WFBorderStyle.FixedSingle
-        self.tb_search.Font        = self.Font
-        self.tb_search.TextChanged += self._on_cat_search
-
-        self.lb               = ListBox()
-        self.lb.Dock          = DockStyle.Fill
-        self.lb.BackColor     = SURFACE
-        self.lb.ForeColor     = TEXT
-        self.lb.BorderStyle   = WFBorderStyle.FixedSingle
-        self.lb.SelectionMode = SelectionMode.One
-        self.lb.SelectedIndexChanged += self._on_cat
-
-        cp.Controls.Add(self.lb)
-        cp.Controls.Add(self.tb_search)
-        cp.Controls.Add(lbl_cat)
-
-        lp.Controls.Add(cp)
-        lp.Controls.Add(pp)
-
-        sc.Panel1.BackColor = BG
-        sc.Panel1.Controls.Add(lp)
-
-        # ═══════════════════════════════════════════
-        # RIGHT PANEL  — Colour assignments DGV
-        # ═══════════════════════════════════════════
-        rr           = Panel()
-        rr.Dock      = DockStyle.Fill
-        rr.Padding   = Padding(6, 10, 10, 10)
-        rr.BackColor = BG
-
-        lbl_head           = Label()
-        lbl_head.Text      = "COLOUR ASSIGNMENTS"
-        lbl_head.ForeColor = ACCENT
-        lbl_head.BackColor = BG
-        lbl_head.Dock      = DockStyle.Top
-        lbl_head.Height    = 22
-        lbl_head.Font      = Font(self.Font.FontFamily, 8, FontStyle.Bold)
-
-        self.lbl_hint           = Label()
-        self.lbl_hint.Text      = "\u2190  Select a category and parameter to populate."
-        self.lbl_hint.ForeColor = SUBTEXT
-        self.lbl_hint.BackColor = BG
-        self.lbl_hint.Dock      = DockStyle.Top
-        self.lbl_hint.Height    = 22
-        self.lbl_hint.Visible   = True
-
-        # ── DataGridView ──────────────────────────────────────────────────────
-        self.dgv = DataGridView()
-        self.dgv.Dock                  = DockStyle.Fill
-        self.dgv.RowHeadersVisible     = False
-        self.dgv.AllowUserToAddRows    = False
-        self.dgv.AllowUserToDeleteRows = False
-        self.dgv.AllowUserToResizeRows = False
-        self.dgv.ReadOnly              = True
-        self.dgv.MultiSelect           = False
-        self.dgv.SelectionMode         = DataGridViewSelectionMode.FullRowSelect
-        self.dgv.AutoSizeColumnsMode   = DataGridViewAutoSizeColumnsMode.Fill
-        self.dgv.ColumnHeadersHeightSizeMode = \
-            self.dgv.ColumnHeadersHeightSizeMode.DisableResizing
-        self.dgv.ColumnHeadersHeight   = 30
-        self.dgv.RowTemplate.Height    = 38
-        self.dgv.BackgroundColor       = BG
-        self.dgv.GridColor             = MUTED
-        self.dgv.BorderStyle           = self.dgv.BorderStyle.FixedSingle
-        self.dgv.CellBorderStyle       = self.dgv.CellBorderStyle.SingleHorizontal
-        self.dgv.EnableHeadersVisualStyles = False
-
-        self.dgv.DefaultCellStyle.BackColor          = SURFACE
-        self.dgv.DefaultCellStyle.ForeColor          = TEXT
-        self.dgv.DefaultCellStyle.SelectionBackColor = MUTED
-        self.dgv.DefaultCellStyle.SelectionForeColor = TEXT
-        self.dgv.ColumnHeadersDefaultCellStyle.BackColor = CARD
-        self.dgv.ColumnHeadersDefaultCellStyle.ForeColor = ACCENT
-        self.dgv.ColumnHeadersDefaultCellStyle.SelectionBackColor = CARD
-        self.dgv.AlternatingRowsDefaultCellStyle.BackColor = CARD
-
-        # Col 0 — Value
-        c0            = DataGridViewTextBoxColumn()
-        c0.HeaderText = "Value"
-        c0.FillWeight = 60
-        c0.SortMode   = DataGridViewColumnSortMode.NotSortable
-        c0.ReadOnly   = True
-
-        # Col 1 — Colour swatch
-        c1            = DataGridViewTextBoxColumn()
-        c1.HeaderText = "Colour  (click swatch)"
-        c1.FillWeight = 22
-        c1.SortMode   = DataGridViewColumnSortMode.NotSortable
-        c1.ReadOnly   = True
-
-        # Col 2 — On / Off toggle
-        c2            = DataGridViewTextBoxColumn()
-        c2.HeaderText = "Active"
-        c2.FillWeight = 18
-        c2.SortMode   = DataGridViewColumnSortMode.NotSortable
-        c2.ReadOnly   = True
-
-        self.dgv.Columns.Add(c0)
-        self.dgv.Columns.Add(c1)
-        self.dgv.Columns.Add(c2)
-        self.dgv.CellClick    += self._on_cell_click
-        self.dgv.CellPainting += self._on_cell_paint
-
-        rr.Controls.Add(self.dgv)
-        rr.Controls.Add(self.lbl_hint)
-        rr.Controls.Add(lbl_head)
-        self.lbl_hint.BringToFront()
-
-        sc.Panel2.BackColor = BG
-        sc.Panel2.Controls.Add(rr)
-
-        # ── Assemble form ─────────────────────────────────────────────────────
-        self.Controls.Add(bar)       # DockStyle.Bottom  → bottom strip
-        self.Controls.Add(mode_bar)  # DockStyle.Top     → top strip
-        self.Controls.Add(sc)        # DockStyle.Fill    → middle
-
-        self.Load += self._on_load
-        self.ResumeLayout(True)
-
-    def _on_load(self, s, e):
-        self._sc.FixedPanel    = FixedPanel.Panel1
-        self._sc.Panel1MinSize = 260
-        self._sc.Panel2MinSize = 320
-        w = self._sc.Width
-        self._sc.SplitterDistance = max(260, min(380, w - 320 - self._sc.SplitterWidth))
-
-    # ── Mode change ───────────────────────────────────────────────────────────
-
-    def _on_mode_change(self, s, e):
-        if self._busy or not s.Checked:
-            return
-        if self.rb_filter.Checked:
-            self._btn_reset.Text = "Remove Filters"
-        else:
-            self._btn_reset.Text = "Reset Overrides"
-
-    # ── Data helpers ──────────────────────────────────────────────────────────
-
-    def _fill_cat_list(self, search):
-        self._busy = True
-        self.lb.Items.Clear()
-        s = search.strip().lower()
-        for c in self._all_cats:
-            if not s or s in c.Name.lower():
-                self.lb.Items.Add(c.Name)
-        self._busy = False
-
-    def _selected_cat(self):
-        if self.lb.SelectedIndex < 0:
-            return None
-        name = str(self.lb.SelectedItem)
-        for c in self._all_cats:
-            if c.Name == name:
-                return c
+def _combo_value(combo):
+    """Return the selected value string from a ComboBox, or None."""
+    sel = combo.SelectedItem
+    if sel is None:
         return None
+    return str(sel.Content) if hasattr(sel, 'Content') else str(sel)
 
-    def _load_params(self):
-        cat = self._selected_cat()
+
+# ─── PICKER DIALOG ────────────────────────────────────────────────────────────
+
+def show_category_picker(all_categories):
+    """
+    Display the themed category / parameter-filter picker.
+
+    Returns (category_name, param_filters) where:
+        category_name  – str
+        param_filters  – [] or [(param_name, param_value), ...]
+
+    Returns None when the user closes without confirming.
+    """
+    window = XamlReader.Parse(PICKER_XAML)
+
+    search_box  = window.FindName("SearchBox")
+    cat_panel   = window.FindName("CategoryPanel")
+    confirm_btn = window.FindName("ConfirmBtn")
+    add_row_btn = window.FindName("AddRowBtn")
+    rows_panel  = window.FindName("RowsPanel")
+
+    result_holder = [None]
+    selected_cat  = [None]
+    radio_buttons = []
+    rows          = []
+
+    # ── Confirm-button enable state ────────────────────────────────────────────
+    def update_confirm():
+        if selected_cat[0] is None:
+            confirm_btn.IsEnabled = False
+            return
+        for row in rows:
+            p_sel     = _combo_value(row['param_combo'])
+            v_sel     = _combo_value(row['value_combo'])
+            has_vals  = row['value_combo'].Items.Count > 0
+            if p_sel is not None and has_vals and v_sel is None:
+                confirm_btn.IsEnabled = False
+                return
+        confirm_btn.IsEnabled = True
+
+    # ── Populate param combo for one row ──────────────────────────────────────
+    def populate_row_params(row):
+        row['param_combo'].Items.Clear()
+        row['value_combo'].Items.Clear()
+        row['value_combo'].IsEnabled = False
+        if selected_cat[0] is None:
+            return
+        for name in get_params_for_category(selected_cat[0]):
+            row['param_combo'].Items.Add(_combo_item(name))
+
+    # ── Populate value combo for one row ──────────────────────────────────────
+    def reload_row_values(row):
+        row['value_combo'].Items.Clear()
+        row['value_combo'].IsEnabled = False
+        p_val = _combo_value(row['param_combo'])
+        if p_val is None or selected_cat[0] is None:
+            update_confirm()
+            return
+        for v in get_values_for_param(selected_cat[0], p_val):
+            row['value_combo'].Items.Add(_combo_item(v))
+        row['value_combo'].IsEnabled = row['value_combo'].Items.Count > 0
+        update_confirm()
+
+    # ── Remove a filter row ───────────────────────────────────────────────────
+    def remove_row(row):
+        rows_panel.Children.Remove(row['grid'])
+        rows.remove(row)
+        update_confirm()
+
+    # ── Create and attach one new filter row ──────────────────────────────────
+    def create_filter_row():
+        grid = Controls.Grid()
+        grid.Margin = Thickness(0, 0, 0, 6)
+        for w in [
+            GridLength(1, GridUnitType.Star),
+            GridLength(10),
+            GridLength(1, GridUnitType.Star),
+            GridLength(8),
+            GridLength.Auto,
+        ]:
+            cd = Controls.ColumnDefinition()
+            cd.Width = w
+            grid.ColumnDefinitions.Add(cd)
+
+        # Parameter ComboBox
+        param_combo = Controls.ComboBox()
+        param_combo.Background      = TRANS_BRUSH
+        param_combo.Foreground      = DARK_BRUSH
+        param_combo.BorderThickness = Thickness(0)
+        param_combo.Height          = 30
+        param_combo.FontSize        = 12
+        param_combo.Padding         = Thickness(6, 0, 4, 0)
+        param_combo.ToolTip         = "Select a parameter"
+
+        param_border = Controls.Border()
+        param_border.Background      = SURFACE_BRUSH
+        param_border.CornerRadius    = CornerRadius(6)
+        param_border.BorderBrush     = MUTED_BRUSH
+        param_border.BorderThickness = Thickness(1)
+        param_border.Child           = param_combo
+        Controls.Grid.SetColumn(param_border, 0)
+        grid.Children.Add(param_border)
+
+        # Value ComboBox
+        value_combo = Controls.ComboBox()
+        value_combo.Background      = TRANS_BRUSH
+        value_combo.Foreground      = DARK_BRUSH
+        value_combo.BorderThickness = Thickness(0)
+        value_combo.Height          = 30
+        value_combo.FontSize        = 12
+        value_combo.Padding         = Thickness(6, 0, 4, 0)
+        value_combo.IsEnabled       = False
+        value_combo.ToolTip         = "Select a value"
+
+        value_border = Controls.Border()
+        value_border.Background      = SURFACE_BRUSH
+        value_border.CornerRadius    = CornerRadius(6)
+        value_border.BorderBrush     = MUTED_BRUSH
+        value_border.BorderThickness = Thickness(1)
+        value_border.Child           = value_combo
+        Controls.Grid.SetColumn(value_border, 2)
+        grid.Children.Add(value_border)
+
+        # Remove (×) button
+        remove_btn = Controls.Button()
+        remove_btn.Content           = u"\u00d7"
+        remove_btn.Width             = 26
+        remove_btn.Height            = 26
+        remove_btn.Background        = TRANS_BRUSH
+        remove_btn.BorderThickness   = Thickness(0)
+        remove_btn.Foreground        = MUTED_BRUSH
+        remove_btn.FontSize          = 17
+        remove_btn.Cursor            = WinInput.Cursors.Hand
+        remove_btn.VerticalAlignment = System.Windows.VerticalAlignment.Center
+        Controls.Grid.SetColumn(remove_btn, 4)
+        grid.Children.Add(remove_btn)
+
+        row = {
+            'grid':        grid,
+            'param_combo': param_combo,
+            'value_combo': value_combo,
+            'remove_btn':  remove_btn,
+        }
+        rows.append(row)
+        rows_panel.Children.Add(grid)
+
+        if selected_cat[0] is not None:
+            populate_row_params(row)
+
+        def _on_param(s, e, r=row):
+            reload_row_values(r)
+
+        def _on_value(s, e):
+            update_confirm()
+
+        def _on_remove(s, e, r=row):
+            remove_row(r)
+
+        param_combo.SelectionChanged += _on_param
+        value_combo.SelectionChanged += _on_value
+        remove_btn.Click             += _on_remove
+
+        update_confirm()
+
+    # ── Category radio changed ─────────────────────────────────────────────────
+    def on_radio_checked(sender, e):
+        selected_cat[0] = sender.Tag
+        add_row_btn.IsEnabled = True
+        for row in rows:
+            populate_row_params(row)
+        update_confirm()
+
+    # ── Search filter ──────────────────────────────────────────────────────────
+    def on_search_changed(sender, e):
+        query = search_box.Text.strip().lower()
+        for rb in radio_buttons:
+            rb.Visibility = (
+                Visibility.Visible
+                if query in rb.Tag.lower()
+                else Visibility.Collapsed
+            )
+
+    # ── Add row button ─────────────────────────────────────────────────────────
+    def on_add_row(sender, e):
+        create_filter_row()
+
+    # ── Confirm ────────────────────────────────────────────────────────────────
+    def on_confirm(sender, e):
+        cat = selected_cat[0]
         if cat is None:
             return
-        self._instances = get_instances(cat.Id)
-        elems = (get_unique_types(self._instances)
-                 if self.rb_type.Checked
-                 else self._instances)
-        self._pmeta = collect_params_with_meta(elems)
+        param_filters = []
+        for row in rows:
+            p = _combo_value(row['param_combo'])
+            v = _combo_value(row['value_combo'])
+            if p is not None and v is not None:
+                param_filters.append((p, v))
+        result_holder[0] = (cat, param_filters)
+        window.Close()
 
-        self._busy = True
-        self.cb_param.Items.Clear()
-        for name in sorted(self._pmeta.keys()):
-            self.cb_param.Items.Add(name)
-        self._busy = False
+    # ── Build RadioButton list ─────────────────────────────────────────────────
+    for name in all_categories:
+        rb          = Controls.RadioButton()
+        rb.Content  = name
+        rb.Tag      = name
+        rb.Checked += on_radio_checked
+        cat_panel.Children.Add(rb)
+        radio_buttons.append(rb)
 
-        self._clear_dgv()
-        if self.cb_param.Items.Count > 0:
-            self.cb_param.SelectedIndex = 0
+    # ── Wire static events ─────────────────────────────────────────────────────
+    search_box.TextChanged += on_search_changed
+    add_row_btn.Click      += on_add_row
+    confirm_btn.Click      += on_confirm
 
-    def _clear_dgv(self):
-        self.dgv.Rows.Clear()
-        self._colors  = {}
-        self._enabled = {}
-        self._pal_idx = 0
-        self.lbl_hint.Text    = "\u2190  Select a category and parameter to populate."
-        self.lbl_hint.Visible = True
+    create_filter_row()
+    update_confirm()
+    window.ShowDialog()
+    return result_holder[0]
 
-    def _fill_dgv(self):
-        self.dgv.Rows.Clear()
-        self._colors  = {}
-        self._enabled = {}
-        self._pal_idx = 0
 
-        if self.cb_param.SelectedItem is None:
-            self.lbl_hint.Visible = True
-            return
+# ─── RESULTS WINDOW ───────────────────────────────────────────────────────────
 
-        meta = self._pmeta.get(str(self.cb_param.SelectedItem), {})
-        vals = meta.get('values', [])
+def show_results_window(elements, category_name):
+    """
+    Modeless results window.  Each row shows [Name, Element ID, Level].
+    Clicking a row calls uidoc.ShowElements() to open and zoom to the element.
+    The search box narrows visible rows by name or level substring.
 
-        if not vals:
-            self.lbl_hint.Text    = "No values found for this parameter."
-            self.lbl_hint.Visible = True
-            return
+    Blocks via Dispatcher.PushFrame until the user closes the window or
+    clicks Done — this keeps the script alive without freezing Revit.
+    """
+    window = XamlReader.Parse(RESULTS_XAML)
 
-        self.lbl_hint.Visible = False
-        for v in vals:
-            self._colors[v]  = PALETTE[self._pal_idx % len(PALETTE)]
-            self._enabled[v] = True
-            self._pal_idx   += 1
-            self.dgv.Rows.Add(v, "", "")   # 3 columns: value | swatch | on/off
+    count_label  = window.FindName("CountLabel")
+    search_box   = window.FindName("SearchBox")
+    rows_panel   = window.FindName("RowsPanel")
+    done_btn     = window.FindName("DoneBtn")
+    status_label = window.FindName("StatusLabel")
 
-    # ── Events ────────────────────────────────────────────────────────────────
+    count = len(elements)
+    count_label.Text = u"{} element{} found  \u2014  {}".format(
+        count,
+        u"s" if count != 1 else u"",
+        category_name
+    )
 
-    def _on_cat_search(self, s, e):
-        if self._busy: return
-        self._fill_cat_list(self.tb_search.Text)
+    # ── Build row widgets ──────────────────────────────────────────────────────
+    # Each entry: (border_widget, searchable_text, revit_ElementId)
+    row_entries = []
+    last_selected_id = [None]
 
-    def _on_cat(self, s, e):
-        if self._busy: return
-        self._load_params()
+    for elem in elements:
+        name  = get_element_display_name(elem)
+        eid   = str(_eid_int(elem.Id))
+        level = get_element_level_name(elem)
+        elem_id = elem.Id   # Revit ElementId object kept for ShowElements
 
-    def _on_toggle(self, s, e):
-        if self._busy or not s.Checked: return
-        self._load_params()
+        # Outer border (provides hover background + click target)
+        row_border = Controls.Border()
+        row_border.CornerRadius    = CornerRadius(6)
+        row_border.Background      = TRANS_BRUSH
+        row_border.Padding         = Thickness(8, 7, 8, 7)
+        row_border.Margin          = Thickness(0, 1, 0, 1)
+        row_border.Cursor          = WinInput.Cursors.Hand
 
-    def _on_param(self, s, e):
-        if self._busy: return
-        self._fill_dgv()
+        # Inner grid: 3 columns mirroring the XAML header
+        g = Controls.Grid()
+        for col_width in [
+            GridLength(1, GridUnitType.Star),
+            GridLength(86),
+            GridLength(110),
+        ]:
+            cd = Controls.ColumnDefinition()
+            cd.Width = col_width
+            g.ColumnDefinitions.Add(cd)
 
-    def _on_cell_click(self, s, e):
-        if e.RowIndex < 0:
-            return
-        val = str(self.dgv.Rows[e.RowIndex].Cells[0].Value)
+        def _tb(text, col_idx, muted=False):
+            tb = Controls.TextBlock()
+            tb.Text       = text
+            tb.Foreground = HINT_BRUSH if muted else TEXT_BRUSH
+            tb.FontSize   = 12
+            tb.Margin     = Thickness(4, 0, 4, 0)
+            tb.VerticalAlignment = System.Windows.VerticalAlignment.Center
+            # Prevent long names from breaking layout
+            tb.TextTrimming = System.Windows.TextTrimming.CharacterEllipsis
+            Controls.Grid.SetColumn(tb, col_idx)
+            return tb
 
-        if e.ColumnIndex == 1:
-            # ── Colour picker ─────────────────────────────────────────────────
-            dlg = ColorDialog()
-            dlg.Color = self._colors.get(val, DC.White)
-            if dlg.ShowDialog() == DialogResult.OK:
-                self._colors[val] = dlg.Color
-                self.dgv.InvalidateRow(e.RowIndex)
+        g.Children.Add(_tb(name,  0))
+        g.Children.Add(_tb(eid,   1, muted=True))
+        g.Children.Add(_tb(level, 2, muted=True))
 
-        elif e.ColumnIndex == 2:
-            # ── On / Off toggle ───────────────────────────────────────────────
-            self._enabled[val] = not self._enabled.get(val, True)
-            row = self.dgv.Rows[e.RowIndex]
-            # Dim the value text when OFF
-            row.DefaultCellStyle.ForeColor = (
-                TEXT if self._enabled[val] else MUTED)
-            self.dgv.InvalidateRow(e.RowIndex)
+        row_border.Child = g
+        rows_panel.Children.Add(row_border)
 
-    def _on_cell_paint(self, s, e):
-        if e.RowIndex < 0:
-            return
+        searchable = (name + u" " + level).lower()
+        row_entries.append((row_border, searchable, elem_id))
 
-        if e.ColumnIndex == 1:
-            # ── Colour swatch ─────────────────────────────────────────────────
-            e.PaintBackground(e.CellBounds, True)
-            val = str(self.dgv.Rows[e.RowIndex].Cells[0].Value)
-            col = self._colors.get(val)
-            if col:
-                # Dim swatch when the row is OFF
-                enabled = self._enabled.get(val, True)
-                if not enabled:
-                    col = DC.FromArgb(
-                        int(col.R * 0.35), int(col.G * 0.35), int(col.B * 0.35))
-                pad = 5
-                r   = e.CellBounds
-                br  = SolidBrush(col)
-                e.Graphics.FillRectangle(
-                    br, Rectangle(r.X + pad, r.Y + pad,
-                                  r.Width - pad * 2, r.Height - pad * 2))
-                br.Dispose()
-            e.Handled = True
+    # ── Wire hover + click for every row ──────────────────────────────────────
+    def _hover_enter(border):
+        def handler(s, e):
+            border.Background = HOVER_BRUSH
+        return handler
 
-        elif e.ColumnIndex == 2:
-            # ── ON / OFF pill ─────────────────────────────────────────────────
-            e.PaintBackground(e.CellBounds, True)
-            val     = str(self.dgv.Rows[e.RowIndex].Cells[0].Value)
-            enabled = self._enabled.get(val, True)
+    def _hover_leave(border):
+        def handler(s, e):
+            border.Background = TRANS_BRUSH
+        return handler
 
-            pad  = 5
-            r    = e.CellBounds
-            rect = Rectangle(r.X + pad, r.Y + pad,
-                             r.Width - pad * 2, r.Height - pad * 2)
-
-            bg_col  = GREEN if enabled else MUTED
-            txt_col = DARK  if enabled else SUBTEXT
-            label   = "ON"  if enabled else "OFF"
-
-            # Fill pill background
-            br = SolidBrush(bg_col)
-            e.Graphics.FillRectangle(br, rect)
-            br.Dispose()
-
-            # Draw centred label
-            sf               = StringFormat()
-            sf.Alignment     = StringAlignment.Center
-            sf.LineAlignment = StringAlignment.Center
-            pill_font = Font(e.CellStyle.Font.FontFamily, 8, FontStyle.Bold)
-            br2 = SolidBrush(txt_col)
-            e.Graphics.DrawString(
-                label, pill_font, br2,
-                RectangleF(float(rect.X), float(rect.Y),
-                           float(rect.Width), float(rect.Height)),
-                sf)
-            br2.Dispose()
-            pill_font.Dispose()
-            e.Handled = True
-
-    # ── Apply dispatcher ──────────────────────────────────────────────────────
-
-    def _apply(self, s, e):
-        if not self._instances:
-            MessageBox.Show(
-                "No elements found in the active view for this category.",
-                "Nothing to Colorize",
-                MessageBoxButtons.OK, MessageBoxIcon.Warning)
-            return
-        if self.cb_param.SelectedItem is None:
-            MessageBox.Show(
-                "Please select a parameter from the dropdown.",
-                "No Parameter Selected",
-                MessageBoxButtons.OK, MessageBoxIcon.Warning)
-            return
-        if SOLID_PATTERN is None:
-            MessageBox.Show(
-                "No solid fill pattern found in the document.",
-                "Missing Pattern", MessageBoxButtons.OK, MessageBoxIcon.Error)
-            return
-
-        if self.rb_filter.Checked:
-            self._apply_filters()
-        else:
-            self._apply_overrides()
-
-    # ── Apply: View Filters ───────────────────────────────────────────────────
-
-    def _apply_filters(self):
-        pname    = str(self.cb_param.SelectedItem)
-        cat      = self._selected_cat()
-        meta     = self._pmeta.get(pname, {})
-        param_id = meta.get('pid')
-        storage  = meta.get('storage')
-        raw_map  = meta.get('raw', {})
-
-        if param_id is None:
-            MessageBox.Show(
-                "Could not find parameter definition for '{0}'.".format(pname),
-                "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-            return
-
-        cat_ids = List[ElementId]()
-        cat_ids.Add(cat.Id)
-
-        applied    = 0
-        skipped    = []
-        first_fail = [None]
-
-        t = Transaction(doc, "Filter Colorize: {0} \u2014 {1}".format(cat.Name, pname))
-        t.Start()
-        try:
-            for val, col in self._colors.items():
-                # Skip values that are toggled OFF
-                if not self._enabled.get(val, True):
-                    continue
-
-                fname = make_filter_name(cat.Name, pname, val)
-                rule  = make_rule(param_id, storage, val, raw_map.get(val))
-                if rule is None:
-                    skipped.append(val)
-                    continue
-
-                rules_list = List[FilterRule]()
-                rules_list.Add(rule)
-                elem_filter = ElementParameterFilter(rules_list)
-
-                pfe = find_filter_by_name(fname)
-                if pfe is None:
-                    try:
-                        pfe = ParameterFilterElement.Create(
-                            doc, fname, cat_ids, elem_filter)
-                    except Exception as ce:
-                        if first_fail[0] is None:
-                            first_fail[0] = str(ce)
-                        skipped.append(val)
-                        continue
-                else:
-                    try:
-                        pfe.SetElementFilter(elem_filter)
-                    except:
-                        pass
-
-                view_filter_ids = set(_eid(fid) for fid in active_view.GetFilters())
-                if _eid(pfe.Id) not in view_filter_ids:
-                    active_view.AddFilter(pfe.Id)
-
-                ogs = OverrideGraphicSettings()
-                rc  = RC(col.R, col.G, col.B)
-                ogs.SetSurfaceForegroundPatternId(SOLID_PATTERN.Id)
-                ogs.SetSurfaceForegroundPatternColor(rc)
-                ogs.SetCutForegroundPatternId(SOLID_PATTERN.Id)
-                ogs.SetCutForegroundPatternColor(rc)
-                active_view.SetFilterOverrides(pfe.Id, ogs)
-                active_view.SetFilterVisibility(pfe.Id, True)
-                applied += 1
-
-            t.Commit()
-
-            msg = "Applied {0} view filter(s) for '{1}'.".format(applied, cat.Name)
-            if skipped:
-                msg += "\n\nSkipped ({0}):\n  {1}".format(
-                    len(skipped), "\n  ".join(skipped[:10]))
-            if first_fail[0]:
-                msg += ("\n\nNote: category may have limited filter support.\n"
-                        "First error: " + first_fail[0])
-            MessageBox.Show(msg, "Done", MessageBoxButtons.OK,
-                            MessageBoxIcon.Information if applied else MessageBoxIcon.Warning)
-
-        except Exception as ex:
-            try: t.RollBack()
-            except: pass
-            MessageBox.Show("Error:\n" + str(ex), "Error",
-                            MessageBoxButtons.OK, MessageBoxIcon.Error)
-
-    # ── Apply: Graphic Overrides ──────────────────────────────────────────────
-
-    def _apply_overrides(self):
-        pname    = str(self.cb_param.SelectedItem)
-        use_type = self.rb_type.Checked
-        cat      = self._selected_cat()
-
-        reset_ogs = OverrideGraphicSettings()
-
-        # Build override map only for ON values
-        val_ogs = {}
-        for val, col in self._colors.items():
-            if not self._enabled.get(val, True):
-                continue
-            ogs = OverrideGraphicSettings()
-            rc  = RC(col.R, col.G, col.B)
-            ogs.SetSurfaceForegroundPatternId(SOLID_PATTERN.Id)
-            ogs.SetSurfaceForegroundPatternColor(rc)
-            ogs.SetCutForegroundPatternId(SOLID_PATTERN.Id)
-            ogs.SetCutForegroundPatternColor(rc)
-            val_ogs[val] = ogs
-
-        t = Transaction(doc, "Override Colorize: {0} \u2014 {1}".format(cat.Name, pname))
-        t.Start()
-        try:
-            applied = 0
-            for inst in self._instances:
-                # Always reset first so switching values clears old colours
-                active_view.SetElementOverrides(inst.Id, reset_ogs)
-
-                if use_type:
-                    tid  = inst.GetTypeId()
-                    elem = doc.GetElement(tid) if tid != ElementId.InvalidElementId else None
-                else:
-                    elem = inst
-
-                if elem is None:
-                    continue
-
-                # Look up on the resolved element; fall back to instance if needed
-                param = elem.LookupParameter(pname)
-                if param is None and use_type:
-                    param = inst.LookupParameter(pname)
-                if param is None:
-                    continue
-
-                v = pval(param)
-                if v in val_ogs:
-                    active_view.SetElementOverrides(inst.Id, val_ogs[v])
-                    applied += 1
-
-            t.Commit()
-            MessageBox.Show(
-                "Applied overrides to {0} of {1} element(s).".format(
-                    applied, len(self._instances)),
-                "Done", MessageBoxButtons.OK, MessageBoxIcon.Information)
-
-        except Exception as ex:
-            try: t.RollBack()
-            except: pass
-            MessageBox.Show("Error:\n" + str(ex), "Error",
-                            MessageBoxButtons.OK, MessageBoxIcon.Error)
-
-    # ── Reset dispatcher ──────────────────────────────────────────────────────
-
-    def _reset(self, s, e):
-        if self.rb_filter.Checked:
-            self._reset_filters()
-        else:
-            self._reset_overrides()
-
-    def _reset_filters(self):
-        wpc_ids = []
-        for fid in list(active_view.GetFilters()):
-            el = doc.GetElement(fid)
-            if el is None:
-                continue
+    def _on_click(eid_ref, name_ref):
+        def handler(s, e):
             try:
-                if el.Name.startswith(WPC_PREFIX):
-                    wpc_ids.append(fid)
-            except:
-                pass
+                uidoc.ShowElements(eid_ref)
 
-        if not wpc_ids:
-            MessageBox.Show(
-                "No WPC_ filters found in the active view.",
-                "Nothing to Remove", MessageBoxButtons.OK, MessageBoxIcon.Information)
-            return
+                # Store last clicked element
+                last_selected_id[0] = eid_ref
 
-        t = Transaction(doc, "Remove WPC_ View Filters")
-        t.Start()
+                status_label.Text = u"Opened: {}  (ID {})".format(
+                    name_ref, _eid_int(eid_ref)
+                )
+            except Exception as ex:
+                status_label.Text = u"Cannot navigate to this element."
+
+        return handler
+
+    for border, _searchable, elem_id in row_entries:
+        # Grab display name for status from the first TextBlock child
         try:
-            for fid in wpc_ids:
-                try: active_view.RemoveFilter(fid)
-                except: pass
-                try: doc.Delete(fid)
-                except: pass
-            t.Commit()
-            MessageBox.Show(
-                "Removed {0} WPC_ filter(s) from the active view.".format(len(wpc_ids)),
-                "Done", MessageBoxButtons.OK, MessageBoxIcon.Information)
-        except Exception as ex:
-            try: t.RollBack()
-            except: pass
-            MessageBox.Show("Error:\n" + str(ex), "Error",
-                            MessageBoxButtons.OK, MessageBoxIcon.Error)
+            row_name = border.Child.Children[0].Text
+        except Exception:
+            row_name = u"element"
 
-    def _reset_overrides(self):
-        if not self._instances:
-            MessageBox.Show(
-                "No elements loaded. Select a category first.",
-                "Nothing to Reset", MessageBoxButtons.OK, MessageBoxIcon.Warning)
-            return
-        reset_ogs = OverrideGraphicSettings()
-        t = Transaction(doc, "Reset Element Overrides")
-        t.Start()
+        border.MouseEnter          += _hover_enter(border)
+        border.MouseLeave          += _hover_leave(border)
+        border.MouseLeftButtonDown += _on_click(elem_id, row_name)
+
+    # ── Search / filter box ────────────────────────────────────────────────────
+    def on_search_changed(s, e):
+        q = search_box.Text.strip().lower()
+        for border, searchable, _ in row_entries:
+            border.Visibility = (
+                Visibility.Visible
+                if not q or q in searchable
+                else Visibility.Collapsed
+            )
+
+    search_box.TextChanged += on_search_changed
+
+    # ── Done button ────────────────────────────────────────────────────────────
+    def on_done(s, e):
         try:
-            for inst in self._instances:
-                active_view.SetElementOverrides(inst.Id, reset_ogs)
-            t.Commit()
-            MessageBox.Show(
-                "Overrides cleared for {0} element(s).".format(len(self._instances)),
-                "Done", MessageBoxButtons.OK, MessageBoxIcon.Information)
-        except Exception as ex:
-            try: t.RollBack()
-            except: pass
-            MessageBox.Show("Error:\n" + str(ex), "Error",
-                            MessageBoxButtons.OK, MessageBoxIcon.Error)
+            if last_selected_id[0]:
+                sel_ids = List[ElementId]()
+                sel_ids.Add(last_selected_id[0])
 
-    def _cancel(self, s, e):
-        self.Close()
+                # Select element in Revit
+                uidoc.Selection.SetElementIds(sel_ids)
+
+                # Optional: keep it visible/focused
+                uidoc.ShowElements(last_selected_id[0])
+
+        except Exception:
+            pass
+
+        window.Close()
+
+    done_btn.Click += on_done
+
+    # ── Show modeless with Dispatcher.PushFrame (non-blocking for Revit) ───────
+    frame = [DispatcherFrame()]
+
+    def on_closed(s, e):
+        frame[0].Continue = False
+
+    window.Closed += on_closed
+    window.Show()
+    Dispatcher.PushFrame(frame[0])
 
 
-# ── Entry point ───────────────────────────────────────────────────────────────
+# ─── MAIN ─────────────────────────────────────────────────────────────────────
 
-if EXEC_PARAMS.config_mode:
-    # Config / right-click: remove all WPC_ filters from the active view
-    wpc_ids = []
-    for fid in active_view.GetFilters():
-        el = doc.GetElement(fid)
-        if el is not None:
-            try:
-                if el.Name.startswith(WPC_PREFIX):
-                    wpc_ids.append(fid)
-            except:
-                pass
-    if wpc_ids:
-        t = Transaction(doc, "Remove WPC_ Filters (config)")
-        t.Start()
-        try:
-            for fid in wpc_ids:
-                try: active_view.RemoveFilter(fid)
-                except: pass
-                try: doc.Delete(fid)
-                except: pass
-            t.Commit()
-        except:
-            try: t.RollBack()
-            except: pass
-else:
-    ColorizerForm().ShowDialog()
+all_categories = get_all_category_names(doc)
+result         = show_category_picker(all_categories)
+
+if not result:
+    script.exit()
+
+category_name, param_filters = result
+
+elements = collect_matching_elements(category_name, param_filters)
+
+if not elements:
+    filter_desc = u""
+    if param_filters:
+        filter_desc = u"\n\nFilters applied:\n" + u"\n".join(
+            u"  \u2022 {} = {}".format(p, v) for p, v in param_filters
+        )
+    TaskDialog.Show(
+        "Pre-Filter by Parameter",
+        u"No elements found for category \u201c{}\u201d.{}".format(
+            category_name, filter_desc
+        )
+    )
+    script.exit()
+
+show_results_window(elements, category_name)
