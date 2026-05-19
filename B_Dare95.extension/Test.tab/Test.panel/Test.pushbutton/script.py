@@ -1,784 +1,885 @@
 # -*- coding: utf-8 -*-
-__title__   = "Shaft Opening Manager"
-__author__  = "Mohamed Bedair"
-__version__ = "1.0.0"
-__doc__     = """
-
+__title__   = "Renumber By Grid\n[Cartesian]"
+__author__  = "B-Dare95"
+__version__ = "Version 1.0"
+__doc__     = """Version = 1.0
+Date    = 19.05.2026
+_____________________________________________________________________
 Description:
-Collects every Shaft Opening in the project and presents them in a
-live-editable table with the following columns:
+Renumber a chosen text parameter for elements of a selected category
+using Cartesian plane grid ordering.
 
-  ID (read-only) · Base Constraint · Base Offset ·
-  Top Constraint · Top Offset · Shaft Function
+Elements are collected from the Active View, then sorted:
+  - Rows    : by Y-axis (bottom to top  OR  top to bottom)
+  - Columns : by X-axis (left to right, closest to origin first)
 
-Prerequisite:
-  The custom parameter "Shaft Function" must already be bound to the
-  Openings category (Manage → Project Parameters). The script exits
-  with an explanatory message if it is absent.
-
+Numbering is applied sequentially, starting from the project origin
+(0,0) and moving outward in the positive X/Y direction.
+_____________________________________________________________________
 How-to:
--> Run the script
--> The Shaft Opening Manager window opens immediately
--> Edit any cell directly — ComboBox for levels, TextBox for offsets
-   and Shaft Function value
--> Use the search bar to filter rows by ID or Shaft Function text
--> Click an element's ID to navigate Revit to that shaft
--> "Save Changes" commits all edits in a single transaction
--> "Cancel" discards all edits and closes the window
+-> Select a Category from the left panel  (search box to filter)
+-> Select a writable text Parameter from the right panel
+   (list updates automatically when a category is chosen)
+-> Set Prefix, Suffix, Start Number, Y-Tolerance, and Sort Direction
+-> Click RUN
+_____________________________________________________________________
+Notes:
+- Y-Tolerance (ft): elements whose Y centres differ by less than this
+  value are treated as belonging to the same row.  Default = 1.5 ft
+  (~457 mm).  Reduce for tightly-packed elements.
+- Elements with no locatable centre (no bounding box / location) are
+  skipped silently.
+_____________________________________________________________________
+Last update:
+- [19.05.2026] - 1.0 RELEASE
+_____________________________________________________________________
+Author: B-Dare95"""
 
-Author: Mohamed Bedair
-"""
+# ╦╔╦╗╔═╗╔═╗╦═╗╔╦╗╔═╗
+# ║║║║╠═╝║ ║╠╦╝ ║ ╚═╗
+# ╩╩ ╩╩  ╚═╝╩╚═ ╩ ╚═╝
+# ==================================================
+import os
+import traceback
 
-# ─── IMPORTS ───────────────────────────────────────────────────────────────────
-import System
+from Autodesk.Revit.DB import (
+    BuiltInCategory,
+    CategoryType,
+    ElementCategoryFilter,
+    FilteredElementCollector,
+    StorageType,
+    Transaction,
+)
+from pyrevit import forms
+
 import clr
 clr.AddReference("PresentationFramework")
 clr.AddReference("PresentationCore")
 clr.AddReference("WindowsBase")
+clr.AddReference("System")
 
-from System.Collections.Generic import List
-from Autodesk.Revit.DB import (
-    FilteredElementCollector, ElementCategoryFilter,
-    BuiltInCategory, BuiltInParameter,
-    ElementId, Transaction, Level
-)
-from Autodesk.Revit.UI import TaskDialog
-from pyrevit import script
-
-import System.Windows
-import System.Windows.Controls as Controls
-import System.Windows.Media as Media
-import System.Windows.Input as WinInput
-import System.Windows.Threading as Threading
-from System.Windows import (
-    Thickness, CornerRadius, GridLength, GridUnitType, Visibility,
-    VerticalAlignment, HorizontalAlignment, TextTrimming
-)
 from System.Windows.Markup import XamlReader
 
-# ─── REVIT HANDLES ─────────────────────────────────────────────────────────────
-doc   = __revit__.ActiveUIDocument.Document
-uidoc = __revit__.ActiveUIDocument
+# ╦  ╦╔═╗╦═╗╦╔═╗╔╗ ╦  ╔═╗╔═╗
+# ╚╗╔╝╠═╣╠╦╝║╠═╣╠╩╗║  ║╣ ╚═╗
+#  ╚╝ ╩ ╩╩╚═╩╩ ╩╚═╝╩═╝╚═╝╚═╝
+# ==================================================
+doc      = __revit__.ActiveUIDocument.Document   # noqa: F821
+uidoc    = __revit__.ActiveUIDocument            # noqa: F821
+app      = __revit__.Application                 # noqa: F821
+rvt_year = int(app.VersionNumber)
 
-# ─── THEME ─────────────────────────────────────────────────────────────────────
-BG      = "#1E1E2E"
-CARD    = "#2A2A3C"
-SURFACE = "#313244"
-MUTED   = "#45475A"
-TEXT    = "#CDD6F4"
-SUBTEXT = "#A6ADC8"
-ACCENT  = "#F0A500"
-ROW_A   = "#2A2A3C"   # even-indexed rows
-ROW_B   = "#252535"   # odd-indexed rows (zebra stripe)
-HDR_BG  = "#1A1A28"   # column header row background
+# ╔╦╗╦═╗╔═╗╔╗╔╔═╗╔═╗╔═╗╔╦╗╦╔═╗╔╗╔  ╦ ╦╦═╗╔═╗╔═╗╔═╗╔═╗╦═╗
+#  ║ ╠╦╝╠═╣║║║╚═╗╠═╣║   ║ ║║ ║║║║  ║║║╠╦╝╠═╣╠═╝╠═╝║╣ ╠╦╝
+#  ╩ ╩╚═╩ ╩╝╚╝╚═╝╩ ╩╚═╝ ╩ ╩╚═╝╝╚╝  ╚╩╝╩╚═╩ ╩╩  ╩  ╚═╝╩╚═
+# ==================================================
+# Import ef_Transaction if available; otherwise fall back to a thin wrapper.
+try:
+    from Snippets._context_manager import ef_Transaction  # noqa: F401
+    _HAS_EF = True
+except Exception:
+    _HAS_EF = False
 
-def _brush(hex_str):
-    h = hex_str.lstrip('#')
-    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-    return Media.SolidColorBrush(Media.Color.FromRgb(r, g, b))
 
-SURFACE_BRUSH = _brush(SURFACE)
-MUTED_BRUSH   = _brush(MUTED)
-TEXT_BRUSH    = _brush(TEXT)
-SUBTEXT_BRUSH = _brush(SUBTEXT)
-ACCENT_BRUSH  = _brush(ACCENT)
-ROW_A_BRUSH   = _brush(ROW_A)
-ROW_B_BRUSH   = _brush(ROW_B)
-HDR_BRUSH     = _brush(HDR_BG)
-DARK_BRUSH    = Media.SolidColorBrush(Media.Color.FromRgb(20, 20, 20))
-TRANS_BRUSH   = Media.Brushes.Transparent
+class _SimpleTx(object):
+    """Minimal context-manager wrapper around a plain Revit Transaction."""
 
-# ─── COLUMN LAYOUT ─────────────────────────────────────────────────────────────
-# 11 slots total: controls at even indices (0, 2, 4, 6, 8, 10),
-# fixed-width gap spacers at odd indices (1, 3, 5, 7, 9).
-COL_SPECS = [
-    GridLength(68),                        # 0  – ID (read-only, fixed px)
-    GridLength(8),                         # 1  – gap
-    GridLength(1.35, GridUnitType.Star),   # 2  – Base Constraint (ComboBox)
-    GridLength(8),                         # 3  – gap
-    GridLength(80),                        # 4  – Base Offset (TextBox, fixed px)
-    GridLength(8),                         # 5  – gap
-    GridLength(1.35, GridUnitType.Star),   # 6  – Top Constraint (ComboBox)
-    GridLength(8),                         # 7  – gap
-    GridLength(80),                        # 8  – Top Offset (TextBox, fixed px)
-    GridLength(8),                         # 9  – gap
-    GridLength(1.8,  GridUnitType.Star),   # 10 – Shaft Function (TextBox)
-]
-CTRL_COLS  = [0, 2, 4, 6, 8, 10]
-HDR_LABELS = [
-    "ID", "Base Constraint", "Base Offset",
-    "Top Constraint", "Top Offset", "Shaft Function",
-]
+    def __init__(self, doc, name):
+        self._t = Transaction(doc, name)
 
-# ─── XAML ──────────────────────────────────────────────────────────────────────
-# Colour tokens: {BG}, {CARD}, etc.
-# WPF markup extensions: {{StaticResource X}}, {{TemplateBinding X}} —
-# the double-braces are collapsed to single after colour substitution.
-BROWSER_XAML = """
+    def __enter__(self):
+        self._t.Start()
+        return self._t
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type:
+            if self._t.HasStarted():
+                self._t.RollBack()
+        else:
+            if self._t.HasStarted():
+                self._t.Commit()
+        return False
+
+
+def _make_tx(doc, name):
+    """Return the best available transaction context-manager."""
+    if _HAS_EF:
+        return ef_Transaction(doc, name, debug=True)
+    return _SimpleTx(doc, name)
+
+
+# ╔═╗╔═╗╦═╗╔╦╗╦╔╗╔╔═╗  ╦ ╦╔╦╗╦╦  ╦╔╦╗╦╔═╗╔═╗
+# ╚═╗║ ║╠╦╝ ║ ║║║║║ ╦  ║ ║ ║ ║║  ║ ║ ║║╣ ╚═╗
+# ╚═╝╚═╝╩╚═ ╩ ╩╝╚╝╚═╝  ╚═╝ ╩ ╩╩═╝╩ ╩ ╩╚═╝╚═╝
+# ==================================================
+
+def get_element_center(el):
+    """
+    Return the (X, Y) model-space centre of an element, or None.
+
+    Tries bounding-box first (model-space, no view pipeline), then
+    falls back to Location.Point / Location.Curve midpoint.
+    Note: get_BoundingBox(None) is safe inside loops — does NOT trigger
+    the view graphics pipeline.
+    """
+    try:
+        bb = el.get_BoundingBox(None)
+        if bb:
+            return ((bb.Min.X + bb.Max.X) * 0.5,
+                    (bb.Min.Y + bb.Max.Y) * 0.5)
+    except Exception:
+        pass
+    try:
+        loc = el.Location
+        if hasattr(loc, 'Point') and loc.Point:
+            return (loc.Point.X, loc.Point.Y)
+        if hasattr(loc, 'Curve') and loc.Curve:
+            mid = loc.Curve.Evaluate(0.5, True)
+            return (mid.X, mid.Y)
+    except Exception:
+        pass
+    return None
+
+
+def sort_by_cartesian_grid(elements, y_tol, ascending_y=True):
+    """
+    Sort *elements* in Cartesian reading order and return the sorted list.
+
+    Algorithm
+    ---------
+    1. Obtain the XY model-space centre of every element.
+    2. Sort all located elements by Y (ascending = bottom-to-top).
+    3. Group into rows: consecutive elements whose Y centres differ by
+       <= y_tol belong to the same row.
+    4. Within each row sort by X ascending (left to right).
+    5. Elements with no locatable centre are appended at the end.
+
+    Parameters
+    ----------
+    elements    : iterable of Revit DB Elements
+    y_tol       : float  — Y grouping tolerance in internal feet
+    ascending_y : bool   — True  → bottom-to-top (default, from origin)
+                           False → top-to-bottom
+    """
+    located   = []
+    unlocated = []
+
+    for el in elements:
+        c = get_element_center(el)
+        if c is not None:
+            located.append((el, c[0], c[1]))   # (element, x, y)
+        else:
+            unlocated.append(el)
+
+    if not located:
+        return list(unlocated)
+
+    # ── Step 1: primary sort by Y ──────────────────────────────────────
+    located.sort(key=lambda t: t[2], reverse=not ascending_y)
+
+    # ── Step 2: group into rows by Y-tolerance ─────────────────────────
+    rows        = []
+    current_row = [located[0]]
+    row_y       = located[0][2]
+
+    for item in located[1:]:
+        if abs(item[2] - row_y) <= y_tol:
+            current_row.append(item)
+        else:
+            current_row.sort(key=lambda t: t[1])   # sort row by X asc
+            rows.append(current_row)
+            current_row = [item]
+            row_y       = item[2]
+
+    current_row.sort(key=lambda t: t[1])
+    rows.append(current_row)
+
+    # ── Step 3: flatten rows then append unlocated ─────────────────────
+    result = [t[0] for row in rows for t in row]
+    result.extend(unlocated)
+    return result
+
+
+# ╔═╗╔═╗╔╦╗╔═╗╔═╗╔═╗╦═╗╦╔═╗╔═╗
+# ║  ╠═╣ ║ ║╣ ║ ╦║ ║╠╦╝║║╣ ╚═╗
+# ╚═╝╩ ╩ ╩ ╚═╝╚═╝╚═╝╩╚═╩╚═╝╚═╝
+# ==================================================
+
+def check_cat(cat):
+    """
+    Return True for usable model categories.
+    Revit 2023+ exposes BuiltInCategory.INVALID for non-BuiltIn cats,
+    which previously caused attribute errors — hence try/except.
+    """
+    try:
+        if rvt_year > 2022:
+            if cat.BuiltInCategory == BuiltInCategory.INVALID:
+                return False
+        return cat.CategoryType == CategoryType.Model
+    except Exception:
+        return False
+
+
+def collect_writable_params(cat_id):
+    """
+    Return a sorted list of writable String-type parameter names for
+    elements of *cat_id* visible in the active view.
+    """
+    try:
+        elements = (
+            FilteredElementCollector(doc, doc.ActiveView.Id)
+            .WherePasses(ElementCategoryFilter(cat_id))
+            .WhereElementIsNotElementType()
+            .ToElements()
+        )
+        seen   = set()
+        result = []
+        for el in elements:
+            for param in el.Parameters:
+                n = param.Definition.Name
+                if (n not in seen
+                        and not param.IsReadOnly
+                        and param.StorageType == StorageType.String):
+                    seen.add(n)
+                    result.append(n)
+        result.sort()
+        return result
+    except Exception:
+        return []
+
+
+# ╔═╗╦  ╦ ╦╦
+# ║ ╦║  ║ ║║
+# ╚═╝╩═╝╚═╝╩
+# ==================================================
+
+XAML_STR = """
 <Window
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Shaft Opening Editor"
-    Width="1000" Height="640"
-    MinWidth="740" MinHeight="440"
+    Title="Renumber By Grid [Cartesian]"
+    Width="760" Height="600"
+    MinWidth="680" MinHeight="560"
     WindowStartupLocation="CenterScreen"
-    Background="{BG}"
-    Foreground="{TEXT}"
-    FontFamily="Segoe UI"
-    FontSize="13">
+    ResizeMode="NoResize"
+    Background="#1E1E2E"
+    FontFamily="Segoe UI">
 
     <Window.Resources>
 
-        <!-- ── Slim ScrollBar ── -->
-        <Style x:Key="ScrollThumbStyle" TargetType="Thumb">
-            <Setter Property="Background" Value="{MUTED}"/>
+        <!-- ── ListBoxItem ───────────────────────────────────────── -->
+        <Style x:Key="S_LBI" TargetType="ListBoxItem">
+            <Setter Property="Foreground"   Value="#CDD6F4"/>
+            <Setter Property="Background"   Value="Transparent"/>
+            <Setter Property="Padding"      Value="8,5"/>
+            <Setter Property="FontSize"     Value="12"/>
+            <Setter Property="Cursor"       Value="Hand"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#F0A500"/>
+                    <Setter Property="Foreground" Value="#1E1E2E"/>
+                    <Setter Property="FontWeight" Value="SemiBold"/>
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#45475A"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- ── ListBox ───────────────────────────────────────────── -->
+        <Style TargetType="ListBox">
+            <Setter Property="Background"       Value="#313244"/>
+            <Setter Property="BorderBrush"      Value="#45475A"/>
+            <Setter Property="BorderThickness"  Value="1"/>
+            <Setter Property="ItemContainerStyle" Value="{StaticResource S_LBI}"/>
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+            <Setter Property="Padding"          Value="0"/>
+        </Style>
+
+        <!-- ── TextBox ───────────────────────────────────────────── -->
+        <Style TargetType="TextBox">
+            <Setter Property="Background"      Value="#313244"/>
+            <Setter Property="Foreground"      Value="#CDD6F4"/>
+            <Setter Property="BorderBrush"     Value="#45475A"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding"         Value="7,5"/>
+            <Setter Property="CaretBrush"      Value="#CDD6F4"/>
+            <Setter Property="FontSize"        Value="12"/>
+            <Setter Property="SelectionBrush"  Value="#F0A500"/>
+        </Style>
+
+        <!-- ── Panel label ───────────────────────────────────────── -->
+        <Style x:Key="S_PanelHeader" TargetType="TextBlock">
+            <Setter Property="Foreground"  Value="#A6ADC8"/>
+            <Setter Property="FontSize"    Value="11"/>
+            <Setter Property="FontWeight"  Value="SemiBold"/>
+            <Setter Property="Margin"      Value="0,0,0,7"/>
+        </Style>
+
+        <!-- ── Field label ───────────────────────────────────────── -->
+        <Style x:Key="S_FieldLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#A6ADC8"/>
+            <Setter Property="FontSize"   Value="11"/>
+            <Setter Property="Margin"     Value="0,0,0,4"/>
+        </Style>
+
+        <!-- ── RUN button ────────────────────────────────────────── -->
+        <Style x:Key="S_RunBtn" TargetType="Button">
+            <Setter Property="Background"      Value="#F0A500"/>
+            <Setter Property="Foreground"      Value="#1E1E2E"/>
+            <Setter Property="FontWeight"      Value="Bold"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="Padding"         Value="0,11"/>
             <Setter Property="Template">
                 <Setter.Value>
-                    <ControlTemplate TargetType="Thumb">
-                        <Border Background="{{TemplateBinding Background}}" CornerRadius="3"/>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{SUBTEXT}"/>
+                    <Setter Property="Background" Value="#E09400"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
 
-        <Style TargetType="ScrollBar">
-            <Setter Property="Background" Value="{CARD}"/>
-            <Setter Property="Width"      Value="6"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ScrollBar">
-                        <Grid Background="{CARD}">
-                            <Track Name="PART_Track" IsDirectionReversed="True">
-                                <Track.Thumb>
-                                    <Thumb Style="{{StaticResource ScrollThumbStyle}}"/>
-                                </Track.Thumb>
-                            </Track>
-                        </Grid>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- ── Save / Accent button ── -->
-        <Style x:Key="SaveBtnStyle" TargetType="Button">
-            <Setter Property="Background"      Value="{ACCENT}"/>
-            <Setter Property="Foreground"      Value="{BG}"/>
-            <Setter Property="FontWeight"      Value="SemiBold"/>
-            <Setter Property="FontSize"        Value="13"/>
-            <Setter Property="Height"          Value="36"/>
-            <Setter Property="Cursor"          Value="Hand"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd"
-                                Background="{{TemplateBinding Background}}"
-                                CornerRadius="6">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed"  Value="True">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.70"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled"  Value="False">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.40"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- ── Cancel / Secondary button ── -->
-        <Style x:Key="CancelBtnStyle" TargetType="Button">
-            <Setter Property="Background"      Value="{SURFACE}"/>
-            <Setter Property="Foreground"      Value="{TEXT}"/>
-            <Setter Property="FontSize"        Value="13"/>
-            <Setter Property="Height"          Value="36"/>
-            <Setter Property="Cursor"          Value="Hand"/>
+        <!-- ── CANCEL button ─────────────────────────────────────── -->
+        <Style x:Key="S_CancelBtn" TargetType="Button">
+            <Setter Property="Background"      Value="#313244"/>
+            <Setter Property="Foreground"      Value="#CDD6F4"/>
+            <Setter Property="BorderBrush"     Value="#45475A"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush"     Value="{MUTED}"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="Padding"         Value="0,11"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd"
-                                Background="{{TemplateBinding Background}}"
-                                BorderBrush="{{TemplateBinding BorderBrush}}"
-                                BorderThickness="{{TemplateBinding BorderThickness}}"
-                                CornerRadius="6">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="6"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center"/>
                         </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.75"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#45475A"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- ── Direction RadioButton (pill toggle) ───────────────── -->
+        <Style x:Key="S_DirBtn" TargetType="RadioButton">
+            <Setter Property="Foreground"      Value="#CDD6F4"/>
+            <Setter Property="Background"      Value="#313244"/>
+            <Setter Property="BorderBrush"     Value="#45475A"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize"        Value="12"/>
+            <Setter Property="Padding"         Value="10,6"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter Property="Background"  Value="#F0A500"/>
+                    <Setter Property="Foreground"  Value="#1E1E2E"/>
+                    <Setter Property="FontWeight"  Value="SemiBold"/>
+                    <Setter Property="BorderBrush" Value="#F0A500"/>
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#45475A"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
 
     </Window.Resources>
 
-    <Border Padding="16" Background="{BG}">
-        <DockPanel>
+    <!-- ═══════════════════════ ROOT GRID ════════════════════════════ -->
+    <Grid Margin="18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>  <!-- title bar          -->
+            <RowDefinition Height="*"/>     <!-- two-panel content  -->
+            <RowDefinition Height="Auto"/>  <!-- divider            -->
+            <RowDefinition Height="Auto"/>  <!-- button row         -->
+        </Grid.RowDefinitions>
 
-            <!-- ── Title bar + search ── -->
-            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12" LastChildFill="False">
-                <TextBlock x:Name="TitleLabel"
-                           DockPanel.Dock="Left"
-                           FontSize="15" FontWeight="SemiBold"
-                           Foreground="{TEXT}"
-                           VerticalAlignment="Center"/>
-                <Border DockPanel.Dock="Right"
-                        Background="{SURFACE}" CornerRadius="6"
-                        BorderBrush="{MUTED}" BorderThickness="1"
-                        Width="230">
-                    <TextBox x:Name="SearchBox"
-                             Background="Transparent" BorderThickness="0"
-                             Foreground="{TEXT}" CaretBrush="{ACCENT}"
-                             Padding="8,5" FontSize="12"
-                             ToolTip="Search by ID or Shaft Function…"/>
-                </Border>
-            </DockPanel>
-
-            <!-- ── Footer: status + buttons ── -->
-            <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
-                <TextBlock x:Name="StatusLabel"
-                           FontSize="11" Foreground="{SUBTEXT}"
-                           HorizontalAlignment="Center"
-                           Margin="0,0,0,8"/>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="12"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <Button x:Name="CancelButton" Grid.Column="0"
-                            Content="Cancel"
-                            Style="{{StaticResource CancelBtnStyle}}"/>
-                    <Button x:Name="SaveButton"   Grid.Column="2"
-                            Content="Save Changes"
-                            Style="{{StaticResource SaveBtnStyle}}"/>
-                </Grid>
+        <!-- ══ TITLE BAR ══════════════════════════════════════════════ -->
+        <Grid Grid.Row="0" Margin="0,0,0,14">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="RENUMBER BY GRID  ·  CARTESIAN PLANE"
+                           Foreground="#F0A500"
+                           FontSize="15" FontWeight="Bold"/>
+                <TextBlock Text="Sorts active-view elements by Y rows then X columns, originating from (0, 0)."
+                           Foreground="#585B70"
+                           FontSize="11" Margin="0,3,0,0"/>
             </StackPanel>
+            <TextBlock Grid.Column="1" x:Name="UI_version_lbl"
+                       Foreground="#585B70" FontSize="11"
+                       VerticalAlignment="Top" HorizontalAlignment="Right"/>
+        </Grid>
 
-            <!-- ── List card ── -->
-            <!-- RowsPanel margin: 8 L / 14 R (8 padding + 6 scrollbar width)   -->
-            <!-- keeps column headers aligned with rows even when bar is visible. -->
-            <Border Background="{CARD}" CornerRadius="8">
-                <ScrollViewer VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel x:Name="RowsPanel" Margin="8,8,14,8"/>
-                </ScrollViewer>
+        <!-- ══ TWO-PANEL CONTENT ════════════════════════════════════════ -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="14"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- ─── LEFT PANEL: Category ─────────────────────────────── -->
+            <Border Grid.Column="0"
+                    Background="#2A2A3C" CornerRadius="8" Padding="12">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>   <!-- header         -->
+                        <RowDefinition Height="Auto"/>   <!-- search box     -->
+                        <RowDefinition Height="*"/>      <!-- list           -->
+                        <RowDefinition Height="Auto"/>   <!-- status label   -->
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0"
+                               Text="CATEGORY"
+                               Style="{StaticResource S_PanelHeader}"/>
+
+                    <!-- Search / filter box -->
+                    <TextBox   x:Name="UI_cat_search"
+                               Grid.Row="1"
+                               Margin="0,0,0,6"/>
+
+                    <!-- Category list -->
+                    <ListBox   x:Name="UI_cat_list"
+                               Grid.Row="2"
+                               SelectionMode="Single"/>
+
+                    <!-- Element count feedback -->
+                    <TextBlock x:Name="UI_cat_status"
+                               Grid.Row="3"
+                               Foreground="#585B70"
+                               FontSize="11"
+                               Margin="0,6,0,0"
+                               TextWrapping="Wrap"/>
+                </Grid>
             </Border>
 
-        </DockPanel>
-    </Border>
+            <!-- ─── RIGHT PANEL: Parameters + config ─────────────────── -->
+            <Border Grid.Column="2"
+                    Background="#2A2A3C" CornerRadius="8" Padding="12">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>   <!-- header         -->
+                        <RowDefinition Height="*"/>      <!-- param list     -->
+                        <RowDefinition Height="Auto"/>   <!-- controls       -->
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0"
+                               Text="PARAMETER  (writable · text only)"
+                               Style="{StaticResource S_PanelHeader}"/>
+
+                    <!-- Parameter list (updates on category selection) -->
+                    <ListBox   x:Name="UI_param_list"
+                               Grid.Row="1"
+                               SelectionMode="Single"
+                               Margin="0,0,0,12"/>
+
+                    <!-- ── Controls grid ── -->
+                    <Grid Grid.Row="2">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Prefix -->
+                        <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,0,8">
+                            <TextBlock Text="Prefix  (optional)"
+                                       Style="{StaticResource S_FieldLabel}"/>
+                            <TextBox x:Name="UI_prefix"/>
+                        </StackPanel>
+
+                        <!-- Suffix -->
+                        <StackPanel Grid.Row="0" Grid.Column="2" Margin="0,0,0,8">
+                            <TextBlock Text="Suffix  (optional)"
+                                       Style="{StaticResource S_FieldLabel}"/>
+                            <TextBox x:Name="UI_suffix"/>
+                        </StackPanel>
+
+                        <!-- Start Number -->
+                        <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,0,8">
+                            <TextBlock Text="Start Number"
+                                       Style="{StaticResource S_FieldLabel}"/>
+                            <TextBox x:Name="UI_start" Text="1"/>
+                        </StackPanel>
+
+                        <!-- Y-Tolerance -->
+                        <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,0,0,8">
+                            <TextBlock Text="Y-Tolerance  (ft)"
+                                       Style="{StaticResource S_FieldLabel}"/>
+                            <TextBox x:Name="UI_tolerance" Text="1.5"/>
+                        </StackPanel>
+
+                        <!-- Sort direction pills -->
+                        <StackPanel Grid.Row="2" Grid.Column="0"
+                                    Grid.ColumnSpan="3">
+                            <TextBlock Text="Row Sort Direction"
+                                       Style="{StaticResource S_FieldLabel}"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <RadioButton x:Name="UI_dir_bt"
+                                             Grid.Column="0"
+                                             Content="&#x2191;  Bottom &#x2192; Top"
+                                             GroupName="SortDir"
+                                             IsChecked="True"
+                                             Style="{StaticResource S_DirBtn}"/>
+                                <RadioButton x:Name="UI_dir_tb"
+                                             Grid.Column="2"
+                                             Content="&#x2193;  Top &#x2192; Bottom"
+                                             GroupName="SortDir"
+                                             Style="{StaticResource S_DirBtn}"/>
+                            </Grid>
+                        </StackPanel>
+                    </Grid>
+                    <!-- end controls grid -->
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ══ DIVIDER ═════════════════════════════════════════════════ -->
+        <Border Grid.Row="2"
+                Height="1" Background="#313244"
+                Margin="0,12,0,12"/>
+
+        <!-- ══ BUTTON ROW ══════════════════════════════════════════════ -->
+        <Grid Grid.Row="3">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="10"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Button x:Name="UI_cancel"
+                    Grid.Column="0"
+                    Content="CANCEL"
+                    Style="{StaticResource S_CancelBtn}"/>
+            <Button x:Name="UI_run"
+                    Grid.Column="2"
+                    Content="RUN"
+                    Style="{StaticResource S_RunBtn}"/>
+        </Grid>
+    </Grid>
 </Window>
-""".replace("{BG}",      BG) \
-   .replace("{CARD}",    CARD) \
-   .replace("{SURFACE}", SURFACE) \
-   .replace("{MUTED}",   MUTED) \
-   .replace("{TEXT}",    TEXT) \
-   .replace("{SUBTEXT}", SUBTEXT) \
-   .replace("{ACCENT}",  ACCENT) \
-   .replace("{{",        "{") \
-   .replace("}}",        "}")
+"""
 
 
-# ─── REVIT HELPERS ─────────────────────────────────────────────────────────────
+# ╔═╗╦  ╦ ╦╦   ╔═╗╦  ╔═╗╔═╗╔═╗
+# ║ ╦║  ║ ║║   ║  ║  ╠═╣╚═╗╚═╗
+# ╚═╝╩═╝╚═╝╩   ╚═╝╩═╝╩ ╩╚═╝╚═╝
+# ==================================================
 
-def _eid_int(eid):
-    """Read ElementId integer safely across Revit versions (2025+ Int64)."""
-    try:
-        return eid.Value          # Revit 2025+
-    except AttributeError:
-        return eid.IntegerValue   # older
-
-def _invalid_eid():
-    """Return an invalid ElementId compatible with all Revit versions."""
-    try:
-        return ElementId.InvalidElementId
-    except AttributeError:
-        return ElementId(-1)
-
-def _get_param(elem, bip, name_fallback):
+class GridNumberUI(object):
     """
-    Try BuiltInParameter first (fast, version-stable), fall back to
-    LookupParameter by display name for custom / renamed params.
+    WPF dialog for Cartesian-grid-based renumbering.
+
+    All output is stored in mutable list containers to stay compatible
+    with IronPython 2.7 (no nonlocal keyword).
     """
+
+    def __init__(self, cats_dict):
+        self._cats_dict = cats_dict
+        self._all_names = sorted(cats_dict.keys())
+
+        # ── Output state (mutable containers) ────────────────────────
+        self.confirmed  = [False]
+        self.cat_name   = [None]
+        self.param_name = [None]
+        self.prefix     = ['']
+        self.suffix     = ['']
+        self.start      = [1]
+        self.tolerance  = [1.5]
+        self.asc_y      = [True]   # True = bottom-to-top
+
+        # ── Build window from inline XAML ─────────────────────────────
+        self._win = XamlReader.Parse(XAML_STR)
+
+        # ── Resolve named controls ────────────────────────────────────
+        self._cat_search  = self._win.FindName('UI_cat_search')
+        self._cat_list    = self._win.FindName('UI_cat_list')
+        self._cat_status  = self._win.FindName('UI_cat_status')
+        self._param_list  = self._win.FindName('UI_param_list')
+        self._prefix_tb   = self._win.FindName('UI_prefix')
+        self._suffix_tb   = self._win.FindName('UI_suffix')
+        self._start_tb    = self._win.FindName('UI_start')
+        self._tol_tb      = self._win.FindName('UI_tolerance')
+        self._dir_bt      = self._win.FindName('UI_dir_bt')
+        self._dir_tb      = self._win.FindName('UI_dir_tb')
+        self._btn_run     = self._win.FindName('UI_run')
+        self._btn_cancel  = self._win.FindName('UI_cancel')
+        self._ver_lbl     = self._win.FindName('UI_version_lbl')
+
+        # Stamp version in top-right corner
+        if self._ver_lbl:
+            self._ver_lbl.Text = __version__
+
+        # ── Populate category list ────────────────────────────────────
+        self._populate_cats(self._all_names)
+
+        # ── Wire events ───────────────────────────────────────────────
+        self._cat_search.TextChanged     += self._on_search
+        self._cat_list.SelectionChanged  += self._on_cat_selected
+        self._btn_run.Click              += self._on_run
+        self._btn_cancel.Click           += self._on_cancel
+
+        # Blocking dialog — execution pauses here until window closes
+        self._win.ShowDialog()
+
+    # ── Private helpers ───────────────────────────────────────────────
+
+    def _populate_cats(self, names):
+        """Rebuild the category ListBox with *names*."""
+        self._cat_list.Items.Clear()
+        for n in names:
+            self._cat_list.Items.Add(n)
+
+    # ── Event handlers ────────────────────────────────────────────────
+
+    def _on_search(self, sender, e):
+        """Filter category list as the user types."""
+        q = self._cat_search.Text.strip().lower()
+        filtered = (
+            [n for n in self._all_names if q in n.lower()]
+            if q else self._all_names
+        )
+        self._populate_cats(filtered)
+        self._cat_status.Text = ''
+
+    def _on_cat_selected(self, sender, e):
+        """
+        Triggered when the user picks a category.
+        Rebuilds the parameter list and updates the element-count label.
+        """
+        name = self._cat_list.SelectedItem
+        if not name:
+            return
+        cat = self._cats_dict.get(name)
+        if not cat:
+            return
+
+        # ── Rebuild parameter list ────────────────────────────────────
+        params = collect_writable_params(cat.Id)
+        self._param_list.Items.Clear()
+        if params:
+            for p in params:
+                self._param_list.Items.Add(p)
+        else:
+            self._param_list.Items.Add('— no writable text parameters found —')
+
+        # ── Element count status ──────────────────────────────────────
+        try:
+            n_els = (
+                FilteredElementCollector(doc, doc.ActiveView.Id)
+                .WherePasses(ElementCategoryFilter(cat.Id))
+                .WhereElementIsNotElementType()
+                .GetElementCount()
+            )
+            self._cat_status.Text = (
+                '{} element{} found in active view'.format(
+                    n_els, 's' if n_els != 1 else ''
+                )
+            )
+        except Exception:
+            self._cat_status.Text = ''
+
+    def _on_run(self, sender, e):
+        """Validate inputs, store results, close window."""
+        cat   = self._cat_list.SelectedItem
+        param = self._param_list.SelectedItem
+
+        if not cat:
+            forms.alert('Please select a Category.', title=__title__)
+            return
+        if not param or param.startswith('—'):
+            forms.alert('Please select a valid Parameter.', title=__title__)
+            return
+
+        try:
+            start = int(self._start_tb.Text.strip())
+        except (ValueError, AttributeError):
+            forms.alert(
+                'Start Number must be a whole number (e.g. 1).',
+                title=__title__
+            )
+            return
+
+        try:
+            tol = float(self._tol_tb.Text.strip().replace(',', '.'))
+            if tol < 0.0:
+                raise ValueError('negative tolerance')
+        except (ValueError, AttributeError):
+            forms.alert(
+                'Y-Tolerance must be a non-negative number (e.g. 1.5).',
+                title=__title__
+            )
+            return
+
+        # Persist results in mutable containers
+        self.confirmed[0]  = True
+        self.cat_name[0]   = cat
+        self.param_name[0] = param
+        self.prefix[0]     = self._prefix_tb.Text   or ''
+        self.suffix[0]     = self._suffix_tb.Text   or ''
+        self.start[0]      = start
+        self.tolerance[0]  = tol
+        # IsChecked on a WPF RadioButton returns Nullable<bool>
+        self.asc_y[0]      = (self._dir_bt.IsChecked == True)  # noqa: E712
+        self._win.Close()
+
+    def _on_cancel(self, sender, e):
+        self._win.Close()
+
+
+# ╔╦╗╔═╗╦╔╗╔  ╔═╗═╗ ╦╔═╗╔═╗╦ ╦╔╦╗╦╔═╗╔╗╔
+# ║║║╠═╣║║║║  ║╣ ╔╩╦╝║╣ ║  ║ ║ ║ ║║ ║║║║
+# ╩ ╩╩ ╩╩╝╚╝  ╚═╝╩ ╚═╚═╝╚═╝╚═╝ ╩ ╩╚═╝╝╚╝
+# ==================================================
+
+# ── Build category dictionary ─────────────────────────────────────────────
+cats = [c for c in doc.Settings.Categories if check_cat(c)]
+
+# Append annotation / specialty categories that are commonly numbered
+# and are not captured by CategoryType.Model
+_EXTRA_BICS = [
+    BuiltInCategory.OST_Grids,
+    BuiltInCategory.OST_Viewports,
+    BuiltInCategory.OST_Rooms,
+    BuiltInCategory.OST_Areas,
+    BuiltInCategory.OST_MEPSpaces,
+]
+_existing_names = {c.Name for c in cats}
+for _bic in _EXTRA_BICS:
     try:
-        p = elem.get_Parameter(bip)
-        if p is not None:
-            return p
+        _extra = doc.Settings.Categories.get_Item(_bic)
+        if _extra and _extra.Name not in _existing_names:
+            cats.append(_extra)
+            _existing_names.add(_extra.Name)
     except Exception:
         pass
-    return elem.LookupParameter(name_fallback)
 
+cats.sort(key=lambda c: c.Name)
+cats_dict = {c.Name: c for c in cats}
 
-def get_all_levels():
-    """All Level elements in the document, sorted by elevation (bottom → top)."""
-    return sorted(
-        FilteredElementCollector(doc).OfClass(Level).ToElements(),
-        key=lambda l: l.Elevation
+# ── Launch dialog ─────────────────────────────────────────────────────────
+ui = GridNumberUI(cats_dict)
+
+if not ui.confirmed[0]:
+    forms.alert('Cancelled.', title=__title__, exitscript=True)
+
+# ── Unpack user choices ───────────────────────────────────────────────────
+sel_cat  = cats_dict[ui.cat_name[0]]
+p_name   = ui.param_name[0]
+prefix   = ui.prefix[0]
+suffix   = ui.suffix[0]
+count    = ui.start[0]
+y_tol    = ui.tolerance[0]
+asc_y    = ui.asc_y[0]
+
+# ── Collect elements from the active view ─────────────────────────────────
+all_els = list(
+    FilteredElementCollector(doc, doc.ActiveView.Id)
+    .WherePasses(ElementCategoryFilter(sel_cat.Id))
+    .WhereElementIsNotElementType()
+    .ToElements()
+)
+
+if not all_els:
+    forms.alert(
+        'No elements found in the active view for:\n  {}'.format(ui.cat_name[0]),
+        title=__title__,
+        exitscript=True,
     )
 
+# ── Sort in Cartesian grid order ──────────────────────────────────────────
+sorted_els = sort_by_cartesian_grid(all_els, y_tol, ascending_y=asc_y)
 
-def collect_shafts():
-    """All non-type Shaft Opening elements using the OST_ShaftOpening category."""
-    try:
-        return list(
-            FilteredElementCollector(doc)
-            .WherePasses(ElementCategoryFilter(BuiltInCategory.OST_ShaftOpening))
-            .WhereElementIsNotElementType()
-            .ToElements()
-        )
-    except Exception:
-        return []
+# ── Apply numbering in a single transaction ───────────────────────────────
+start_count = count
+numbered    = 0
+skipped     = 0
 
-
-def has_shaft_function_param(shafts):
-    """
-    Return True if the 'Shaft Function' parameter is bound in this document
-    (i.e., at least one shaft element exposes the parameter definition).
-    """
-    for shaft in shafts:
-        if shaft.LookupParameter("Shaft Function") is not None:
-            return True
-    return False
-
-
-def _level_name_for_id(eid, levels_by_id):
-    """Resolve a level ElementId to its display name, or '(Unconnected)'."""
-    if eid is None:
-        return u"(Unconnected)"
-    val = _eid_int(eid)
-    if val < 0:
-        return u"(Unconnected)"
-    return levels_by_id.get(val, u"(Unknown \u2014 ID {0})".format(val))
-
-
-def _param_offset_display(elem, bip, name_fallback):
-    """
-    Get an offset parameter's value as a human-readable project-unit string.
-    Falls back to the raw internal double if AsValueString() is unavailable.
-    """
-    p = _get_param(elem, bip, name_fallback)
-    if p is None:
-        return u"0"
-    try:
-        vs = p.AsValueString()
-        return vs if vs else str(round(p.AsDouble(), 6))
-    except Exception:
-        return u"0"
-
-
-def _get_shaft_fields(elem, levels_by_id):
-    """
-    Extract the six display values for one shaft element.
-    Returns: (bc_name, bo_str, tc_name, to_str, sf_val)
-    """
-    p_bc    = _get_param(elem, BuiltInParameter.WALL_BASE_CONSTRAINT, "Base Constraint")
-    bc_name = _level_name_for_id(p_bc.AsElementId() if p_bc else None, levels_by_id)
-
-    bo_str  = _param_offset_display(elem, BuiltInParameter.WALL_BASE_OFFSET, "Base Offset")
-
-    p_tc    = _get_param(elem, BuiltInParameter.WALL_HEIGHT_TYPE,  "Top Constraint")
-    tc_name = _level_name_for_id(p_tc.AsElementId() if p_tc else None, levels_by_id)
-
-    to_str  = _param_offset_display(elem, BuiltInParameter.WALL_TOP_OFFSET, "Top Offset")
-
-    p_sf    = elem.LookupParameter("Shaft Function")
-    sf_val  = u""
-    if p_sf and p_sf.HasValue:
-        try:
-            sf_val = p_sf.AsString() or u""
-        except Exception:
-            pass
-
-    return bc_name, bo_str, tc_name, to_str, sf_val
-
-
-# ─── APPLY CHANGES (module-level, used inside transaction) ─────────────────────
-
-def _apply_row_changes(row_data, elem, levels_by_name, errors):
-    """
-    Read current control values from *row_data* and write them to the
-    Revit element's parameters. Errors are appended to *errors* (mutable list)
-    rather than raised, so the transaction continues for other rows.
-    """
-    eid_tag = u"ID {0}".format(_eid_int(row_data['eid']))
-
-    # ── Level ComboBox → ElementId parameter ──────────────────────────────
-    def _set_level_param(bip, fallback_name, combo):
-        sel = combo.SelectedItem
-        if sel is None:
-            return
-        lvl_name = str(sel.Content) if hasattr(sel, 'Content') else str(sel)
-        p = _get_param(elem, bip, fallback_name)
-        if p is None or p.IsReadOnly:
-            return
-        try:
-            if lvl_name == u"(Unconnected)":
-                p.Set(_invalid_eid())
-            elif lvl_name in levels_by_name:
-                p.Set(levels_by_name[lvl_name].Id)
-        except Exception as ex:
-            errors.append(u"{0} \u2014 {1}: {2}".format(eid_tag, fallback_name, str(ex)[:80]))
-
-    # ── TextBox → Double parameter (project units via SetValueString) ──────
-    def _set_offset_param(bip, fallback_name, tb):
-        text = tb.Text.strip()
-        p = _get_param(elem, bip, fallback_name)
-        if p is None or p.IsReadOnly:
-            return
-        try:
-            # SetValueString interprets the string in current project units
-            p.SetValueString(text)
-        except Exception:
+with _make_tx(doc, __title__):
+    for el in sorted_els:
+        param = el.LookupParameter(p_name)
+        if param and not param.IsReadOnly and param.StorageType == StorageType.String:
             try:
-                # Last resort: treat as a bare number in internal (feet) units
-                p.Set(float(text))
-            except Exception as ex:
-                errors.append(u"{0} \u2014 {1}: {2}".format(eid_tag, fallback_name, str(ex)[:80]))
-
-    # ── TextBox → String parameter ─────────────────────────────────────────
-    def _set_string_param(param_name, tb):
-        p = elem.LookupParameter(param_name)
-        if p is None or p.IsReadOnly:
-            return
-        try:
-            p.Set(tb.Text)
-        except Exception as ex:
-            errors.append(u"{0} \u2014 {1}: {2}".format(eid_tag, param_name, str(ex)[:80]))
-
-    _set_level_param(BuiltInParameter.WALL_BASE_CONSTRAINT, "Base Constraint", row_data['bc_combo'])
-    _set_offset_param(BuiltInParameter.WALL_BASE_OFFSET,    "Base Offset",     row_data['bo_tb'])
-    _set_level_param(BuiltInParameter.WALL_HEIGHT_TYPE,  "Top Constraint",  row_data['tc_combo'])
-    _set_offset_param(BuiltInParameter.WALL_TOP_OFFSET,     "Top Offset",      row_data['to_tb'])
-    _set_string_param("Shaft Function",                                         row_data['sf_tb'])
-
-
-# ─── UI ROW BUILDERS ───────────────────────────────────────────────────────────
-
-def _make_col_grid():
-    """Return a Grid pre-loaded with the shared 11-column layout."""
-    g = Controls.Grid()
-    for w in COL_SPECS:
-        cd = Controls.ColumnDefinition()
-        cd.Width = w
-        g.ColumnDefinitions.Add(cd)
-    return g
-
-
-def _make_header_row():
-    """
-    Sticky-looking column header row (first child of RowsPanel, scrolls with
-    content — shaft counts are typically small so this is fine in practice).
-    """
-    grid = _make_col_grid()
-    grid.Background = HDR_BRUSH
-    grid.Height     = 28
-    grid.Margin     = Thickness(0, 0, 0, 0)
-
-    for col_idx, label in zip(CTRL_COLS, HDR_LABELS):
-        tb = Controls.TextBlock()
-        tb.Text              = label.upper()
-        tb.Foreground        = SUBTEXT_BRUSH
-        tb.FontSize          = 10
-        tb.FontWeight        = System.Windows.FontWeights.SemiBold
-        tb.VerticalAlignment = VerticalAlignment.Center
-        tb.Padding           = Thickness(5, 0, 0, 0)
-        Controls.Grid.SetColumn(tb, col_idx)
-        grid.Children.Add(tb)
-
-    return grid
-
-
-def _make_combo_in_border(items, selected_text):
-    """
-    Dark-themed ComboBox (transparent bg, white popup items) wrapped in a
-    styled Border that provides the visible container.
-    Returns (border, combo_box).
-    """
-    cb = Controls.ComboBox()
-    cb.Background               = TRANS_BRUSH
-    cb.Foreground               = DARK_BRUSH   # white popup needs dark text
-    cb.BorderThickness          = Thickness(0)
-    cb.Height                   = 26
-    cb.FontSize                 = 12
-    cb.Padding                  = Thickness(4, 0, 2, 0)
-    cb.VerticalContentAlignment = VerticalAlignment.Center
-
-    sel_idx = 0
-    for i, name in enumerate(items):
-        cbi = Controls.ComboBoxItem()
-        cbi.Content    = name
-        cbi.Foreground = DARK_BRUSH
-        cbi.Padding    = Thickness(6, 3, 6, 3)
-        cb.Items.Add(cbi)
-        if name == selected_text:
-            sel_idx = i
-    cb.SelectedIndex = sel_idx
-
-    border = Controls.Border()
-    border.Background      = SURFACE_BRUSH
-    border.CornerRadius    = CornerRadius(4)
-    border.BorderBrush     = MUTED_BRUSH
-    border.BorderThickness = Thickness(1)
-    border.Child           = cb
-    return border, cb
-
-
-def _make_textbox_in_border(text):
-    """
-    Dark-themed TextBox wrapped in a styled Border.
-    Returns (border, text_box).
-    """
-    tb = Controls.TextBox()
-    tb.Text                     = text or u""
-    tb.Background               = TRANS_BRUSH
-    tb.Foreground               = TEXT_BRUSH
-    tb.CaretBrush               = ACCENT_BRUSH
-    tb.BorderThickness          = Thickness(0)
-    tb.Padding                  = Thickness(5, 2, 5, 2)
-    tb.FontSize                 = 12
-    tb.VerticalAlignment        = VerticalAlignment.Center
-    tb.VerticalContentAlignment = VerticalAlignment.Center
-
-    border = Controls.Border()
-    border.Background      = SURFACE_BRUSH
-    border.CornerRadius    = CornerRadius(4)
-    border.BorderBrush     = MUTED_BRUSH
-    border.BorderThickness = Thickness(1)
-    border.Height          = 26
-    border.Child           = tb
-    return border, tb
-
-
-def _make_data_row(elem, row_idx, level_options, levels_by_id):
-    """
-    Build one editable data row for *elem*.
-
-    Returns (grid, row_data) where row_data carries:
-      'eid'        – ElementId for transaction use
-      'bc_combo'   – Base Constraint ComboBox
-      'bo_tb'      – Base Offset TextBox
-      'tc_combo'   – Top Constraint ComboBox
-      'to_tb'      – Top Offset TextBox
-      'sf_tb'      – Shaft Function TextBox
-      'search_key' – lower-cased concatenation for the search bar
-    """
-    bc_name, bo_str, tc_name, to_str, sf_val = _get_shaft_fields(elem, levels_by_id)
-    id_str = str(_eid_int(elem.Id))
-
-    grid = _make_col_grid()
-    grid.Margin    = Thickness(0, 2, 0, 2)
-    grid.Background = ROW_A_BRUSH if row_idx % 2 == 0 else ROW_B_BRUSH
-    grid.MinHeight = 32
-
-    # ── Col 0: ID (read-only, click navigates to element) ─────────────────
-    id_block = Controls.TextBlock()
-    id_block.Text              = id_str
-    id_block.Foreground        = SUBTEXT_BRUSH
-    id_block.FontFamily        = Media.FontFamily("Consolas, Courier New")
-    id_block.FontSize          = 11
-    id_block.VerticalAlignment = VerticalAlignment.Center
-    id_block.TextTrimming      = TextTrimming.CharacterEllipsis
-    id_block.Padding           = Thickness(5, 0, 2, 0)
-    id_block.Cursor            = WinInput.Cursors.Hand
-    id_block.ToolTip           = (u"Element ID: {0}\n"
-                                  u"Click to navigate Revit to this shaft").format(id_str)
-
-    # Capture ElementId per-row with default-arg closure (IronPython 2.7 safe)
-    def _on_id_click(sender, e, eid=elem.Id):
-        try:
-            uidoc.ShowElements(eid)
-        except Exception:
-            pass
-
-    id_block.MouseLeftButtonDown += _on_id_click
-    Controls.Grid.SetColumn(id_block, 0)
-    grid.Children.Add(id_block)
-
-    # ── Col 2: Base Constraint (ComboBox) ──────────────────────────────────
-    bc_border, bc_combo = _make_combo_in_border(level_options, bc_name)
-    Controls.Grid.SetColumn(bc_border, 2)
-    grid.Children.Add(bc_border)
-
-    # ── Col 4: Base Offset (TextBox) ───────────────────────────────────────
-    bo_border, bo_tb = _make_textbox_in_border(bo_str)
-    Controls.Grid.SetColumn(bo_border, 4)
-    grid.Children.Add(bo_border)
-
-    # ── Col 6: Top Constraint (ComboBox) ───────────────────────────────────
-    tc_border, tc_combo = _make_combo_in_border(level_options, tc_name)
-    Controls.Grid.SetColumn(tc_border, 6)
-    grid.Children.Add(tc_border)
-
-    # ── Col 8: Top Offset (TextBox) ────────────────────────────────────────
-    to_border, to_tb = _make_textbox_in_border(to_str)
-    Controls.Grid.SetColumn(to_border, 8)
-    grid.Children.Add(to_border)
-
-    # ── Col 10: Shaft Function (TextBox) ───────────────────────────────────
-    sf_border, sf_tb = _make_textbox_in_border(sf_val)
-    Controls.Grid.SetColumn(sf_border, 10)
-    grid.Children.Add(sf_border)
-
-    row_data = {
-        'eid':        elem.Id,
-        'bc_combo':   bc_combo,
-        'bo_tb':      bo_tb,
-        'tc_combo':   tc_combo,
-        'to_tb':      to_tb,
-        'sf_tb':      sf_tb,
-        # Combined search key: id + level names + shaft function value
-        'search_key': u" ".join([id_str, bc_name, tc_name, sf_val]).lower(),
-    }
-    return grid, row_data
-
-
-# ─── BROWSER WINDOW ────────────────────────────────────────────────────────────
-
-def show_shaft_browser(shafts, levels):
-    """
-    Open the modeless Shaft Opening Editor.
-    Uses Show() + Dispatcher.PushFrame() so Revit stays interactive
-    while the window is open.
-    """
-    window     = XamlReader.Parse(BROWSER_XAML)
-    title_lbl  = window.FindName("TitleLabel")
-    search_box = window.FindName("SearchBox")
-    status_lbl = window.FindName("StatusLabel")
-    cancel_btn = window.FindName("CancelButton")
-    save_btn   = window.FindName("SaveButton")
-    rows_panel = window.FindName("RowsPanel")
-
-    # Mutable state — no 'nonlocal' in IronPython 2.7
-    frame = [Threading.DispatcherFrame()]
-
-    # ── Level data structures ──────────────────────────────────────────────
-    # "(Unconnected)" is the first option so it appears at the top of each
-    # level ComboBox; it maps to an invalid ElementId when saved.
-    level_options  = [u"(Unconnected)"] + [l.Name for l in levels]
-    levels_by_name = {l.Name: l          for l in levels}
-    levels_by_id   = {_eid_int(l.Id): l.Name for l in levels}
-
-    # ── Header labels ──────────────────────────────────────────────────────
-    title_lbl.Text  = (u"Shaft Opening Editor  \u00b7  "
-                       u"{0} shaft(s) found".format(len(shafts)))
-    status_lbl.Text = (u"Click an ID to navigate  \u00b7  "
-                       u"Edit cells directly  \u00b7  "
-                       u"Save Changes to commit all edits in one transaction")
-
-    # ── Build column headers + divider (both scroll with content) ─────────
-    rows_panel.Children.Add(_make_header_row())
-
-    divider = Controls.Border()
-    divider.Height     = 1
-    divider.Background = MUTED_BRUSH
-    divider.Opacity    = 0.4
-    divider.Margin     = Thickness(0, 4, 0, 4)
-    rows_panel.Children.Add(divider)
-
-    # ── Build one editable row per shaft ───────────────────────────────────
-    all_row_data  = []   # list of dicts (controls + metadata)
-    all_row_grids = []   # parallel list of Grid widgets (for search visibility)
-
-    for i, shaft in enumerate(shafts):
-        grid, row_data = _make_data_row(shaft, i, level_options, levels_by_id)
-        rows_panel.Children.Add(grid)
-        all_row_data.append(row_data)
-        all_row_grids.append(grid)
-
-    # ── Search handler ─────────────────────────────────────────────────────
-    def on_search_changed(s, e):
-        query = search_box.Text.strip().lower()
-        for rd, rg in zip(all_row_data, all_row_grids):
-            visible = (not query) or (query in rd['search_key'])
-            rg.Visibility = Visibility.Visible if visible else Visibility.Collapsed
-
-    # ── Save handler ───────────────────────────────────────────────────────
-    def on_save(s, e):
-        errors = []
-        t = Transaction(doc, u"Edit Shaft Opening Properties")
-        try:
-            t.Start()
-            for rd in all_row_data:
-                elem = doc.GetElement(rd['eid'])
-                if elem is not None:
-                    _apply_row_changes(rd, elem, levels_by_name, errors)
-            t.Commit()
-        except Exception as tx_ex:
-            try:
-                t.RollBack()
+                param.Set(prefix + str(count) + suffix)
+                count    += 1
+                numbered += 1
             except Exception:
-                pass
-            errors.insert(0, u"Transaction failed: " + str(tx_ex)[:100])
+                skipped += 1
+        else:
+            skipped += 1
 
-        frame[0].Continue = False
-        window.Close()
+# ── Summary alert ─────────────────────────────────────────────────────────
+direction_label = 'Bottom \u2192 Top' if asc_y else 'Top \u2192 Bottom'
 
-        if errors:
-            TaskDialog.Show(
-                u"Shaft Editor \u2014 Warnings",
-                u"Some changes could not be applied:\n\n"
-                + u"\n".join(errors[:20])
-            )
-
-    # ── Cancel handler ─────────────────────────────────────────────────────
-    def on_cancel(s, e):
-        frame[0].Continue = False
-        window.Close()
-
-    # ── Window closing (X / Alt-F4) ────────────────────────────────────────
-    def on_closing(s, e):
-        frame[0].Continue = False
-
-    # ── Wire events ────────────────────────────────────────────────────────
-    search_box.TextChanged += on_search_changed
-    save_btn.Click         += on_save
-    cancel_btn.Click       += on_cancel
-    window.Closing         += on_closing
-
-    # Non-blocking: Show() + PushFrame keeps the Revit main thread alive
-    # so the user can pan/zoom while editing.
-    window.Show()
-    Threading.Dispatcher.PushFrame(frame[0])
-
-
-# ─── MAIN ──────────────────────────────────────────────────────────────────────
-
-shafts = collect_shafts()
-
-if not shafts:
-    TaskDialog.Show(
-        u"Shaft Opening Editor",
-        u"No Shaft Openings were found in the current document."
-    )
-    script.exit()
-
-if not has_shaft_function_param(shafts):
-    TaskDialog.Show(
-        u"Shaft Opening Editor",
-        u'The parameter "Shaft Function" was not found on any Shaft Opening '
-        u'in this document.\n\n'
-        u'Please add it as a Shared Parameter bound to the Openings category '
-        u'via Manage \u2192 Project Parameters, then re-run this tool.'
-    )
-    script.exit()
-
-levels = get_all_levels()
-show_shaft_browser(shafts, levels)
+forms.alert(
+    'Renumbering complete!\n\n'
+    'Category   : {cat}\n'
+    'Parameter  : {param}\n'
+    'Direction  : {dir}\n'
+    'Tolerance  : {tol} ft\n\n'
+    '{n} element{pl} numbered.\n'
+    'Range      : {pfx}{s}{sfx}  \u2192  {pfx}{e}{sfx}\n'
+    '{sk} element{skpl} skipped (no matching parameter).'.format(
+        cat   = ui.cat_name[0],
+        param = p_name,
+        dir   = direction_label,
+        tol   = y_tol,
+        n     = numbered,
+        pl    = 's' if numbered != 1 else '',
+        pfx   = prefix,
+        sfx   = suffix,
+        s     = start_count,
+        e     = count - 1,
+        sk    = skipped,
+        skpl  = 's' if skipped != 1 else '',
+    ),
+    title=__title__,
+)
+# ==================================================

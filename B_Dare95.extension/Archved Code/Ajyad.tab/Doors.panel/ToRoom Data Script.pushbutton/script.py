@@ -29,45 +29,45 @@ t.Start()
 for door in all_doors:
 
     try:
-        door_toroom = door.ToRoom[phase]
+        door_fromroom = door.FromRoom[phase]
 
-        if door_toroom == None:
+        if door_fromroom == None:
             doors_without_rooms.append(door)
             continue
 
-        to_room_level = door_toroom.get_Parameter(BuiltInParameter.LEVEL_NAME).AsValueString()
+        # to_room_level = door_toroom.get_Parameter(BuiltInParameter.LEVEL_NAME).AsValueString()
 
-        to_room_number = door_toroom.LookupParameter("SDC_Room_Number").AsValueString()
+        from_room_number = door_fromroom.LookupParameter("SDC_G_SERIAL").AsValueString()
 
-        door_room_data_number= door.LookupParameter("SDC_A_DOR_TOROOM_NUMBER")
+        door_mark= door.get_Parameter(BuiltInParameter.ALL_MODEL_MARK)
 
-        door_room_data_number.Set(to_room_number)
+        door_mark.Set(from_room_number)
 
-        door_room_data_level = door.LookupParameter("SDC_A_DOR_TOROOM_LEVEL")
-
-        door_room_data_level.Set(to_room_level)
-
-        room_data = to_room_level + to_room_number
-
-        doors_in_same_room[door] = room_data
+        # door_room_data_level = door.LookupParameter("SDC_A_DOR_TOROOM_LEVEL")
+        #
+        # door_room_data_level.Set(to_room_level)
+        #
+        # room_data = to_room_level + to_room_number
+        #
+        # doors_in_same_room[door] = room_data
 
     except:
         continue
 
-value_counts = {}
-result_dict = {}
-
-for key, value in doors_in_same_room.items():
-    current_count = value_counts.get(value, 0) + 1
-    value_counts[value] = current_count
-    result_dict[key] = current_count
-
-# Inner loop moved outside — runs only after all doors are counted
-for door, designator in result_dict.items():
-    try:
-        door_room_designator_param = door.LookupParameter("SDC_A_DOR_TOROOM_DESIGNATOR")
-        door_room_designator_param.Set(str(designator))  # Cast to string for text parameters
-    except:
-        pass
+# value_counts = {}
+# result_dict = {}
+#
+# for key, value in doors_in_same_room.items():
+#     current_count = value_counts.get(value, 0) + 1
+#     value_counts[value] = current_count
+#     result_dict[key] = current_count
+#
+# # Inner loop moved outside — runs only after all doors are counted
+# for door, designator in result_dict.items():
+#     try:
+#         door_room_designator_param = door.LookupParameter("SDC_A_DOR_TOROOM_DESIGNATOR")
+#         door_room_designator_param.Set(str(designator))  # Cast to string for text parameters
+#     except:
+#         pass
 
 t.Commit()
