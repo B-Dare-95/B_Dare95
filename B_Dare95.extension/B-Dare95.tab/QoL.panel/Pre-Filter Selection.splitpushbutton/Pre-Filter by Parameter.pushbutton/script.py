@@ -1,20 +1,26 @@
 # -*- coding: utf-8 -*-
 __title__ = "Pre-Filter by Parameter"
 __author__ = "Mohamed Bedair"
-__version__ = '1.3.1'
+__version__ = '1.5.0'
 __doc__ = """
 
 Description:
 Filters the Selection box to only the selected category.
-Optionally refines the selection further by stacking one or more
-parameter-value filters (all filters applied with AND logic).
-Also allows negating selection with SHIFT click.
+Optionally refines the selection by stacking parameter-value filter rows.
+Each row after the first carries an AND / OR / NOT operator that controls
+how it combines with the result of all previous rows.
+
+Operator semantics (left-to-right evaluation):
+  AND  — element must match both the previous result AND this filter
+  OR   — element matches if the previous result OR this filter is true
+  NOT  — element must match the previous result AND NOT this filter
 
 How-to:
 -> Run the script
 -> Select a single category from the list
 -> (Optional) Pick a parameter and value from the filter row
--> (Optional) Click "+ Add Filter" to stack more constraints
+-> (Optional) Click "+ Add Filter" — choose AND / OR / NOT on the
+   connector pill that appears between the rows, then fill in the row
 -> Click "Make A Selection" and draw a rectangle
 
 Author: Mohamed Bedair
@@ -34,7 +40,6 @@ from Autodesk.Revit.DB import (
 )
 from Autodesk.Revit.UI.Selection import ISelectionFilter
 from pyrevit import script
-from pyrevit import EXEC_PARAMS
 
 import System.Windows
 import System.Windows.Controls as Controls
@@ -56,7 +61,7 @@ CARD    = "#2A2A3C"
 SURFACE = "#313244"
 MUTED   = "#45475A"
 TEXT    = "#CDD6F4"
-SUBTEXT = "#000000"
+SUBTEXT = "#000000"   # kept as-is (used for scrollbar-thumb hover in XAML)
 ACCENT  = "#F0A500"
 
 def _brush(hex_str):
@@ -64,14 +69,15 @@ def _brush(hex_str):
     r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
     return Media.SolidColorBrush(Media.Color.FromRgb(r, g, b))
 
-# Brushes used when building rows programmatically
 SURFACE_BRUSH = _brush(SURFACE)
 MUTED_BRUSH   = _brush(MUTED)
 TEXT_BRUSH    = _brush(TEXT)
-DARK_BRUSH    = Media.SolidColorBrush(Media.Color.FromRgb(20, 20, 20))  # dropdown item text
+ACCENT_BRUSH  = _brush(ACCENT)
+BG_BRUSH      = _brush(BG)
+DARK_BRUSH    = Media.SolidColorBrush(Media.Color.FromRgb(20, 20, 20))
 TRANS_BRUSH   = Media.Brushes.Transparent
-# ──────────────────────────────────────────────────────────────────────────────
 
+# ─── XAML ─────────────────────────────────────────────────────────────────────
 XAML_TEMPLATE = """
 <Window
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -299,7 +305,7 @@ XAML_TEMPLATE = """
                            Foreground="{TEXT}" FontSize="11" Margin="4,0,0,0"/>
             </Grid>
 
-            <!-- Dynamic filter rows injected by Python -->
+            <!-- Dynamic filter rows (and connector pills) injected by Python -->
             <StackPanel x:Name="RowsPanel" Margin="0,0,0,12"/>
 
             <!-- Confirm button -->
@@ -337,7 +343,7 @@ def _eid_int(eid):
     try:
         return eid.IntegerValue
     except AttributeError:
-        return eid.Value      # Revit 2025+ (Int64)
+        return eid.Value       # Revit 2025+ (Int64)
 
 
 def get_param_value_string(param):
@@ -350,10 +356,10 @@ def get_param_value_string(param):
             v = param.AsString()
             return v if v else None
         elif st == StorageType.Integer:
-            vs = param.AsValueString()      # catches Yes/No, enum labels
+            vs = param.AsValueString()
             return vs if vs else str(param.AsInteger())
         elif st == StorageType.Double:
-            vs = param.AsValueString()      # includes units
+            vs = param.AsValueString()
             return vs if vs else str(round(param.AsDouble(), 6))
         elif st == StorageType.ElementId:
             eid = param.AsElementId()
@@ -372,17 +378,12 @@ def get_param_value_string(param):
 
 
 def get_params_for_category(category_name):
-    """
-    Sorted list of every parameter name (instance + type) on elements
-    of *category_name*, via an efficient ElementCategoryFilter pass.
-    """
+    """Sorted list of every parameter name (instance + type) on the category."""
     cat_obj = get_category_by_name(doc, category_name)
     if cat_obj is None:
         return []
-
     params         = set()
     seen_type_ints = set()
-
     try:
         col = (FilteredElementCollector(doc)
                .WherePasses(ElementCategoryFilter(cat_obj.Id))
@@ -406,22 +407,16 @@ def get_params_for_category(category_name):
                 pass
     except Exception:
         pass
-
     return sorted(params)
 
 
 def get_values_for_param(category_name, param_name):
-    """
-    Sorted list of unique human-readable values for *param_name* across all
-    elements (instance + type) of *category_name*.
-    """
+    """Sorted list of unique human-readable values for param_name in the category."""
     cat_obj = get_category_by_name(doc, category_name)
     if cat_obj is None:
         return []
-
     values         = set()
     seen_type_ints = set()
-
     try:
         col = (FilteredElementCollector(doc)
                .WherePasses(ElementCategoryFilter(cat_obj.Id))
@@ -449,7 +444,6 @@ def get_values_for_param(category_name, param_name):
                 pass
     except Exception:
         pass
-
     return sorted(values)
 
 
@@ -474,14 +468,141 @@ def element_matches_single_param(elem, param_name, param_value):
     return False
 
 
-def element_matches_all_filters(elem, param_filters):
-    """True if elem satisfies every (param_name, param_value) pair (AND logic)."""
+def element_matches_filters_with_ops(elem, param_filters):
+    """
+    Evaluate param_filters against elem using per-row operators.
+
+    param_filters  – list of (param_name, param_value, operator)
+                     Operator on the first item is ignored (it is the base).
+
+    Operators:
+      'AND'  →  result = result AND  match(this row)
+      'OR'   →  result = result OR   match(this row)
+      'NOT'  →  result = result AND NOT match(this row)  (exclude matching)
+
+    Evaluation is strictly left-to-right.
+    An empty list returns True (no filter → pass everything).
+    """
     if not param_filters:
         return True
-    for pname, pval in param_filters:
-        if not element_matches_single_param(elem, pname, pval):
-            return False
-    return True
+
+    result = element_matches_single_param(
+        elem, param_filters[0][0], param_filters[0][1]
+    )
+
+    for i in range(1, len(param_filters)):
+        pname, pval, op = param_filters[i]
+        current = element_matches_single_param(elem, pname, pval)
+        if op == 'AND':
+            result = result and current
+        elif op == 'OR':
+            result = result or current
+        elif op == 'NOT':
+            result = result and not current
+
+    return result
+
+
+# ─── CONNECTOR WIDGET (AND / OR / NOT pills) ──────────────────────────────────
+
+def create_connector_widget(row):
+    """
+    Build the operator-selector widget that sits between two filter rows.
+
+    Renders as three pill-shaped toggle buttons (AND / OR / NOT) flanked by
+    subtle horizontal rules that visually connect the rows above and below.
+
+    The active operator is stored in row['operator'] (a mutable one-item list
+    so closures can mutate it without needing 'nonlocal').
+
+    Returns the root Grid widget (ready to add to rows_panel).
+    """
+    # ── Root: 3-column grid [line ─── pills ─── line] ─────────────────────
+    container = Controls.Grid()
+    container.Margin = Thickness(0, 4, 0, 4)
+
+    for w in [
+        GridLength(1, GridUnitType.Star),
+        GridLength.Auto,
+        GridLength(1, GridUnitType.Star),
+    ]:
+        cd = Controls.ColumnDefinition()
+        cd.Width = w
+        container.ColumnDefinitions.Add(cd)
+
+    def _rule():
+        line = Controls.Border()
+        line.Height              = 1
+        line.Background          = MUTED_BRUSH
+        line.Opacity             = 0.35
+        line.VerticalAlignment   = System.Windows.VerticalAlignment.Center
+        return line
+
+    left_rule  = _rule()
+    right_rule = _rule()
+    Controls.Grid.SetColumn(left_rule,  0)
+    Controls.Grid.SetColumn(right_rule, 2)
+    container.Children.Add(left_rule)
+    container.Children.Add(right_rule)
+
+    # ── Pills panel (centre column) ────────────────────────────────────────
+    pills_panel = Controls.StackPanel()
+    pills_panel.Orientation = Controls.Orientation.Horizontal
+    pills_panel.Margin      = Thickness(6, 0, 6, 0)
+    Controls.Grid.SetColumn(pills_panel, 1)
+    container.Children.Add(pills_panel)
+
+    # ── Build individual pills ─────────────────────────────────────────────
+    # pill_refs: op_label → (Border_widget, TextBlock_widget)
+    pill_refs = {}
+
+    for op_label in ['AND', 'OR', 'NOT']:
+        border = Controls.Border()
+        border.CornerRadius    = CornerRadius(9)
+        border.Padding         = Thickness(9, 3, 9, 3)
+        border.Margin          = Thickness(0, 0, 4, 0)
+        border.Cursor          = WinInput.Cursors.Hand
+
+        tb = Controls.TextBlock()
+        tb.Text       = op_label
+        tb.FontSize   = 10
+        tb.FontWeight = System.Windows.FontWeights.SemiBold
+        tb.VerticalAlignment   = System.Windows.VerticalAlignment.Center
+        tb.HorizontalAlignment = System.Windows.HorizontalAlignment.Center
+
+        border.Child = tb
+        pills_panel.Children.Add(border)
+        pill_refs[op_label] = (border, tb)
+
+    # ── Style helper: apply active/inactive visuals ────────────────────────
+    def _refresh_pills():
+        current = row['operator'][0]
+        for lbl, (brd, txt) in pill_refs.items():
+            if lbl == current:
+                brd.Background      = ACCENT_BRUSH
+                brd.BorderThickness = Thickness(0)
+                txt.Foreground      = BG_BRUSH
+                txt.Opacity         = 1.0
+            else:
+                brd.Background      = SURFACE_BRUSH
+                brd.BorderBrush     = MUTED_BRUSH
+                brd.BorderThickness = Thickness(1)
+                txt.Foreground      = TEXT_BRUSH
+                txt.Opacity         = 0.45
+
+    # ── Click handler: select this operator ───────────────────────────────
+    # Default-arg pattern captures op_label and row safely in IronPython 2.7
+    def _on_click(s, e, op=None, r=row):
+        r['operator'][0] = op
+        _refresh_pills()
+
+    for lbl in ['AND', 'OR', 'NOT']:
+        pill_refs[lbl][0].MouseLeftButtonDown += (
+            lambda s, e, op=lbl: _on_click(s, e, op)
+        )
+
+    _refresh_pills()   # initialise with AND selected
+    return container
 
 
 # ─── DIALOG ───────────────────────────────────────────────────────────────────
@@ -509,7 +630,8 @@ def show_category_picker(all_categories):
 
     Returns (category_name, param_filters) where:
         category_name  – str
-        param_filters  – [] or [(param_name, param_value), ...]
+        param_filters  – [] or [(param_name, param_value, operator), ...]
+                         operator on index 0 is always 'AND' (base row)
 
     Returns None when the user closes without confirming.
     """
@@ -524,24 +646,23 @@ def show_category_picker(all_categories):
     result_holder = [None]
     selected_cat  = [None]
     radio_buttons = []
-    rows          = []        # list of row dicts
+    rows          = []   # list of row dicts
 
-    # ── Confirm state ──────────────────────────────────────────────────────────
+    # ── Confirm-button guard ───────────────────────────────────────────────
     def update_confirm():
         if selected_cat[0] is None:
             confirm_btn.IsEnabled = False
             return
-        # Block only if a row has a param chosen, values exist, but none selected
         for row in rows:
-            p_sel = _combo_value(row['param_combo'])
-            v_sel = _combo_value(row['value_combo'])
+            p_sel      = _combo_value(row['param_combo'])
+            v_sel      = _combo_value(row['value_combo'])
             has_values = row['value_combo'].Items.Count > 0
             if p_sel is not None and has_values and v_sel is None:
                 confirm_btn.IsEnabled = False
                 return
         confirm_btn.IsEnabled = True
 
-    # ── Populate param combo for one row ──────────────────────────────────────
+    # ── Param/value population ─────────────────────────────────────────────
     def populate_row_params(row):
         row['param_combo'].Items.Clear()
         row['value_combo'].Items.Clear()
@@ -551,7 +672,6 @@ def show_category_picker(all_categories):
         for name in get_params_for_category(selected_cat[0]):
             row['param_combo'].Items.Add(_combo_item(name))
 
-    # ── Populate value combo for one row ──────────────────────────────────────
     def reload_row_values(row):
         row['value_combo'].Items.Clear()
         row['value_combo'].IsEnabled = False
@@ -564,15 +684,42 @@ def show_category_picker(all_categories):
         row['value_combo'].IsEnabled = row['value_combo'].Items.Count > 0
         update_confirm()
 
-    # ── Remove a row ──────────────────────────────────────────────────────────
+    # ── Row removal ────────────────────────────────────────────────────────
     def remove_row(row):
+        # Remove the connector widget that precedes this row (if any)
+        if row['connector_grid'] is not None:
+            rows_panel.Children.Remove(row['connector_grid'])
         rows_panel.Children.Remove(row['grid'])
         rows.remove(row)
+
+        # Edge case: if the (formerly second) row is now row[0], it still
+        # carries a connector_grid that must be stripped from the panel.
+        if rows and rows[0]['connector_grid'] is not None:
+            rows_panel.Children.Remove(rows[0]['connector_grid'])
+            rows[0]['connector_grid'] = None
+
         update_confirm()
 
-    # ── Create and attach one new filter row ──────────────────────────────────
+    # ── Create and attach one new filter row ──────────────────────────────
     def create_filter_row():
-        # Grid columns: [param | 10 | value | 8 | ×]
+        # Build the row dict first so create_connector_widget can reference it
+        row = {
+            'grid':           None,   # set below
+            'param_combo':    None,
+            'value_combo':    None,
+            'remove_btn':     None,
+            'operator':       ['AND'],  # mutable — default AND
+            'connector_grid': None,     # set below for rows after the first
+        }
+        rows.append(row)
+
+        # ── Connector pill (only for rows after the first) ─────────────────
+        if len(rows) > 1:
+            connector = create_connector_widget(row)
+            row['connector_grid'] = connector
+            rows_panel.Children.Add(connector)
+
+        # ── Filter row grid: [param | 10 | value | 8 | ×] ─────────────────
         grid = Controls.Grid()
         grid.Margin = Thickness(0, 0, 0, 6)
         for w in [
@@ -586,7 +733,7 @@ def show_category_picker(all_categories):
             cd.Width = w
             grid.ColumnDefinitions.Add(cd)
 
-        # ── Parameter ComboBox ────────────────────────────────────────────────
+        # ── Parameter ComboBox ────────────────────────────────────────────
         param_combo = Controls.ComboBox()
         param_combo.Background      = TRANS_BRUSH
         param_combo.Foreground      = DARK_BRUSH
@@ -605,7 +752,7 @@ def show_category_picker(all_categories):
         Controls.Grid.SetColumn(param_border, 0)
         grid.Children.Add(param_border)
 
-        # ── Value ComboBox ────────────────────────────────────────────────────
+        # ── Value ComboBox ────────────────────────────────────────────────
         value_combo = Controls.ComboBox()
         value_combo.Background      = TRANS_BRUSH
         value_combo.Foreground      = DARK_BRUSH
@@ -625,9 +772,9 @@ def show_category_picker(all_categories):
         Controls.Grid.SetColumn(value_border, 2)
         grid.Children.Add(value_border)
 
-        # ── Remove (×) button ─────────────────────────────────────────────────
+        # ── Remove (×) button ─────────────────────────────────────────────
         remove_btn = Controls.Button()
-        remove_btn.Content           = "×"
+        remove_btn.Content           = u"\u00D7"
         remove_btn.Width             = 26
         remove_btn.Height            = 26
         remove_btn.Background        = TRANS_BRUSH
@@ -639,20 +786,19 @@ def show_category_picker(all_categories):
         Controls.Grid.SetColumn(remove_btn, 4)
         grid.Children.Add(remove_btn)
 
-        row = {
-            'grid':        grid,
-            'param_combo': param_combo,
-            'value_combo': value_combo,
-            'remove_btn':  remove_btn,
-        }
-        rows.append(row)
+        # ── Back-fill the row dict ─────────────────────────────────────────
+        row['grid']        = grid
+        row['param_combo'] = param_combo
+        row['value_combo'] = value_combo
+        row['remove_btn']  = remove_btn
+
         rows_panel.Children.Add(grid)
 
-        # Pre-populate params if category already chosen
+        # Pre-populate params if a category is already selected
         if selected_cat[0] is not None:
             populate_row_params(row)
 
-        # Wire events — r=row default arg safely captures this row's reference
+        # Wire events — r=row captures this row's reference safely
         def _on_param(s, e, r=row):
             reload_row_values(r)
 
@@ -668,7 +814,7 @@ def show_category_picker(all_categories):
 
         update_confirm()
 
-    # ── Category radio changed ─────────────────────────────────────────────────
+    # ── Category radio changed ─────────────────────────────────────────────
     def on_radio_checked(sender, e):
         selected_cat[0] = sender.Tag
         add_row_btn.IsEnabled = True
@@ -676,7 +822,7 @@ def show_category_picker(all_categories):
             populate_row_params(row)
         update_confirm()
 
-    # ── Search filter ──────────────────────────────────────────────────────────
+    # ── Search filter ──────────────────────────────────────────────────────
     def on_search_changed(sender, e):
         query = search_box.Text.strip().lower()
         for rb in radio_buttons:
@@ -686,25 +832,24 @@ def show_category_picker(all_categories):
                 else Visibility.Collapsed
             )
 
-    # ── Add row button ─────────────────────────────────────────────────────────
-    def on_add_row(sender, e):
-        create_filter_row()
-
-    # ── Confirm ────────────────────────────────────────────────────────────────
+    # ── Confirm ────────────────────────────────────────────────────────────
     def on_confirm(sender, e):
         cat = selected_cat[0]
         if cat is None:
             return
         param_filters = []
-        for row in rows:
+        for i, row in enumerate(rows):
             p = _combo_value(row['param_combo'])
             v = _combo_value(row['value_combo'])
             if p is not None and v is not None:
-                param_filters.append((p, v))
+                # First row's operator is the base; subsequent rows carry
+                # whichever of AND/OR/NOT the user selected on their connector.
+                op = row['operator'][0] if i > 0 else 'AND'
+                param_filters.append((p, v, op))
         result_holder[0] = (cat, param_filters)
         window.Close()
 
-    # ── Build RadioButton list ─────────────────────────────────────────────────
+    # ── Build RadioButton list ─────────────────────────────────────────────
     for name in all_categories:
         rb          = Controls.RadioButton()
         rb.Content  = name
@@ -713,14 +858,13 @@ def show_category_picker(all_categories):
         cat_panel.Children.Add(rb)
         radio_buttons.append(rb)
 
-    # ── Wire static events ─────────────────────────────────────────────────────
+    # ── Wire static events ─────────────────────────────────────────────────
     search_box.TextChanged += on_search_changed
-    add_row_btn.Click      += on_add_row
+    add_row_btn.Click      += lambda s, e: create_filter_row()
     confirm_btn.Click      += on_confirm
 
-    # Start with one empty filter row
+    # Start with one empty filter row (no connector — it is the base)
     create_filter_row()
-
     update_confirm()
     window.ShowDialog()
     return result_holder[0]
@@ -731,8 +875,8 @@ def show_category_picker(all_categories):
 class CustomISelectionFilter(ISelectionFilter):
     """
     Allows elements whose category matches *category_name*.
-    If *param_filters* is a non-empty list of (param_name, param_value) tuples,
-    the element must also satisfy every filter (AND logic).
+    If *param_filters* is provided as (name, value, op) triples, the combined
+    boolean expression is evaluated with element_matches_filters_with_ops.
     """
     def __init__(self, category_name, param_filters=None):
         self.category_name = category_name
@@ -742,7 +886,7 @@ class CustomISelectionFilter(ISelectionFilter):
         if not (elem.Category and elem.Category.Name == self.category_name):
             return False
         if self.param_filters:
-            return element_matches_all_filters(elem, self.param_filters)
+            return element_matches_filters_with_ops(elem, self.param_filters)
         return True
 
     def AllowReference(self, reference, position):
@@ -752,7 +896,7 @@ class CustomISelectionFilter(ISelectionFilter):
 # ─── ACTIONS ──────────────────────────────────────────────────────────────────
 
 def apply_category_filter(category_name, param_filters=None):
-    """Restrict rectangle selection to elements matching all criteria."""
+    """Restrict rectangle selection to elements matching the combined criteria."""
     try:
         sel_filter     = CustomISelectionFilter(category_name, param_filters)
         selected_elems = selection.PickElementsByRectangle(sel_filter, "Select Elements")
@@ -761,29 +905,6 @@ def apply_category_filter(category_name, param_filters=None):
     except Exception:
         script.exit()
 
-
-def negate_selection(category_name, param_filters=None):
-    """
-    Rectangle select all, then keep elements that do NOT match all criteria
-    (SHIFT-click mode — inverts the filter).
-    """
-    try:
-        elems = selection.PickElementsByRectangle("Select Elements")
-        if param_filters:
-            filtered_ids = [
-                el.Id for el in elems
-                if not (el.Category
-                        and el.Category.Name == category_name
-                        and element_matches_all_filters(el, param_filters))
-            ]
-        else:
-            filtered_ids = [
-                el.Id for el in elems
-                if not (el.Category and el.Category.Name == category_name)
-            ]
-        uidoc.Selection.SetElementIds(List[ElementId](filtered_ids))
-    except Exception:
-        script.exit()
 
 
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
@@ -796,7 +917,4 @@ if not result:
 
 category_name, param_filters = result
 
-if EXEC_PARAMS.config_mode:
-    negate_selection(category_name, param_filters)
-else:
-    apply_category_filter(category_name, param_filters)
+apply_category_filter(category_name, param_filters)
