@@ -12,7 +12,7 @@ clr.AddReference("WindowsBase")
 
 from Autodesk.Revit.DB import (
     FilteredElementCollector, Family, FamilySymbol,
-    BuiltInCategory, StorageType
+    BuiltInCategory, StorageType, BuiltInParameter
 )
 from System.Windows import Window, WindowStartupLocation, Thickness, ResizeMode
 from System.Windows.Controls import (
@@ -145,7 +145,7 @@ def param_group_label(param):
 def get_param_details(family_doc):
     """
     Returns a list of dicts:
-      { name, group, is_instance, data_type }
+      { name, group, is_instance, data_type, is_builtin }
     sorted by group then name.
     """
     result = []
@@ -157,11 +157,18 @@ def get_param_details(family_doc):
                 group       = param_group_label(p)
                 is_instance = p.IsInstance
                 data_type   = storage_type_label(p.StorageType)
+                # Detect built-in: if AsBuiltInParameter returns INVALID, it's custom
+                try:
+                    bip        = p.Definition.BuiltInParameter
+                    is_builtin = (bip != BuiltInParameter.INVALID)
+                except:
+                    is_builtin = False
                 result.append({
-                    "name"        : name,
-                    "group"       : group,
-                    "is_instance" : is_instance,
-                    "data_type"   : data_type,
+                    "name"       : name,
+                    "group"      : group,
+                    "is_instance": is_instance,
+                    "data_type"  : data_type,
+                    "is_builtin" : is_builtin,
                 })
             except:
                 pass
@@ -274,17 +281,29 @@ def build_params_table(param_details, level):
         for p in params:
             kind_class = "badge-inst" if p["is_instance"] else "badge-type"
             kind_label = "Instance"   if p["is_instance"] else "Type"
+            custom_badge = (
+                '' if p["is_builtin"]
+                else '<span class="badge-custom" title="Custom / Shared / Project Parameter">&#9670; Custom</span>'
+            )
             rows_html += """
-        <tr>
-          <td class="param-name">{name}</td>
+        <tr class="{row_class}">
+          <td class="param-name">{name} {custom}</td>
           <td><span class="param-dtype">{dtype}</span></td>
           <td><span class="param-kind {kclass}">{klabel}</span></td>
         </tr>""".format(
-                name   = escape_html(p["name"]),
-                dtype  = escape_html(p["data_type"]),
-                kclass = kind_class,
-                klabel = kind_label,
+                row_class = "custom-param-row" if not p["is_builtin"] else "",
+                name      = escape_html(p["name"]),
+                custom    = custom_badge,
+                dtype     = escape_html(p["data_type"]),
+                kclass    = kind_class,
+                klabel    = kind_label,
             )
+
+    custom_count = sum(1 for p in param_details if not p["is_builtin"])
+    custom_note  = (
+        ' <span class="toggle-custom-count">&#9670; {} custom</span>'.format(custom_count)
+        if custom_count > 0 else ""
+    )
 
     uid = "params_" + re.sub(r"[^a-zA-Z0-9]", "_", str(id(param_details)))
 
@@ -292,7 +311,7 @@ def build_params_table(param_details, level):
     <div class="params-section">
       <button class="params-toggle" onclick="toggleParams('{uid}')" style="border-color:{border};">
         <span class="toggle-icon" id="icon_{uid}">&#9654;</span>
-        Parameters ({total})
+        Parameters ({total}){custom_note}
       </button>
       <div class="params-table-wrap" id="{uid}" style="display:none;">
         <table class="params-table">
@@ -305,10 +324,11 @@ def build_params_table(param_details, level):
         </table>
       </div>
     </div>""".format(
-        uid    = uid,
-        border = border,
-        total  = len(param_details),
-        rows   = rows_html,
+        uid         = uid,
+        border      = border,
+        total       = len(param_details),
+        custom_note = custom_note,
+        rows        = rows_html,
     )
 
 def node_to_html(node, is_last=True, ancestors_last=None):
@@ -624,6 +644,16 @@ def generate_html(family_name, root_node):
     background: rgba(255,255,255,0.08);
     color: var(--text);
   }}
+  .toggle-custom-count {{
+    display: inline-flex;
+    align-items: center;
+    background: rgba(248, 113, 250, 0.18);
+    color: #F470F7;
+    border-radius: 4px;
+    padding: 0px 6px;
+    font-size: 10px;
+    margin-left: 6px;
+  }}
   .toggle-icon {{
     font-size: 9px;
     transition: transform 0.15s;
@@ -701,6 +731,28 @@ def generate_html(family_name, root_node):
   }}
   .badge-inst {{ background: rgba(34,201,160,0.18); color: #4DD9B8; }}
   .badge-type {{ background: rgba(240,165,  0,0.18); color: #F0C050; }}
+
+  /* Custom / non-built-in parameter highlight */
+  .custom-param-row td {{
+    background: rgba(248, 113, 250, 0.06) !important;
+  }}
+  .custom-param-row:hover td {{
+    background: rgba(248, 113, 250, 0.11) !important;
+  }}
+  .badge-custom {{
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: rgba(248, 113, 250, 0.18);
+    color: #F470F7;
+    border: 1px solid rgba(248, 113, 250, 0.35);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 10px;
+    font-weight: 600;
+    vertical-align: middle;
+    margin-left: 4px;
+  }}
 
   /* === LEGEND === */
   .legend {{
