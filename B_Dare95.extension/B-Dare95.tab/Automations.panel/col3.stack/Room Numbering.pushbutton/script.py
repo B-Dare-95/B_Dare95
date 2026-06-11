@@ -1,40 +1,34 @@
 # -*- coding: utf-8 -*-
 __title__   = "Renumber Rooms\n[Grid-Based]"
 __author__  = "B-Dare95"
-__version__ = "Version 3.0"
-__doc__     = """Version = 3.0
+__version__ = "Version 2.0"
+__doc__     = """Version = 2.0
 Date    = 09.06.2026
 _____________________________________________________________________
 Description:
 Renumbers a chosen Room parameter using grid-line intersections and
-a nearest-to-corner reference system, with per-level or project-wide
-sequence control and support for both Text and Integer parameters.
+a nearest-to-corner reference system.
 
 Workflow:
   1. Collects all Grid Lines and computes every pairwise 2-D
-     intersection, then identifies the four outermost corner points
-     (TL / TR / BL / BR).
-  2. The user picks ONE corner tile as the numbering origin.
-  3. Rooms are grouped by Level (lowest elevation first).
-  4. Within each Level, rooms are sorted nearest → farthest from the
-     selected corner and numbered sequentially.
-  5. Sequence Mode:
-       Per Level    — counter resets to Start Number each new level.
-       Full Project — counter runs continuously across all levels.
-  6. Both Text (String) and Number (Integer) parameters are supported.
-     Choosing an Integer parameter restricts Prefix / Suffix to digits
-     only — a live error message appears if non-numeric characters are
-     entered.
+     intersection.
+  2. Identifies the 4 outermost intersection points (TL / TR / BL /
+     BR corners of the intersection bounding box).
+  3. The user picks ONE of the four corners as the reference point
+     via the 2x2 tile grid in the UI.
+  4. Rooms are grouped by Level (bottom level first).
+  5. Within each Level, rooms are sorted by Euclidean distance from
+     the reference corner — nearest room is numbered first.
+  6. The counter RESETS to Start Number for every new Level.
 _____________________________________________________________________
 How-to:
 -> Select a Room Parameter from the left panel
-   (TEXT = accepts any string · INT = digits only)
--> Click a Reference Corner tile
--> Set Prefix, Suffix, Start Number, and Sequence Mode
+-> Click the corner tile that represents your starting reference
+-> Set Prefix, Suffix, and Start Number
 -> Click RUN
 _____________________________________________________________________
 Last update:
-- [09.06.2026] - 3.0  Sequence mode toggle + Integer param support
+- [09.06.2026] - 2.0 RELEASE (per-level, nearest-to-corner)
 _____________________________________________________________________
 Author: B-Dare95"""
 
@@ -59,7 +53,6 @@ clr.AddReference("PresentationCore")
 clr.AddReference("WindowsBase")
 clr.AddReference("System")
 
-from System.Windows import Visibility
 from System.Windows.Markup import XamlReader
 
 # ╦  ╦╔═╗╦═╗╦╔═╗╔╗ ╦  ╔═╗╔═╗
@@ -83,6 +76,8 @@ except Exception:
 
 
 class _SimpleTx(object):
+    """Minimal Transaction context-manager fallback."""
+
     def __init__(self, doc, name):
         self._t = Transaction(doc, name)
 
@@ -105,11 +100,17 @@ def _make_tx(doc, name):
 # ╚═╝╩╚═╩═╩╝  ╩ ╩╝╚╝╩ ╩╩═╝ ╚╝ ╚═╝╩╚═╝
 # ==================================================
 
-_DEDUP_TOL = 0.01   # ft — merge near-identical intersection points
+_DEDUP_TOL = 0.01       # ft — tolerance for merging near-identical points
 
 
 def _intersect_2d(x1, y1, dx1, dy1, x2, y2, dx2, dy2):
-    """Analytical 2-D intersection of two infinite lines. Returns (x,y) or None."""
+    """
+    Analytical 2-D intersection of two infinite lines.
+    Line 1 : (x1,y1) + t*(dx1,dy1)
+    Line 2 : (x2,y2) + s*(dx2,dy2)
+    Returns (ix, iy) or None when lines are parallel.
+    Pure-math approach — avoids IronPython clr.Reference out-param issues.
+    """
     cross = dx1 * dy2 - dy1 * dx2
     if abs(cross) < 1e-9:
         return None
@@ -119,15 +120,24 @@ def _intersect_2d(x1, y1, dx1, dy1, x2, y2, dx2, dy2):
 
 def analyse_grids(doc):
     """
-    Compute all pairwise Grid-Line intersections and identify the four
-    corner points of the intersection bounding box.
+    Collect Grid Lines, compute all pairwise intersections, and identify
+    the four outermost corner points (TL / TR / BL / BR).
 
-    Returns dict or None (when < 2 grids / no intersections).
+    Each corner is the actual intersection point nearest to the
+    corresponding corner of the overall intersection bounding box.
+
+    Returns dict:
+        grid_count    : int
+        intersections : list of (x, y)
+        corners       : {'TL': (x,y), 'TR': (x,y), 'BL': (x,y), 'BR': (x,y)}
+
+    Returns None when fewer than 2 grids exist or no intersections found.
     """
     grids = list(FilteredElementCollector(doc).OfClass(Grid).ToElements())
     if len(grids) < 2:
         return None
 
+    # ── Normalised 2-D line representations ─────────────────────────────
     lines = []
     for g in grids:
         try:
@@ -146,6 +156,8 @@ def analyse_grids(doc):
     if len(lines) < 2:
         return None
 
+    # ── Pairwise intersections ───────────────────────────────────────────
+    # Each line tuple has 4 elements; concatenate two → 8-element tuple → unpack
     raw_pts = []
     for i in range(len(lines)):
         for j in range(i + 1, len(lines)):
@@ -156,6 +168,7 @@ def analyse_grids(doc):
     if not raw_pts:
         return None
 
+    # ── Deduplicate within _DEDUP_TOL ────────────────────────────────────
     unique_pts = []
     for p in raw_pts:
         is_dup = False
@@ -169,23 +182,28 @@ def analyse_grids(doc):
     if not unique_pts:
         return None
 
+    # ── Bounding box of all intersection points ──────────────────────────
     min_x = min(p[0] for p in unique_pts)
     max_x = max(p[0] for p in unique_pts)
     min_y = min(p[1] for p in unique_pts)
     max_y = max(p[1] for p in unique_pts)
 
     def _nearest(tx, ty):
+        """Return the intersection point closest to (tx, ty)."""
         return min(unique_pts, key=lambda p: (p[0] - tx) ** 2 + (p[1] - ty) ** 2)
+
+    # ── Four corner points ───────────────────────────────────────────────
+    corners = {
+        'TL': _nearest(min_x, max_y),   # top-left
+        'TR': _nearest(max_x, max_y),   # top-right
+        'BL': _nearest(min_x, min_y),   # bottom-left
+        'BR': _nearest(max_x, min_y),   # bottom-right
+    }
 
     return {
         'grid_count':    len(grids),
         'intersections': unique_pts,
-        'corners': {
-            'TL': _nearest(min_x, max_y),
-            'TR': _nearest(max_x, max_y),
-            'BL': _nearest(min_x, min_y),
-            'BR': _nearest(max_x, min_y),
-        },
+        'corners':       corners,
     }
 
 
@@ -195,6 +213,7 @@ def analyse_grids(doc):
 # ==================================================
 
 def get_placed_rooms(doc):
+    """Return all placed rooms (Area > 0, Location is not None)."""
     all_rooms = (
         FilteredElementCollector(doc)
         .OfCategory(BuiltInCategory.OST_Rooms)
@@ -212,6 +231,7 @@ def get_placed_rooms(doc):
 
 
 def get_room_xy(room):
+    """Return (X, Y) of a room's LocationPoint, or None."""
     try:
         loc = room.Location
         if loc and hasattr(loc, 'Point') and loc.Point:
@@ -222,31 +242,31 @@ def get_room_xy(room):
 
 
 def collect_room_writable_params(rooms):
-    """
-    Return a sorted list of (name, StorageType) for every writable
-    String OR Integer parameter found across all supplied rooms.
-
-    Integer parameters require numeric Prefix/Suffix — the UI
-    enforces this constraint at runtime.
-    """
-    seen = {}   # name → StorageType  (first-seen wins on name collision)
+    """Return a sorted list of writable String-type param names across all rooms."""
+    seen   = set()
+    result = []
     for room in rooms:
         try:
             for param in room.Parameters:
-                n  = param.Definition.Name
-                st = param.StorageType
-                if n not in seen and not param.IsReadOnly:
-                    if st == StorageType.String or st == StorageType.Integer:
-                        seen[n] = st
+                n = param.Definition.Name
+                if (n not in seen
+                        and not param.IsReadOnly
+                        and param.StorageType == StorageType.String):
+                    seen.add(n)
+                    result.append(n)
         except Exception:
             pass
-    return sorted(seen.items(), key=lambda t: t[0])   # [(name, StorageType)]
+    result.sort()
+    return result
 
 
 def group_rooms_by_level(rooms, doc):
     """
-    Partition placed rooms by Level, sorted by elevation ascending.
-    Returns list of {'name', 'elevation', 'rooms'}.
+    Partition placed rooms by their Level element, sorted by
+    elevation ascending (lowest floor first).
+
+    Returns list of dicts: [{'name': str, 'elevation': float, 'rooms': list}]
+    Rooms with no resolvable Level go into a trailing '(No Level)' group.
     """
     groups   = {}
     no_level = []
@@ -262,32 +282,46 @@ def group_rooms_by_level(rooms, doc):
                 no_level.append(room)
                 continue
 
+            # ElementId as dict key — use integer value for reliability
             try:
                 key = int(lvl_id.Value)
             except AttributeError:
                 key = int(lvl_id.IntegerValue)
 
             if key not in groups:
-                groups[key] = {'name': lvl.Name, 'elevation': lvl.Elevation, 'rooms': []}
+                groups[key] = {
+                    'name':      lvl.Name,
+                    'elevation': lvl.Elevation,
+                    'rooms':     [],
+                }
             groups[key]['rooms'].append(room)
         except Exception:
             no_level.append(room)
 
-    result = sorted(groups.values(), key=lambda g: g['elevation'])
+    sorted_groups = sorted(groups.values(), key=lambda g: g['elevation'])
+
     if no_level:
-        result.append({'name': '(No Level)', 'elevation': 1e18, 'rooms': no_level})
-    return result
+        sorted_groups.append({
+            'name':      '(No Level)',
+            'elevation': 1e18,
+            'rooms':     no_level,
+        })
+
+    return sorted_groups
 
 
 def sort_by_distance(rooms, ref_pt):
-    """Sort rooms by Euclidean distance from ref_pt, nearest first."""
-    rx, ry = ref_pt[0], ref_pt[1]
+    """
+    Sort *rooms* by Euclidean distance from *ref_pt* (nearest first).
+    Rooms with no locatable centre sort to the end.
+    """
+    ref_x, ref_y = ref_pt[0], ref_pt[1]
 
     def _dist(room):
         c = get_room_xy(room)
         if c is None:
             return 1e18
-        return math.sqrt((c[0] - rx) ** 2 + (c[1] - ry) ** 2)
+        return math.sqrt((c[0] - ref_x) ** 2 + (c[1] - ref_y) ** 2)
 
     return sorted(rooms, key=_dist)
 
@@ -297,19 +331,20 @@ def sort_by_distance(rooms, ref_pt):
 # ╚═╝╩═╝╚═╝╩   ╚═╝╩
 # ==================================================
 
-_CORNER_BTN_NAMES   = {'TL': 'UI_corner_tl', 'TR': 'UI_corner_tr',
-                       'BL': 'UI_corner_bl', 'BR': 'UI_corner_br'}
-_CORNER_COORD_NAMES = {'TL': 'UI_coord_tl',  'TR': 'UI_coord_tr',
-                       'BL': 'UI_coord_bl',  'BR': 'UI_coord_br'}
-_CORNER_LABELS      = {'TL': 'TOP-LEFT',     'TR': 'TOP-RIGHT',
-                       'BL': 'BOT-LEFT',     'BR': 'BOT-RIGHT'}
+# Corner metadata: key → (arrow glyph, display label, XAML button name, coord name)
+_CORNER_META = {
+    'TL': (u'\u2196', 'TOP-LEFT',    'UI_corner_tl', 'UI_coord_tl'),
+    'TR': (u'\u2197', 'TOP-RIGHT',   'UI_corner_tr', 'UI_coord_tr'),
+    'BL': (u'\u2199', 'BOT-LEFT',    'UI_corner_bl', 'UI_coord_bl'),
+    'BR': (u'\u2198', 'BOT-RIGHT',   'UI_corner_br', 'UI_coord_br'),
+}
 
 XAML_STR = """
 <Window
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="Renumber Rooms [Grid-Based]"
-    Width="760" Height="640"
+    Width="760" Height="600"
     WindowStartupLocation="CenterScreen"
     ResizeMode="NoResize"
     Background="#1E1E2E"
@@ -367,14 +402,14 @@ XAML_STR = """
             <Setter Property="Margin"      Value="0,0,0,7"/>
         </Style>
 
-        <!-- Field label -->
+        <!-- Field label (above an input) -->
         <Style x:Key="S_FieldLabel" TargetType="TextBlock">
             <Setter Property="Foreground" Value="#A6ADC8"/>
             <Setter Property="FontSize"   Value="11"/>
             <Setter Property="Margin"     Value="0,0,0,4"/>
         </Style>
 
-        <!-- Corner tile RadioButton -->
+        <!-- Corner tile RadioButton (2x2 grid) -->
         <Style x:Key="S_CornerBtn" TargetType="RadioButton">
             <Setter Property="Background"      Value="#313244"/>
             <Setter Property="Foreground"      Value="#A6ADC8"/>
@@ -386,7 +421,8 @@ XAML_STR = """
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
-                        <Border Background="{TemplateBinding Background}"
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 CornerRadius="8">
@@ -402,42 +438,6 @@ XAML_STR = """
                 <Trigger Property="IsChecked" Value="True">
                     <Setter Property="Background"  Value="#F0A500"/>
                     <Setter Property="Foreground"  Value="#1E1E2E"/>
-                    <Setter Property="BorderBrush" Value="#F0A500"/>
-                </Trigger>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#45475A"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
-        <!-- Pill RadioButton (sequence mode + future toggles) -->
-        <Style x:Key="S_PillBtn" TargetType="RadioButton">
-            <Setter Property="Foreground"      Value="#CDD6F4"/>
-            <Setter Property="Background"      Value="#313244"/>
-            <Setter Property="BorderBrush"     Value="#45475A"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="FontSize"        Value="12"/>
-            <Setter Property="Padding"         Value="10,6"/>
-            <Setter Property="Cursor"          Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="RadioButton">
-                        <Border Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="6"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-            <Style.Triggers>
-                <Trigger Property="IsChecked" Value="True">
-                    <Setter Property="Background"  Value="#F0A500"/>
-                    <Setter Property="Foreground"  Value="#1E1E2E"/>
-                    <Setter Property="FontWeight"  Value="SemiBold"/>
                     <Setter Property="BorderBrush" Value="#F0A500"/>
                 </Trigger>
                 <Trigger Property="IsMouseOver" Value="True">
@@ -505,16 +505,16 @@ XAML_STR = """
 
     </Window.Resources>
 
-    <!-- ════════════════════════ ROOT GRID ════════════════════════════ -->
+    <!-- ═══════════════════════ ROOT GRID ════════════════════════════ -->
     <Grid Margin="18">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>   <!-- title bar      -->
-            <RowDefinition Height="*"/>      <!-- main panels    -->
-            <RowDefinition Height="Auto"/>   <!-- divider        -->
-            <RowDefinition Height="Auto"/>   <!-- button row     -->
+            <RowDefinition Height="Auto"/>   <!-- title bar         -->
+            <RowDefinition Height="*"/>      <!-- main panels       -->
+            <RowDefinition Height="Auto"/>   <!-- divider           -->
+            <RowDefinition Height="Auto"/>   <!-- button row        -->
         </Grid.RowDefinitions>
 
-        <!-- ══ TITLE ════════════════════════════════════════════════════ -->
+        <!-- ══ TITLE ═══════════════════════════════════════════════════ -->
         <Grid Grid.Row="0" Margin="0,0,0,14">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
@@ -523,7 +523,7 @@ XAML_STR = """
             <StackPanel Grid.Column="0">
                 <TextBlock Text="RENUMBER ROOMS  ·  NEAREST-TO-CORNER"
                            Foreground="#F0A500" FontSize="15" FontWeight="Bold"/>
-                <TextBlock Text="Per-level or project-wide  ·  nearest-first from the selected grid corner."
+                <TextBlock Text="Per-level numbering  ·  sorted by distance from the selected grid corner."
                            Foreground="#585B70" FontSize="11" Margin="0,3,0,0"/>
             </StackPanel>
             <TextBlock x:Name="UI_version" Grid.Column="1"
@@ -539,71 +539,52 @@ XAML_STR = """
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- ────────────────────────────────────────────────────────── -->
-            <!-- LEFT : Room parameter picker                               -->
-            <!-- ────────────────────────────────────────────────────────── -->
+            <!-- ─────────────────────────────────────────────────────── -->
+            <!-- LEFT : Room parameter picker                            -->
+            <!-- ─────────────────────────────────────────────────────── -->
             <Border Grid.Column="0" Background="#2A2A3C" CornerRadius="8" Padding="12">
                 <Grid>
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>   <!-- header           -->
-                        <RowDefinition Height="*"/>      <!-- parameter list   -->
-                        <RowDefinition Height="Auto"/>   <!-- hint / type tag  -->
-                        <RowDefinition Height="Auto"/>   <!-- inline error     -->
+                        <RowDefinition Height="Auto"/>   <!-- header      -->
+                        <RowDefinition Height="*"/>      <!-- param list  -->
+                        <RowDefinition Height="Auto"/>   <!-- hint        -->
                     </Grid.RowDefinitions>
 
                     <TextBlock Grid.Row="0"
-                               Text="ROOM PARAMETER"
+                               Text="ROOM PARAMETER  (writable · text only)"
                                Style="{StaticResource S_PanelHeader}"/>
 
                     <ListBox x:Name="UI_param_list"
                              Grid.Row="1" SelectionMode="Single"/>
 
-                    <!-- Type hint (updates on selection) -->
                     <TextBlock x:Name="UI_param_hint" Grid.Row="2"
                                Foreground="#585B70" FontSize="11"
                                Margin="0,6,0,0" TextWrapping="Wrap"/>
-
-                    <!-- Inline error (Collapsed until Integer validation fails) -->
-                    <Border Grid.Row="3"
-                            Background="#3B1C2A"
-                            CornerRadius="6"
-                            Padding="8,6"
-                            Margin="0,6,0,0"
-                            Visibility="Collapsed"
-                            x:Name="UI_error_border">
-                        <TextBlock x:Name="UI_error_msg"
-                                   Foreground="#F38BA8"
-                                   FontSize="11"
-                                   TextWrapping="Wrap"/>
-                    </Border>
-
                 </Grid>
             </Border>
 
-            <!-- ────────────────────────────────────────────────────────── -->
-            <!-- RIGHT : Corner picker + Settings                           -->
-            <!-- ────────────────────────────────────────────────────────── -->
+            <!-- ─────────────────────────────────────────────────────── -->
+            <!-- RIGHT : Corner picker + Settings                        -->
+            <!-- ─────────────────────────────────────────────────────── -->
             <Border Grid.Column="2" Background="#2A2A3C" CornerRadius="8" Padding="12">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>   <!-- "REFERENCE CORNER" header -->
-                        <RowDefinition Height="*"/>      <!-- 2x2 corner tile grid      -->
+                        <RowDefinition Height="*"/>      <!-- 2x2 tile grid             -->
                         <RowDefinition Height="Auto"/>   <!-- status line               -->
                         <RowDefinition Height="10"/>     <!-- spacer                    -->
                         <RowDefinition Height="Auto"/>   <!-- "SETTINGS" header         -->
                         <RowDefinition Height="Auto"/>   <!-- Prefix / Suffix           -->
                         <RowDefinition Height="8"/>      <!-- gap                       -->
                         <RowDefinition Height="Auto"/>   <!-- Start Number              -->
-                        <RowDefinition Height="8"/>      <!-- gap                       -->
-                        <RowDefinition Height="Auto"/>   <!-- Sequence Mode             -->
                     </Grid.RowDefinitions>
 
-                    <!-- Section header -->
+                    <!-- ── Section header ────────────────────────── -->
                     <TextBlock Grid.Row="0"
                                Text="REFERENCE CORNER"
                                Style="{StaticResource S_PanelHeader}"/>
 
-                    <!-- ── 2 × 2 corner tile grid ─────────────────────── -->
+                    <!-- ── 2 x 2 corner tile grid ─────────────────── -->
                     <Grid Grid.Row="1">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -611,83 +592,110 @@ XAML_STR = """
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="*" MinHeight="76"/>
+                            <RowDefinition Height="*" MinHeight="82"/>
                             <RowDefinition Height="6"/>
-                            <RowDefinition Height="*" MinHeight="76"/>
+                            <RowDefinition Height="*" MinHeight="82"/>
                         </Grid.RowDefinitions>
 
-                        <!-- TOP-LEFT -->
+                        <!-- TOP-LEFT tile -->
                         <RadioButton x:Name="UI_corner_tl"
                                      Grid.Row="0" Grid.Column="0"
                                      GroupName="CornerGroup"
                                      Style="{StaticResource S_CornerBtn}">
                             <StackPanel HorizontalAlignment="Center">
-                                <TextBlock Text="&#x2196;" FontSize="20" FontWeight="Bold"
+                                <TextBlock x:Name="UI_arrow_tl"
+                                           Text="&#x2196;"
+                                           FontSize="22" FontWeight="Bold"
                                            HorizontalAlignment="Center"/>
-                                <TextBlock Text="TOP-LEFT" FontSize="10" FontWeight="SemiBold"
-                                           HorizontalAlignment="Center" Margin="0,2,0,0"/>
-                                <TextBlock x:Name="UI_coord_tl" FontSize="9"
-                                           HorizontalAlignment="Center" Margin="0,3,0,0"/>
+                                <TextBlock Text="TOP-LEFT"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,2,0,0"/>
+                                <TextBlock x:Name="UI_coord_tl"
+                                           FontSize="9"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,3,0,0"/>
                             </StackPanel>
                         </RadioButton>
 
-                        <!-- TOP-RIGHT -->
+                        <!-- TOP-RIGHT tile -->
                         <RadioButton x:Name="UI_corner_tr"
                                      Grid.Row="0" Grid.Column="2"
                                      GroupName="CornerGroup"
                                      Style="{StaticResource S_CornerBtn}">
                             <StackPanel HorizontalAlignment="Center">
-                                <TextBlock Text="&#x2197;" FontSize="20" FontWeight="Bold"
+                                <TextBlock x:Name="UI_arrow_tr"
+                                           Text="&#x2197;"
+                                           FontSize="22" FontWeight="Bold"
                                            HorizontalAlignment="Center"/>
-                                <TextBlock Text="TOP-RIGHT" FontSize="10" FontWeight="SemiBold"
-                                           HorizontalAlignment="Center" Margin="0,2,0,0"/>
-                                <TextBlock x:Name="UI_coord_tr" FontSize="9"
-                                           HorizontalAlignment="Center" Margin="0,3,0,0"/>
+                                <TextBlock Text="TOP-RIGHT"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,2,0,0"/>
+                                <TextBlock x:Name="UI_coord_tr"
+                                           FontSize="9"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,3,0,0"/>
                             </StackPanel>
                         </RadioButton>
 
-                        <!-- BOT-LEFT -->
+                        <!-- BOT-LEFT tile -->
                         <RadioButton x:Name="UI_corner_bl"
                                      Grid.Row="2" Grid.Column="0"
                                      GroupName="CornerGroup"
                                      Style="{StaticResource S_CornerBtn}">
                             <StackPanel HorizontalAlignment="Center">
-                                <TextBlock Text="&#x2199;" FontSize="20" FontWeight="Bold"
+                                <TextBlock x:Name="UI_arrow_bl"
+                                           Text="&#x2199;"
+                                           FontSize="22" FontWeight="Bold"
                                            HorizontalAlignment="Center"/>
-                                <TextBlock Text="BOT-LEFT" FontSize="10" FontWeight="SemiBold"
-                                           HorizontalAlignment="Center" Margin="0,2,0,0"/>
-                                <TextBlock x:Name="UI_coord_bl" FontSize="9"
-                                           HorizontalAlignment="Center" Margin="0,3,0,0"/>
+                                <TextBlock Text="BOT-LEFT"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,2,0,0"/>
+                                <TextBlock x:Name="UI_coord_bl"
+                                           FontSize="9"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,3,0,0"/>
                             </StackPanel>
                         </RadioButton>
 
-                        <!-- BOT-RIGHT -->
+                        <!-- BOT-RIGHT tile -->
                         <RadioButton x:Name="UI_corner_br"
                                      Grid.Row="2" Grid.Column="2"
                                      GroupName="CornerGroup"
                                      Style="{StaticResource S_CornerBtn}">
                             <StackPanel HorizontalAlignment="Center">
-                                <TextBlock Text="&#x2198;" FontSize="20" FontWeight="Bold"
+                                <TextBlock x:Name="UI_arrow_br"
+                                           Text="&#x2198;"
+                                           FontSize="22" FontWeight="Bold"
                                            HorizontalAlignment="Center"/>
-                                <TextBlock Text="BOT-RIGHT" FontSize="10" FontWeight="SemiBold"
-                                           HorizontalAlignment="Center" Margin="0,2,0,0"/>
-                                <TextBlock x:Name="UI_coord_br" FontSize="9"
-                                           HorizontalAlignment="Center" Margin="0,3,0,0"/>
+                                <TextBlock Text="BOT-RIGHT"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,2,0,0"/>
+                                <TextBlock x:Name="UI_coord_br"
+                                           FontSize="9"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,3,0,0"/>
                             </StackPanel>
                         </RadioButton>
-                    </Grid>
-                    <!-- end 2x2 grid -->
 
-                    <!-- Status: N levels · M rooms -->
+                    </Grid>
+                    <!-- end 2x2 tile grid -->
+
+                    <!-- ── Status line ────────────────────────────── -->
                     <TextBlock x:Name="UI_status" Grid.Row="2"
                                Foreground="#585B70" FontSize="11"
-                               HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                               HorizontalAlignment="Center"
+                               Margin="0,6,0,0"/>
 
-                    <!-- Settings header -->
-                    <TextBlock Grid.Row="4" Text="SETTINGS"
+                    <!-- ── Settings header ────────────────────────── -->
+                    <TextBlock Grid.Row="4"
+                               Text="SETTINGS"
                                Style="{StaticResource S_PanelHeader}"/>
 
-                    <!-- Prefix / Suffix -->
+                    <!-- ── Prefix / Suffix ────────────────────────── -->
                     <Grid Grid.Row="5">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -706,42 +714,19 @@ XAML_STR = """
                         </StackPanel>
                     </Grid>
 
-                    <!-- Start Number -->
+                    <!-- ── Start Number ───────────────────────────── -->
                     <StackPanel Grid.Row="7">
-                        <TextBlock Text="Start Number"
+                        <TextBlock Text="Start Number  (resets each level)"
                                    Style="{StaticResource S_FieldLabel}"/>
                         <TextBox x:Name="UI_start" Text="1"/>
                     </StackPanel>
 
-                    <!-- Sequence Mode pill toggle -->
-                    <StackPanel Grid.Row="9">
-                        <TextBlock Text="Sequence Mode"
-                                   Style="{StaticResource S_FieldLabel}"/>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="8"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <RadioButton x:Name="UI_seq_level"
-                                         Grid.Column="0"
-                                         Content="&#x21BB;  Per Level"
-                                         GroupName="SeqMode"
-                                         IsChecked="True"
-                                         Style="{StaticResource S_PillBtn}"/>
-                            <RadioButton x:Name="UI_seq_project"
-                                         Grid.Column="2"
-                                         Content="&#x2192;  Full Project"
-                                         GroupName="SeqMode"
-                                         Style="{StaticResource S_PillBtn}"/>
-                        </Grid>
-                    </StackPanel>
-
                 </Grid>
             </Border>
+            <!-- end right panel -->
         </Grid>
 
-        <!-- ══ DIVIDER ══════════════════════════════════════════════════ -->
+        <!-- ══ DIVIDER ═══════════════════════════════════════════════════ -->
         <Border Grid.Row="2" Height="1" Background="#313244" Margin="0,12,0,12"/>
 
         <!-- ══ BUTTONS ══════════════════════════════════════════════════ -->
@@ -766,64 +751,68 @@ XAML_STR = """
 # ╚═╝╩═╝╚═╝╩   ╚═╝╩═╝╩ ╩╚═╝╚═╝
 # ==================================================
 
+# Mapping: corner key → RadioButton name in XAML
+_CORNER_BTN_NAMES = {
+    'TL': 'UI_corner_tl',
+    'TR': 'UI_corner_tr',
+    'BL': 'UI_corner_bl',
+    'BR': 'UI_corner_br',
+}
+_CORNER_COORD_NAMES = {
+    'TL': 'UI_coord_tl',
+    'TR': 'UI_coord_tr',
+    'BL': 'UI_coord_bl',
+    'BR': 'UI_coord_br',
+}
+
+
 class RoomGridUI(object):
     """
-    WPF dialog — v3.0.
+    WPF dialog.
 
-    Left panel  : parameter list (TEXT · INT badges)
-                  + inline error banner for Integer-type violations
-    Right panel : 2×2 corner tile grid
-                  + Prefix / Suffix / Start Number / Sequence Mode
+    Left  : parameter ListBox
+    Right : 2x2 corner-tile RadioButton grid  +  Prefix / Suffix / Start
 
-    IronPython 2.7 — all output in mutable list containers (no nonlocal).
+    All results stored in mutable list containers (no nonlocal — IronPython 2.7).
     """
 
     def __init__(self, params, grid_info, level_groups):
-        """
-        params       : list of (name, StorageType)
-        grid_info    : dict from analyse_grids()
-        level_groups : list from group_rooms_by_level()
-        """
-        self._params       = params          # [(name, StorageType)]
+        self._params       = params
         self._grid_info    = grid_info
         self._level_groups = level_groups
-        self._param_data   = []              # parallel to ListBox items
 
-        # ── Output state ──────────────────────────────────────────────
-        self.confirmed      = [False]
-        self.param_name     = [None]
-        self.p_storage_type = [None]         # StorageType.String / .Integer
-        self.corner_key     = [None]         # 'TL' / 'TR' / 'BL' / 'BR'
-        self.prefix         = ['']
-        self.suffix         = ['']
-        self.start          = [1]
-        self.per_level      = [True]         # True = reset each level
+        # ── Output state ────────────────────────────────────────────
+        self.confirmed  = [False]
+        self.param_name = [None]
+        self.corner_key = [None]     # 'TL' / 'TR' / 'BL' / 'BR'
+        self.prefix     = ['']
+        self.suffix     = ['']
+        self.start      = [1]
 
         # ── Build window ─────────────────────────────────────────────
         self._win = XamlReader.Parse(XAML_STR)
 
         # ── Resolve controls ─────────────────────────────────────────
-        self._param_list    = self._win.FindName('UI_param_list')
-        self._param_hint    = self._win.FindName('UI_param_hint')
-        self._error_border  = self._win.FindName('UI_error_border')
-        self._error_msg     = self._win.FindName('UI_error_msg')
-        self._prefix_tb     = self._win.FindName('UI_prefix')
-        self._suffix_tb     = self._win.FindName('UI_suffix')
-        self._start_tb      = self._win.FindName('UI_start')
-        self._status_lbl    = self._win.FindName('UI_status')
-        self._ver_lbl       = self._win.FindName('UI_version')
-        self._seq_level_btn = self._win.FindName('UI_seq_level')
-        self._btn_run       = self._win.FindName('UI_run')
-        self._btn_cancel    = self._win.FindName('UI_cancel')
+        self._param_list  = self._win.FindName('UI_param_list')
+        self._param_hint  = self._win.FindName('UI_param_hint')
+        self._prefix_tb   = self._win.FindName('UI_prefix')
+        self._suffix_tb   = self._win.FindName('UI_suffix')
+        self._start_tb    = self._win.FindName('UI_start')
+        self._btn_run     = self._win.FindName('UI_run')
+        self._btn_cancel  = self._win.FindName('UI_cancel')
+        self._status_lbl  = self._win.FindName('UI_status')
+        self._ver_lbl     = self._win.FindName('UI_version')
 
+        # Corner RadioButtons
         self._corner_btns = {
             k: self._win.FindName(v)
             for k, v in _CORNER_BTN_NAMES.items()
         }
 
-        # ── Populate ─────────────────────────────────────────────────
+        # ── Populate data ─────────────────────────────────────────────
         if self._ver_lbl:
             self._ver_lbl.Text = __version__
+
         self._fill_param_list()
         self._fill_corner_coords()
         self._fill_status()
@@ -838,34 +827,26 @@ class RoomGridUI(object):
     # ── Populate helpers ──────────────────────────────────────────────
 
     def _fill_param_list(self):
-        """
-        Populate the parameter ListBox.
-        Each item is displayed as  "Name   ·   TEXT"  or  "Name   ·   INT"
-        so the user immediately knows which type they are choosing.
-        The parallel _param_data list provides the raw (name, StorageType).
-        """
         self._param_list.Items.Clear()
-        self._param_data = []
-
         if self._params:
-            for name, st in self._params:
-                type_tag = u'TEXT' if st == StorageType.String else u'INT'
-                display  = u'{}   \u00b7   {}'.format(name, type_tag)
-                self._param_list.Items.Add(display)
-                self._param_data.append((name, st))
+            for p in self._params:
+                self._param_list.Items.Add(p)
         else:
             self._param_list.Items.Add(
-                u'\u2014 no writable parameters found \u2014'
+                u'\u2014 no writable text parameters found \u2014'
             )
 
     def _fill_corner_coords(self):
-        for key, coord_ctrl_name in _CORNER_COORD_NAMES.items():
-            lbl = self._win.FindName(coord_ctrl_name)
-            if lbl and key in self._grid_info['corners']:
-                pt = self._grid_info['corners'][key]
-                lbl.Text = u'X={:.2f}   Y={:.2f}'.format(pt[0], pt[1])
+        """Write 'X=…  Y=…' into each tile's coordinate TextBlock."""
+        corners = self._grid_info['corners']
+        for key, coord_name in _CORNER_COORD_NAMES.items():
+            lbl = self._win.FindName(coord_name)
+            if lbl and key in corners:
+                pt = corners[key]
+                lbl.Text = 'X={:.2f}   Y={:.2f}'.format(pt[0], pt[1])
 
     def _fill_status(self):
+        """Bottom status: '3 levels  ·  24 rooms'"""
         n_levels = len(self._level_groups)
         n_rooms  = sum(len(g['rooms']) for g in self._level_groups)
         if self._status_lbl:
@@ -876,48 +857,25 @@ class RoomGridUI(object):
                 )
             )
 
-    def _clear_error(self):
-        """Hide the inline error banner."""
-        if self._error_border:
-            self._error_border.Visibility = Visibility.Collapsed
-        if self._error_msg:
-            self._error_msg.Text = ''
-
-    def _show_error(self, msg):
-        """Display an inline error banner in the left panel."""
-        if self._error_msg:
-            self._error_msg.Text = msg
-        if self._error_border:
-            self._error_border.Visibility = Visibility.Visible
-
     # ── Event handlers ────────────────────────────────────────────────
 
     def _on_param_selected(self, sender, e):
-        """Update the type hint and clear any active error on selection change."""
-        self._clear_error()
-        idx = self._param_list.SelectedIndex
-        if 0 <= idx < len(self._param_data):
-            name, st = self._param_data[idx]
-            if st == StorageType.String:
-                hint = u'\u2714  {}   \u00b7   TEXT \u2014 accepts any string'.format(name)
-            else:
-                hint = u'\u2714  {}   \u00b7   INT \u2014 digits only'.format(name)
+        p = self._param_list.SelectedItem
+        if p and not p.startswith(u'\u2014'):
             if self._param_hint:
-                self._param_hint.Text = hint
+                self._param_hint.Text = u'\u2714  {}'.format(p)
 
     def _on_run(self, sender, e):
-        """Validate all inputs; show inline error for Integer violations; commit."""
-        # ── Parameter ────────────────────────────────────────────────
-        idx = self._param_list.SelectedIndex
-        if idx < 0 or not self._param_data:
+        # ── Validate parameter ────────────────────────────────────────
+        param = self._param_list.SelectedItem
+        if not param or param.startswith(u'\u2014'):
             forms.alert('Please select a Room Parameter.', title=__title__)
             return
-        actual_name, storage_type = self._param_data[idx]
 
-        # ── Corner ───────────────────────────────────────────────────
+        # ── Validate corner selection ─────────────────────────────────
         chosen_key = None
         for key, btn in self._corner_btns.items():
-            if btn is not None and btn.IsChecked == True:   # noqa: E712
+            if btn is not None and btn.IsChecked == True:   # noqa: E712  Nullable<bool>
                 chosen_key = key
                 break
         if chosen_key is None:
@@ -928,43 +886,23 @@ class RoomGridUI(object):
             )
             return
 
-        # ── Start Number ─────────────────────────────────────────────
+        # ── Validate start number ─────────────────────────────────────
         try:
             start = int(self._start_tb.Text.strip())
         except (ValueError, AttributeError):
-            forms.alert('Start Number must be a whole number (e.g. 1).', title=__title__)
+            forms.alert(
+                'Start Number must be a whole number  (e.g. 1).',
+                title=__title__
+            )
             return
 
-        pfx = self._prefix_tb.Text or ''
-        sfx = self._suffix_tb.Text or ''
-
-        # ── Integer-type constraint check ─────────────────────────────
-        # The composed value  Prefix + Number + Suffix  must be parseable
-        # as a Python int so it can be passed to Revit's param.Set(int).
-        if storage_type == StorageType.Integer:
-            test_val = pfx + str(start) + sfx
-            try:
-                int(test_val)
-            except ValueError:
-                self._show_error(
-                    u'\u26A0  INTEGER parameter selected.\n'
-                    u'Prefix + Number + Suffix must together form a whole number '
-                    u'(e.g. "10", "101", "5").  Remove any letters, spaces, or '
-                    u'symbols from Prefix and Suffix, or choose a TEXT parameter.'
-                )
-                return
-
-        # ── All valid — clear error and commit ────────────────────────
-        self._clear_error()
-
-        self.confirmed[0]      = True
-        self.param_name[0]     = actual_name
-        self.p_storage_type[0] = storage_type
-        self.corner_key[0]     = chosen_key
-        self.prefix[0]         = pfx
-        self.suffix[0]         = sfx
-        self.start[0]          = start
-        self.per_level[0]      = (self._seq_level_btn.IsChecked == True)  # noqa: E712
+        # ── Commit ────────────────────────────────────────────────────
+        self.confirmed[0]  = True
+        self.param_name[0] = param
+        self.corner_key[0] = chosen_key
+        self.prefix[0]     = self._prefix_tb.Text or ''
+        self.suffix[0]     = self._suffix_tb.Text or ''
+        self.start[0]      = start
         self._win.Close()
 
     def _on_cancel(self, sender, e):
@@ -982,13 +920,13 @@ grid_info = analyse_grids(doc)
 if grid_info is None:
     forms.alert(
         'Insufficient Grid Lines detected.\n\n'
-        'At least 2 non-parallel Grid Lines are required to compute\n'
-        'intersection points.  Please add grids and try again.',
+        'This script requires at least 2 non-parallel Grid Lines to\n'
+        'compute intersection points.  Please add grids and try again.',
         title=__title__,
         exitscript=True,
     )
 
-# ── Step 2: Rooms + parameters + levels ──────────────────────────────────
+# ── Step 2: Collect placed rooms ──────────────────────────────────────────
 placed_rooms = get_placed_rooms(doc)
 
 if not placed_rooms:
@@ -999,57 +937,54 @@ if not placed_rooms:
         exitscript=True,
     )
 
+# ── Step 3: Writable parameters + level grouping ──────────────────────────
 room_params  = collect_room_writable_params(placed_rooms)
 level_groups = group_rooms_by_level(placed_rooms, doc)
 
 if not level_groups:
     forms.alert(
-        'Could not resolve a Level for any placed Room.',
+        'Could not resolve any Level for the placed Rooms.',
         title=__title__,
         exitscript=True,
     )
 
-# ── Step 3: Launch UI ─────────────────────────────────────────────────────
+# ── Step 4: Launch UI ─────────────────────────────────────────────────────
 ui = RoomGridUI(room_params, grid_info, level_groups)
 
 if not ui.confirmed[0]:
     forms.alert('Cancelled.', title=__title__, exitscript=True)
 
 p_name      = ui.param_name[0]
-p_storage   = ui.p_storage_type[0]
 ref_pt      = grid_info['corners'][ui.corner_key[0]]
 prefix      = ui.prefix[0]
 suffix      = ui.suffix[0]
 start_count = ui.start[0]
-per_level   = ui.per_level[0]
 
+# Corner display label for the summary (e.g. "TOP-RIGHT")
+_CORNER_LABELS = {'TL': 'TOP-LEFT', 'TR': 'TOP-RIGHT',
+                  'BL': 'BOT-LEFT', 'BR': 'BOT-RIGHT'}
 corner_label = _CORNER_LABELS.get(ui.corner_key[0], ui.corner_key[0])
-seq_label    = u'Per Level' if per_level else u'Full Project'
 
-# ── Step 4: Renumber ──────────────────────────────────────────────────────
-# Single transaction covers all levels — one atomic undo step.
+# ── Step 5: Renumber per level ────────────────────────────────────────────
+# All levels share a single Transaction for atomic undo.
 level_summaries = []
 total_numbered  = 0
 total_skipped   = 0
-count           = start_count   # running counter across levels
 
 with _make_tx(doc, __title__):
     for group in level_groups:
-        if per_level:
-            count = start_count     # reset to Start Number for each level
-
         level_rooms  = sort_by_distance(group['rooms'], ref_pt)
-        lvl_start    = count
+        count        = start_count      # reset for every level
         lvl_numbered = 0
+        lvl_start    = count
 
         for room in level_rooms:
             param = room.LookupParameter(p_name)
-            if param and not param.IsReadOnly:
+            if (param
+                    and not param.IsReadOnly
+                    and param.StorageType == StorageType.String):
                 try:
-                    if p_storage == StorageType.String:
-                        param.Set(prefix + str(count) + suffix)
-                    else:                                   # StorageType.Integer
-                        param.Set(int(prefix + str(count) + suffix))
+                    param.Set(prefix + str(count) + suffix)
                     count        += 1
                     lvl_numbered += 1
                 except Exception:
@@ -1065,10 +1000,9 @@ with _make_tx(doc, __title__):
             count - 1,
         ))
 
-# ── Step 5: Summary ───────────────────────────────────────────────────────
-level_lines = u'\n'.join(
-    u'  {name:<22} {n} room{pl}   '
-    u'({pfx}{s}{sfx} \u2013 {pfx}{e}{sfx})'.format(
+# ── Step 6: Summary ───────────────────────────────────────────────────────
+level_lines = '\n'.join(
+    u'  {name:<20}  {n} room{pl}   ({pfx}{s}{sfx} \u2013 {pfx}{e}{sfx})'.format(
         name = name,
         n    = n,
         pl   = 's' if n != 1 else ' ',
@@ -1082,20 +1016,17 @@ level_lines = u'\n'.join(
 
 forms.alert(
     u'Renumbering complete!\n\n'
-    u'Parameter    : {param}  [{ptype}]\n'
-    u'Reference    : {corner}  (X={rx:.2f}   Y={ry:.2f})\n'
-    u'Sequence     : {seq}\n\n'
+    u'Parameter    : {param}\n'
+    u'Reference    : {corner}  (X={rx:.2f}   Y={ry:.2f})\n\n'
     u'Per-level breakdown:\n{levels}\n\n'
     u'{total} room{tpl} numbered   \u00b7   {sk} skipped.'.format(
         param  = p_name,
-        ptype  = u'TEXT' if p_storage == StorageType.String else u'INT',
         corner = corner_label,
         rx     = ref_pt[0],
         ry     = ref_pt[1],
-        seq    = seq_label,
         levels = level_lines,
         total  = total_numbered,
-        tpl    = u's' if total_numbered != 1 else u'',
+        tpl    = 's' if total_numbered != 1 else '',
         sk     = total_skipped,
     ),
     title=__title__,

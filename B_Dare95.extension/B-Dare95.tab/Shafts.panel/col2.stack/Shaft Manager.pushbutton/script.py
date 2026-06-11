@@ -22,8 +22,9 @@ How-to:
 -> Edit any cell directly — ComboBox for levels, TextBox for offsets
    and Shaft Function value
 -> Use the search bar to filter rows by ID or Shaft Function text
--> Click an element's ID to navigate Revit to that shaft
--> "Save Changes" commits all edits in a single transaction
+-> Click an element's ID to select it and navigate Revit to that shaft
+-> Click ✕ at the end of a row to mark that shaft for deletion
+-> "Save Changes" commits all edits (and deletes) in a single transaction
 -> "Cancel" discards all edits and closes the window
 
 Author: Mohamed Bedair
@@ -103,11 +104,13 @@ COL_SPECS = [
     GridLength(80),                        # 8  – Top Offset (TextBox, fixed px)
     GridLength(8),                         # 9  – gap
     GridLength(1.8,  GridUnitType.Star),   # 10 – Shaft Function (TextBox)
+    GridLength(8),                         # 11 – gap
+    GridLength(28),                        # 12 – Delete button (fixed px)
 ]
-CTRL_COLS  = [0, 2, 4, 6, 8, 10]
+CTRL_COLS  = [0, 2, 4, 6, 8, 10, 12]
 HDR_LABELS = [
     "ID", "Base Constraint", "Base Offset",
-    "Top Constraint", "Top Offset", "Shaft Function",
+    "Top Constraint", "Top Offset", "Shaft Function", "",
 ]
 
 # ─── XAML ──────────────────────────────────────────────────────────────────────
@@ -604,6 +607,9 @@ def _make_data_row(elem, row_idx, level_options, levels_by_id):
     # Capture ElementId per-row with default-arg closure (IronPython 2.7 safe)
     def _on_id_click(sender, e, eid=elem.Id):
         try:
+            sel_ids = List[ElementId]()
+            sel_ids.Add(eid)
+            uidoc.Selection.SetElementIds(sel_ids)
             uidoc.ShowElements(eid)
         except Exception:
             pass
@@ -637,16 +643,60 @@ def _make_data_row(elem, row_idx, level_options, levels_by_id):
     Controls.Grid.SetColumn(sf_border, 10)
     grid.Children.Add(sf_border)
 
+    # ── Col 12: Delete button ──────────────────────────────────────────────
+    del_btn = Controls.Button()
+    del_btn.Content         = u"\u2715"   # ✕
+    del_btn.Width           = 24
+    del_btn.Height          = 24
+    del_btn.FontSize        = 11
+    del_btn.FontWeight      = System.Windows.FontWeights.Bold
+    del_btn.Cursor          = WinInput.Cursors.Hand
+    del_btn.BorderThickness = Thickness(0)
+    del_btn.ToolTip         = u"Delete this shaft opening (applied on Save)"
+    del_btn.VerticalAlignment   = VerticalAlignment.Center
+    del_btn.HorizontalAlignment = HorizontalAlignment.Center
+
+    # Red tint background — hover/press via code-behind to avoid x: namespace
+    # issues that occur when XamlReader.Parse is called for per-row snippets
+    # without a full xmlns:x declaration context.
+    DEL_NORMAL_BRUSH = _brush("#3D2020")
+    DEL_HOVER_BRUSH  = _brush("#6B2020")
+    del_btn.Background = DEL_NORMAL_BRUSH
+    del_btn.Foreground = _brush("#FF6B6B")
+
+    def _del_mouse_enter(s, e, b=del_btn, hov=DEL_HOVER_BRUSH):
+        b.Background = hov
+    def _del_mouse_leave(s, e, b=del_btn, nor=DEL_NORMAL_BRUSH):
+        b.Background = nor
+
+    del_btn.MouseEnter += _del_mouse_enter
+    del_btn.MouseLeave += _del_mouse_leave
+
+    Controls.Grid.SetColumn(del_btn, 12)
+    grid.Children.Add(del_btn)
+
+    # deleted flag — mutated by the button handler
+    deleted_flag = [False]
+
     row_data = {
-        'eid':        elem.Id,
-        'bc_combo':   bc_combo,
-        'bo_tb':      bo_tb,
-        'tc_combo':   tc_combo,
-        'to_tb':      to_tb,
-        'sf_tb':      sf_tb,
+        'eid':          elem.Id,
+        'bc_combo':     bc_combo,
+        'bo_tb':        bo_tb,
+        'tc_combo':     tc_combo,
+        'to_tb':        to_tb,
+        'sf_tb':        sf_tb,
+        'deleted':      deleted_flag,
+        'grid_ref':     grid,
         # Combined search key: id + level names + shaft function value
         'search_key': u" ".join([id_str, bc_name, tc_name, sf_val]).lower(),
     }
+
+    def _on_delete(sender, e, rd=row_data):
+        rd['deleted'][0] = True
+        rd['grid_ref'].Visibility = Visibility.Collapsed
+
+    del_btn.Click += _on_delete
+
     return grid, row_data
 
 
@@ -679,8 +729,9 @@ def show_shaft_browser(shafts, levels):
     # ── Header labels ──────────────────────────────────────────────────────
     title_lbl.Text  = (u"Shaft Opening Editor  \u00b7  "
                        u"{0} shaft(s) found".format(len(shafts)))
-    status_lbl.Text = (u"Click an ID to navigate  \u00b7  "
+    status_lbl.Text = (u"Click an ID to select & navigate  \u00b7  "
                        u"Edit cells directly  \u00b7  "
+                       u"\u2715 to mark for deletion  \u00b7  "
                        u"Save Changes to commit all edits in one transaction")
 
     # ── Build column headers + divider (both scroll with content) ─────────
@@ -718,7 +769,15 @@ def show_shaft_browser(shafts, levels):
             t.Start()
             for rd in all_row_data:
                 elem = doc.GetElement(rd['eid'])
-                if elem is not None:
+                if elem is None:
+                    continue
+                if rd['deleted'][0]:
+                    try:
+                        doc.Delete(rd['eid'])
+                    except Exception as del_ex:
+                        errors.append(u"ID {0} \u2014 delete failed: {1}".format(
+                            _eid_int(rd['eid']), str(del_ex)[:80]))
+                else:
                     _apply_row_changes(rd, elem, levels_by_name, errors)
             t.Commit()
         except Exception as tx_ex:
