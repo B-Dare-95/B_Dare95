@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__title__   = "Renumber Rooms\n[Grid-Based]"
+__title__   = "Renumber Rooms"
 __author__  = "B-Dare95"
 __version__ = "Version 3.0"
 __doc__     = """Version = 3.0
@@ -1026,6 +1026,16 @@ per_level   = ui.per_level[0]
 corner_label = _CORNER_LABELS.get(ui.corner_key[0], ui.corner_key[0])
 seq_label    = u'Per Level' if per_level else u'Full Project'
 
+# ── Zero-padding width ────────────────────────────────────────────────────
+# Applies to TEXT parameters only (integers cannot carry leading zeros).
+# Full Project : fixed once, based on total rooms across every level.
+# Per Level    : recomputed inside the loop for each level individually.
+if p_storage == StorageType.String and not per_level:
+    _total_rooms = sum(len(g['rooms']) for g in level_groups)
+    pad_width    = len(str(_total_rooms))
+else:
+    pad_width = 1   # per-level overrides below; Integer never reads this
+
 # ── Step 4: Renumber ──────────────────────────────────────────────────────
 # Single transaction covers all levels — one atomic undo step.
 level_summaries = []
@@ -1036,7 +1046,9 @@ count           = start_count   # running counter across levels
 with _make_tx(doc, __title__):
     for group in level_groups:
         if per_level:
-            count = start_count     # reset to Start Number for each level
+            count = start_count
+            if p_storage == StorageType.String:  # per-level pad
+                pad_width = len(str(len(group['rooms'])))
 
         level_rooms  = sort_by_distance(group['rooms'], ref_pt)
         lvl_start    = count
@@ -1047,7 +1059,7 @@ with _make_tx(doc, __title__):
             if param and not param.IsReadOnly:
                 try:
                     if p_storage == StorageType.String:
-                        param.Set(prefix + str(count) + suffix)
+                        param.Set(prefix + str(count).zfill(pad_width) + suffix)
                     else:                                   # StorageType.Integer
                         param.Set(int(prefix + str(count) + suffix))
                     count        += 1
@@ -1063,6 +1075,7 @@ with _make_tx(doc, __title__):
             lvl_numbered,
             lvl_start,
             count - 1,
+            pad_width if p_storage == StorageType.String else 0,
         ))
 
 # ── Step 5: Summary ───────────────────────────────────────────────────────
@@ -1074,10 +1087,10 @@ level_lines = u'\n'.join(
         pl   = 's' if n != 1 else ' ',
         pfx  = prefix,
         sfx  = suffix,
-        s    = s,
-        e    = e,
+        s    = str(s).zfill(pw) if pw > 0 else str(s),
+        e    = str(e).zfill(pw) if pw > 0 else str(e),
     )
-    for name, n, s, e in level_summaries
+    for name, n, s, e, pw in level_summaries
 )
 
 forms.alert(
