@@ -60,19 +60,15 @@ class LinkedStructuralColumnFilter(ISelectionFilter):
         return isinstance(element, RevitLinkInstance)
 
     def AllowReference(self, reference, point):
-        # Resolve the reference to the linked element and check its category
         try:
             link_instance = doc.GetElement(reference.ElementId)
             if not isinstance(link_instance, RevitLinkInstance):
                 return False
             linked_doc = link_instance.GetLinkDocument()
             linked_element = linked_doc.GetElement(reference.LinkedElementId)
-            return (
-                linked_element is not None
-                and linked_element.Category is not None
-                and linked_element.Category.Id.IntegerValue
-                    == int(BuiltInCategory.OST_StructuralColumns)
-            )
+            if linked_element is None or linked_element.Category is None:
+                return False
+            return linked_element.Category.Id.Value == int(BuiltInCategory.OST_StructuralColumns)
         except Exception:
             return False
 
@@ -85,37 +81,76 @@ def get_base_elevation(column, linked_doc):
     base_level = linked_doc.GetElement(base_level_param.AsElementId())
     return base_level.Elevation if base_level else None
 
-def get_footprint_curves(column, base_elevation, transform, tolerance=0.01):
-    """Extract edges at the base elevation and transform them into host coordinates."""
+def _collect_solids(geom_obj):
+    """Recursively collect all Solids from a geometry object, handling nested GeometryInstances."""
+    solids = []
+    if isinstance(geom_obj, Solid):
+        if geom_obj.Volume > 0:
+            solids.append(geom_obj)
+    elif isinstance(geom_obj, GeometryInstance):
+        for child in geom_obj.GetInstanceGeometry():
+            solids.extend(_collect_solids(child))
+    return solids
+
+
+def get_footprint_curves(column, base_elevation, transform, tolerance=0.05):
+    """
+    Extract bottom-face edges from the column solid and transform to host coordinates.
+    Strategy: find the lowest Z face in the solid (not relying on exact elevation match),
+    then return its boundary curves transformed into host space.
+    """
     options = Options()
     options.ComputeReferences = True
     options.DetailLevel = ViewDetailLevel.Fine
 
-    curves = []
     geom_element = column.get_Geometry(options)
     if geom_element is None:
-        return curves
+        return []
 
+    # Collect all solids recursively (handles nested GeometryInstances)
+    all_solids = []
     for geom_obj in geom_element:
-        solids = []
+        all_solids.extend(_collect_solids(geom_obj))
 
-        if isinstance(geom_obj, GeometryInstance):
-            solids = [obj for obj in geom_obj.GetInstanceGeometry() if isinstance(obj, Solid)]
-        elif isinstance(geom_obj, Solid):
-            solids = [geom_obj]
+    if not all_solids:
+        return []
 
-        for solid in solids:
-            if solid.Volume <= 0:
-                continue
-            for edge in solid.Edges:
-                curve = edge.AsCurve()
-                p0 = curve.GetEndPoint(0)
-                p1 = curve.GetEndPoint(1)
-                if abs(p0.Z - base_elevation) < tolerance and abs(p1.Z - base_elevation) < tolerance:
-                    curves.append(curve.CreateTransformed(transform))
+    # Pick the solid with the largest volume (the main column body)
+    main_solid = max(all_solids, key=lambda s: s.Volume)
+
+    # Find the lowest horizontal face (base of column) by centroid Z
+    best_face = None
+    best_face_z = None
+    for face in main_solid.Faces:
+        normal = face.FaceNormal
+        # Only consider near-horizontal faces pointing downward or upward
+        if abs(normal.Z) < 0.9:
+            continue
+        # Compute approximate face centroid Z by averaging edge endpoints
+        edge_loops = face.EdgeLoops
+        z_vals = []
+        for loop in edge_loops:
+            for edge in loop:
+                z_vals.append(edge.AsCurve().GetEndPoint(0).Z)
+                z_vals.append(edge.AsCurve().GetEndPoint(1).Z)
+        if not z_vals:
+            continue
+        face_z = sum(z_vals) / len(z_vals)
+        if best_face_z is None or face_z < best_face_z:
+            best_face_z = face_z
+            best_face = face
+
+    if best_face is None:
+        return []
+
+    # Extract outer boundary curves from the bottom face and transform to host space
+    curves = []
+    outer_loop = list(best_face.EdgeLoops)[0]  # first loop is always the outer boundary
+    for edge in outer_loop:
+        curve = edge.AsCurve()
+        curves.append(curve.CreateTransformed(transform))
 
     return curves
-
 def create_model_lines(curves, sketch_plane):
     for curve in curves:
         try:
@@ -210,6 +245,8 @@ else:
                 selected_rail_id,
                 host_level_id
             )
+
+            column_guards.Flip()
 
         t.Commit()
 
