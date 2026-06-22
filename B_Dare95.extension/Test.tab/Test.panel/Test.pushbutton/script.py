@@ -1,551 +1,551 @@
 # -*- coding: utf-8 -*-
-__title__ = "Column Guard Generator"
-__doc__ = """Version = 2.0
+__title__     = "Bulk Copy from Link"
+__author__    = "Mohamed Bedair"
+__version__   = 'Version = 2.0'
+__doc__       = """Version = 2.0
+Date    = 22.06.2026
 _____________________________________________________________________
 Description:
-Generates individual Column Guardrails for each column in a linked file.
 
-How to use:
+Copies one element per distinct Type, from one or more selected
+Categories, out of a chosen Linked Model, into the active model
+in the same place (pinned).
+_____________________________________________________________________
+How-to:
 
-1- Select a Railing Type to use as Column Guardrail
-2- Select Structural Columns to apply the guard
-3- Done!!
+-> Run the script
+-> Pick a Linked Model from the list
+-> Pick one or more Categories from the list
+   (only categories that actually exist in that link are shown)
+-> Click Copy
+-> One element per distinct Type under the selected Categories will
+   be copied into the active model, in place, and pinned.
+_____________________________________________________________________
+Last update:
+- [22.06.2026] - 2.0 RELEASE - Link picker + multi-category picker +
+                                one-per-type copy logic
+- [21.12.2023] - 1.0 RELEASE
 _____________________________________________________________________
 Author: Mohamed Bedair"""
 
+# IMPORTS ---------------------------------------------------------------
 import clr
-
 clr.AddReference('RevitAPI')
 clr.AddReference('RevitAPIUI')
 clr.AddReference('PresentationFramework')
 clr.AddReference('PresentationCore')
 clr.AddReference('WindowsBase')
-clr.AddReference('System.Xml')
 
-from Autodesk.Revit.DB import (Level, FilteredElementCollector, BuiltInParameter,
-                                BuiltInCategory, Options, ViewDetailLevel,
-                                GeometryInstance, Solid, CurveLoop,
-                                Transaction, XYZ, RevitLinkInstance)
-from Autodesk.Revit.DB.Architecture import Railing, RailingType
-from Autodesk.Revit.UI.Selection import ISelectionFilter, ObjectType
-
-import System
-from System.Windows.Markup import XamlReader
-from System.Windows.Threading import Dispatcher, DispatcherFrame
+from System.Collections.Generic import List
 from System.Windows import Window, Application
-from System.Windows.Controls import ListBoxItem
+from System.Windows.Markup import XamlReader
+from System.IO import StringReader
+from System.Windows.Threading import Dispatcher, DispatcherFrame
 
-doc = __revit__.ActiveUIDocument.Document
+from Autodesk.Revit.DB import (
+    FilteredElementCollector, RevitLinkInstance, ElementId, Transaction,
+    ElementTransformUtils, Transform, XYZ, CopyPasteOptions
+)
+from Autodesk.Revit.UI import TaskDialog
+from pyrevit import script
+
+# VARIABLES ---------------------------------------------------------------
+doc   = __revit__.ActiveUIDocument.Document
 uidoc = __revit__.ActiveUIDocument
 
-# ─── Catppuccin WPF UI ───────────────────────────────────────────────────────
+# THEME -------------------------------------------------------------------
+THEME = {
+    "bg":      "#1E1E2E",
+    "card":    "#2A2A3C",
+    "surface": "#313244",
+    "muted":   "#45475A",
+    "text":    "#CDD6F4",
+    "subtext": "#A6ADC8",
+    "accent":  "#F0A500",
+}
 
-XAML = """
-<Window
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Column Guard Generator"
-    Width="420" SizeToContent="Height"
-    WindowStartupLocation="CenterScreen"
-    ResizeMode="NoResize"
-    Background="#1E1E2E"
-    FontFamily="Segoe UI">
 
+# ---------------------------------------------------------------------
+# MODELESS WINDOW HELPER (Dispatcher.PushFrame pattern)
+# ---------------------------------------------------------------------
+def show_modeless(window):
+    """Show a WPF window modelessly while keeping Revit responsive,
+    and block this script until the window is closed."""
+    frame = DispatcherFrame()
+
+    def on_closed(sender, args):
+        frame.Continue = False
+
+    window.Closed += on_closed
+    window.Show()
+    Dispatcher.PushFrame(frame)
+
+
+# ---------------------------------------------------------------------
+# XAML BUILDERS
+# ---------------------------------------------------------------------
+def build_link_picker_xaml():
+    return u"""
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Bulk Copy from Link - Select Linked Model"
+        Height="500" Width="480"
+        WindowStartupLocation="CenterScreen"
+        Background="{theme_bg}">
     <Window.Resources>
-
-        <!-- Scrollbar thumb -->
-        <Style x:Key="ThumbStyle" TargetType="Thumb">
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Thumb">
-                        <Border Background="#45475A" CornerRadius="3" Margin="2"/>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Minimal scrollbar -->
-        <Style x:Key="ThinScrollBar" TargetType="ScrollBar">
-            <Setter Property="Width" Value="6"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ScrollBar">
-                        <Grid Background="Transparent">
-                            <Track Name="PART_Track" IsDirectionReversed="True">
-                                <Track.Thumb>
-                                    <Thumb Style="{StaticResource ThumbStyle}"/>
-                                </Track.Thumb>
-                            </Track>
-                        </Grid>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- ScrollViewer -->
-        <Style x:Key="ThinScroll" TargetType="ScrollViewer">
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ScrollViewer">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <ScrollContentPresenter Grid.Column="0"/>
-                            <ScrollBar Grid.Column="1"
-                                       Style="{StaticResource ThinScrollBar}"
-                                       Orientation="Vertical"
-                                       Value="{TemplateBinding VerticalOffset}"
-                                       Maximum="{TemplateBinding ScrollableHeight}"
-                                       ViewportSize="{TemplateBinding ViewportHeight}"
-                                       Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"/>
-                        </Grid>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- ListBoxItem -->
-        <Style TargetType="ListBoxItem">
-            <Setter Property="Foreground" Value="#CDD6F4"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Padding" Value="10,7"/>
+        <Style x:Key="RoundButton" TargetType="Button">
+            <Setter Property="Background" Value="{theme_accent}"/>
+            <Setter Property="Foreground" Value="{theme_bg}"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="14,8"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="RoundButtonSecondary" TargetType="Button" BasedOn="{StaticResource RoundButton}">
+            <Setter Property="Background" Value="{theme_muted}"/>
+            <Setter Property="Foreground" Value="{theme_text}"/>
+        </Style>
+        <Style TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="Foreground" Value="{theme_text}"/>
+            <Setter Property="Template">
+                <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
-                        <Border x:Name="Bd"
-                                Background="{TemplateBinding Background}"
-                                CornerRadius="6"
-                                Margin="0,2"
+                        <Border x:Name="Bd" Background="{theme_surface}" CornerRadius="6" Margin="0,3"
                                 Padding="{TemplateBinding Padding}">
                             <ContentPresenter/>
                         </Border>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#313244"/>
-                            </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#F0A500"/>
-                                <Setter Property="Foreground" Value="#1E1E2E"/>
+                                <Setter TargetName="Bd" Property="Background" Value="{theme_accent}"/>
                             </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- ListBox -->
-        <Style TargetType="ListBox">
-            <Setter Property="Background" Value="#2A2A3C"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="4"/>
-            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
-            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ListBox">
-                        <Border Background="{TemplateBinding Background}"
-                                CornerRadius="8"
-                                Padding="{TemplateBinding Padding}">
-                            <ScrollViewer Style="{StaticResource ThinScroll}"
-                                          Focusable="False">
-                                <ItemsPresenter/>
-                            </ScrollViewer>
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Primary button -->
-        <Style x:Key="PrimaryBtn" TargetType="Button">
-            <Setter Property="Background" Value="#F0A500"/>
-            <Setter Property="Foreground" Value="#1E1E2E"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="Height" Value="38"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd"
-                                Background="{TemplateBinding Background}"
-                                CornerRadius="8"
-                                Padding="16,0">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#E09400"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#C07800"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Bd" Property="Background" Value="#45475A"/>
-                                <Setter Property="Foreground" Value="#6C7086"/>
+                                <Setter TargetName="Bd" Property="Background" Value="{theme_muted}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
-
-        <!-- Ghost/cancel button -->
-        <Style x:Key="GhostBtn" TargetType="Button">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#A6ADC8"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="Height" Value="38"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush" Value="#45475A"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8"
-                                Padding="16,0">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#313244"/>
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#6C7086"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#45475A"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
     </Window.Resources>
 
-    <StackPanel Margin="24,20,24,24">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <StackPanel Margin="0,0,0,20">
-            <TextBlock Text="Column Guard Generator"
-                       Foreground="#CDD6F4"
-                       FontSize="18"
-                       FontWeight="SemiBold"/>
-            <TextBlock Text="Select a railing type to wrap around linked structural columns."
-                       Foreground="#A6ADC8"
-                       FontSize="11"
-                       Margin="0,4,0,0"
-                       TextWrapping="Wrap"/>
-        </StackPanel>
+        <TextBlock Grid.Row="0" Text="Select Linked Model" FontSize="18" FontWeight="Bold"
+                   Foreground="{theme_text}" Margin="0,0,0,4"/>
+        <TextBlock Grid.Row="1" Text="Choose the linked model to copy elements from."
+                   FontSize="12" Foreground="{theme_subtext}" Margin="0,0,0,12"/>
 
-        <!-- Divider -->
-        <Border Height="1" Background="#313244" Margin="0,0,0,20"/>
-
-        <!-- Railing Type label -->
-        <StackPanel Margin="0,0,0,8" Orientation="Horizontal">
-            <Border Width="3" Height="14" Background="#F0A500"
-                    CornerRadius="2" Margin="0,0,8,0" VerticalAlignment="Center"/>
-            <TextBlock Text="Railing Type"
-                       Foreground="#CDD6F4"
-                       FontSize="12"
-                       FontWeight="Medium"
-                       VerticalAlignment="Center"/>
-        </StackPanel>
-
-        <!-- Railing list -->
-        <ListBox x:Name="RailList"
-                 Height="180"
-                 Margin="0,0,0,20"/>
-
-        <!-- Count badge -->
-        <Border Background="#2A2A3C" CornerRadius="6" Padding="10,7"
-                Margin="0,0,0,20">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="Available types: "
-                           Foreground="#A6ADC8" FontSize="11"/>
-                <TextBlock x:Name="CountLabel"
-                           Foreground="#F0A500" FontSize="11" FontWeight="SemiBold"/>
-            </StackPanel>
+        <Border Grid.Row="2" Background="{theme_card}" CornerRadius="8" Padding="8">
+            <ListBox x:Name="LinkList" Background="Transparent" BorderThickness="0"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding DocTitle}" Foreground="{theme_text}"/>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
         </Border>
 
-        <!-- Action buttons -->
-        <Grid>
+        <Grid Grid.Row="3" Margin="0,14,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="12"/>
-                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
+            <Button Grid.Column="1" Content="Cancel" x:Name="CancelBtn"
+                    Style="{StaticResource RoundButtonSecondary}" Margin="0,0,8,0"/>
+            <Button Grid.Column="2" Content="Next  ->" x:Name="NextBtn"
+                    Style="{StaticResource RoundButton}"/>
+        </Grid>
+    </Grid>
+</Window>
+""".replace("{theme_bg}", THEME["bg"]) \
+   .replace("{theme_card}", THEME["card"]) \
+   .replace("{theme_surface}", THEME["surface"]) \
+   .replace("{theme_muted}", THEME["muted"]) \
+   .replace("{theme_text}", THEME["text"]) \
+   .replace("{theme_subtext}", THEME["subtext"]) \
+   .replace("{theme_accent}", THEME["accent"])
 
-            <Button x:Name="CancelBtn"
-                    Grid.Column="0"
-                    Content="Cancel"
-                    Style="{StaticResource GhostBtn}"/>
 
-            <Button x:Name="ConfirmBtn"
-                    Grid.Column="2"
-                    Content="Select Columns →"
-                    Style="{StaticResource PrimaryBtn}"
-                    IsEnabled="False"/>
+def build_category_picker_xaml():
+    return u"""
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Bulk Copy from Link - Select Categories"
+        Height="560" Width="480"
+        WindowStartupLocation="CenterScreen"
+        Background="{theme_bg}">
+    <Window.Resources>
+        <Style x:Key="RoundButton" TargetType="Button">
+            <Setter Property="Background" Value="{theme_accent}"/>
+            <Setter Property="Foreground" Value="{theme_bg}"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="14,8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="RoundButtonSecondary" TargetType="Button" BasedOn="{StaticResource RoundButton}">
+            <Setter Property="Background" Value="{theme_muted}"/>
+            <Setter Property="Foreground" Value="{theme_text}"/>
+        </Style>
+        <Style x:Key="CheckRow" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{theme_text}"/>
+            <Setter Property="Padding" Value="8,8"/>
+            <Setter Property="FontSize" Value="13"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Select Categories" FontSize="18" FontWeight="Bold"
+                   Foreground="{theme_text}" Margin="0,0,0,4"/>
+        <TextBlock Grid.Row="1" x:Name="SubtitleText" Text="Categories found in the selected link."
+                   FontSize="12" Foreground="{theme_subtext}" Margin="0,0,0,10"/>
+
+        <Grid Grid.Row="2" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="" />
+            <Button Grid.Column="1" Content="Select All" x:Name="SelectAllBtn"
+                    Style="{StaticResource RoundButtonSecondary}" Margin="0,0,8,0" Padding="10,4"/>
+            <Button Grid.Column="2" Content="Clear" x:Name="ClearAllBtn"
+                    Style="{StaticResource RoundButtonSecondary}" Padding="10,4"/>
         </Grid>
 
-    </StackPanel>
+        <Border Grid.Row="3" Background="{theme_card}" CornerRadius="8" Padding="8">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="CategoryList">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{theme_surface}" CornerRadius="6" Margin="0,3" Padding="4,0">
+                                <CheckBox Content="{Binding Display}" IsChecked="{Binding IsChecked}"
+                                          Style="{StaticResource CheckRow}"/>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+
+        <Grid Grid.Row="4" Margin="0,14,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="1" Content="Cancel" x:Name="CancelBtn"
+                    Style="{StaticResource RoundButtonSecondary}" Margin="0,0,8,0"/>
+            <Button Grid.Column="2" Content="Copy" x:Name="CopyBtn"
+                    Style="{StaticResource RoundButton}"/>
+        </Grid>
+    </Grid>
 </Window>
-"""
-
-def show_railing_picker(rail_names):
-    """Show Catppuccin WPF dialog. Returns selected name string or None."""
-    selected = [None]
-
-    win = XamlReader.Parse(XAML)
-    rail_list  = win.FindName("RailList")
-    confirm    = win.FindName("ConfirmBtn")
-    cancel     = win.FindName("CancelBtn")
-    count_lbl  = win.FindName("CountLabel")
-
-    # Populate list
-    for name in rail_names:
-        item = ListBoxItem()
-        item.Content = name
-        rail_list.Items.Add(item)
-
-    count_lbl.Text = str(len(rail_names))
-
-    def on_selection_changed(s, e):
-        confirm.IsEnabled = rail_list.SelectedItem is not None
-
-    def on_confirm(s, e):
-        if rail_list.SelectedItem is not None:
-            selected[0] = rail_list.SelectedItem.Content
-        win.Close()
-
-    def on_cancel(s, e):
-        win.Close()
-
-    rail_list.SelectionChanged += on_selection_changed
-    confirm.Click += on_confirm
-    cancel.Click  += on_cancel
-
-    # Pump dispatcher so the window blocks without freezing Revit
-    frame = DispatcherFrame()
-
-    def on_closed(s, e):
-        frame.Continue = False
-
-    win.Closed += on_closed
-    win.Show()
-    Dispatcher.PushFrame(frame)
-
-    return selected[0]
+""".replace("{theme_bg}", THEME["bg"]) \
+   .replace("{theme_card}", THEME["card"]) \
+   .replace("{theme_surface}", THEME["surface"]) \
+   .replace("{theme_muted}", THEME["muted"]) \
+   .replace("{theme_text}", THEME["text"]) \
+   .replace("{theme_subtext}", THEME["subtext"]) \
+   .replace("{theme_accent}", THEME["accent"])
 
 
-# ─── Collect Railing Types ────────────────────────────────────────────────────
-
-all_rail_types    = FilteredElementCollector(doc).OfClass(RailingType).ToElements()
-all_rail_types_id = FilteredElementCollector(doc).OfClass(RailingType).ToElementIds()
-all_rail_names    = [rail.get_Parameter(BuiltInParameter.ALL_MODEL_TYPE_NAME).AsValueString()
-                     for rail in all_rail_types]
-
-rail_dict_type_name = dict(zip(all_rail_types, all_rail_names))
-rail_dict_name_id   = dict(zip(all_rail_names, all_rail_types_id))
-
-selected_rail = show_railing_picker(all_rail_names)
-
-if not selected_rail:
-    print("No railing type selected. Cancelled.")
-    import sys; sys.exit()
-
-selected_rail_id = rail_dict_name_id.get(selected_rail)
-
-# ─── Selection Filter ─────────────────────────────────────────────────────────
-
-class LinkedStructuralColumnFilter(ISelectionFilter):
-    """Allows selection of structural columns from Revit link instances only."""
-
-    def AllowElement(self, element):
-        return isinstance(element, RevitLinkInstance)
-
-    def AllowReference(self, reference, point):
-        try:
-            link_instance = doc.GetElement(reference.ElementId)
-            if not isinstance(link_instance, RevitLinkInstance):
-                return False
-            linked_doc = link_instance.GetLinkDocument()
-            linked_element = linked_doc.GetElement(reference.LinkedElementId)
-            if linked_element is None or linked_element.Category is None:
-                return False
-            return linked_element.Category.Id.Value == int(BuiltInCategory.OST_StructuralColumns)
-        except Exception:
-            return False
-
-# ─── Helpers ──────────────────────────────────────────────────────────────────
-
-def get_base_elevation(column, linked_doc):
-    base_level_param = column.get_Parameter(BuiltInParameter.FAMILY_BASE_LEVEL_PARAM)
-    if base_level_param is None:
-        return None
-    base_level = linked_doc.GetElement(base_level_param.AsElementId())
-    return base_level.Elevation if base_level else None
+# ---------------------------------------------------------------------
+# DATA HELPERS
+# ---------------------------------------------------------------------
+class LinkItem(object):
+    """Simple display wrapper for a RevitLinkInstance in the ListBox."""
+    def __init__(self, link_instance, doc_title):
+        self.link_instance = link_instance
+        self.DocTitle = doc_title
 
 
-def _collect_solids(geom_obj):
-    """Recursively collect all Solids from a geometry object, handling nested GeometryInstances."""
-    solids = []
-    if isinstance(geom_obj, Solid):
-        if geom_obj.Volume > 0:
-            solids.append(geom_obj)
-    elif isinstance(geom_obj, GeometryInstance):
-        for child in geom_obj.GetInstanceGeometry():
-            solids.extend(_collect_solids(child))
-    return solids
+class CategoryRow(object):
+    """Bindable row for the category checklist ItemsControl."""
+    def __init__(self, category, count):
+        self.category = category
+        self.Display = u"{0}  ({1})".format(category.Name, count)
+        self.IsChecked = False
 
 
-def get_footprint_curves(column, base_elevation, transform, tolerance=0.05):
-    """
-    Extract bottom-face edges from the column solid and transform to host coordinates.
-    Strategy: find the lowest Z face in the solid (not relying on exact elevation match),
-    then return its boundary curves transformed into host space.
-    """
-    options = Options()
-    options.ComputeReferences = True
-    options.DetailLevel = ViewDetailLevel.Fine
+def get_link_instances():
+    """Collect all RevitLinkInstances in the active model that have a
+    loaded linked document, returning LinkItem wrappers."""
+    link_instances = FilteredElementCollector(doc) \
+        .OfClass(RevitLinkInstance) \
+        .ToElements()
 
-    geom_element = column.get_Geometry(options)
-    if geom_element is None:
-        return []
-
-    all_solids = []
-    for geom_obj in geom_element:
-        all_solids.extend(_collect_solids(geom_obj))
-
-    if not all_solids:
-        return []
-
-    main_solid = max(all_solids, key=lambda s: s.Volume)
-
-    best_face   = None
-    best_face_z = None
-    for face in main_solid.Faces:
-        normal = face.FaceNormal
-        if abs(normal.Z) < 0.9:
+    items = []
+    for li in link_instances:
+        lnk_doc = li.GetLinkDocument()
+        if lnk_doc is None:
+            # Link is unloaded - skip, can't read elements from it
             continue
-        z_vals = []
-        for loop in face.EdgeLoops:
-            for edge in loop:
-                z_vals.append(edge.AsCurve().GetEndPoint(0).Z)
-                z_vals.append(edge.AsCurve().GetEndPoint(1).Z)
-        if not z_vals:
+        title = lnk_doc.Title
+        items.append(LinkItem(li, title))
+    return items
+
+
+def get_categories_with_elements(lnkd_doc):
+    """Return a dict {category_id_value: (category, count)} for every
+    category in the linked document that has at least one model element."""
+    all_elements = FilteredElementCollector(lnkd_doc) \
+        .WhereElementIsNotElementType() \
+        .ToElements()
+
+    cat_counts = {}   # category_id_value -> [Category, count]
+    for el in all_elements:
+        cat = el.Category
+        if cat is None:
             continue
-        face_z = sum(z_vals) / len(z_vals)
-        if best_face_z is None or face_z < best_face_z:
-            best_face_z = face_z
-            best_face   = face
+        cat_id_val = cat.Id.Value if hasattr(cat.Id, "Value") else cat.Id.IntegerValue
+        if cat_id_val in cat_counts:
+            cat_counts[cat_id_val][1] += 1
+        else:
+            cat_counts[cat_id_val] = [cat, 1]
 
-    if best_face is None:
-        return []
-
-    curves = []
-    outer_loop = list(best_face.EdgeLoops)[0]
-    for edge in outer_loop:
-        curves.append(edge.AsCurve().CreateTransformed(transform))
-
-    return curves
+    return cat_counts
 
 
-def sort_curves_into_loop(curves, tolerance=1e-6):
-    """Re-order curves so they form a single connected closed loop."""
-    if not curves:
-        return curves
-    sorted_curves = [curves[0]]
-    remaining = list(curves[1:])
-    while remaining:
-        last_end = sorted_curves[-1].GetEndPoint(1)
-        matched  = False
-        for i, c in enumerate(remaining):
-            if last_end.DistanceTo(c.GetEndPoint(0)) < tolerance:
-                sorted_curves.append(c)
-                remaining.pop(i)
-                matched = True
-                break
-            elif last_end.DistanceTo(c.GetEndPoint(1)) < tolerance:
-                sorted_curves.append(c.CreateReversed())
-                remaining.pop(i)
-                matched = True
-                break
-        if not matched:
-            break
-    return sorted_curves
+def get_one_element_per_type(lnkd_doc, category_ids):
+    """For the given list of Category Ids (linked doc category ids),
+    collect every element in those categories, group by ElementType Id,
+    and return a list of one representative ElementId per distinct type.
+
+    Elements with no type (TypeId == InvalidElementId) are each treated
+    as their own distinct 'type' bucket, keyed by element Id, so nothing
+    is silently dropped."""
+
+    collector = FilteredElementCollector(lnkd_doc) \
+        .WhereElementIsNotElementType() \
+        .ToElements()
+
+    invalid_id = ElementId.InvalidElementId
+
+    seen_type_ids = set()
+    representative_ids = []
+
+    for el in collector:
+        if el.Category is None:
+            continue
+        cat_id_val = el.Category.Id.Value if hasattr(el.Category.Id, "Value") else el.Category.Id.IntegerValue
+        if cat_id_val not in category_ids:
+            continue
+
+        type_id = el.GetTypeId()
+
+        if type_id == invalid_id or type_id is None:
+            # No type relationship - treat this element as unique on its own
+            key = ("__no_type__", el.Id.Value if hasattr(el.Id, "Value") else el.Id.IntegerValue)
+        else:
+            key = ("type", type_id.Value if hasattr(type_id, "Value") else type_id.IntegerValue)
+
+        if key in seen_type_ids:
+            continue
+
+        seen_type_ids.add(key)
+        representative_ids.append(el.Id)
+
+    return representative_ids
 
 
-def get_nearest_host_level_id(host_doc, elevation):
-    """Return the Id of the host-doc level closest to the given elevation."""
-    levels = FilteredElementCollector(host_doc).OfClass(Level).ToElements()
-    if not levels:
-        return None
-    return min(levels, key=lambda lvl: abs(lvl.Elevation - elevation)).Id
+# ---------------------------------------------------------------------
+# STEP 1 - PICK LINKED MODEL
+# ---------------------------------------------------------------------
+def pick_link_instance():
+    link_items = get_link_instances()
 
-# ─── Main ─────────────────────────────────────────────────────────────────────
+    if not link_items:
+        TaskDialog.Show("B-Dare95", "No loaded linked models were found in this project.")
+        script.exit()
 
-sel_filter = LinkedStructuralColumnFilter()
+    xaml = build_link_picker_xaml()
+    window = XamlReader.Parse(xaml)  # type: Window
 
-try:
-    references = uidoc.Selection.PickObjects(
-        ObjectType.LinkedElement,
-        sel_filter,
-        "Select structural columns from a Revit link (Finish when done)"
-    )
-except Exception:
-    print("Selection cancelled.")
-    references = []
+    link_list_box = window.FindName("LinkList")
+    next_btn = window.FindName("NextBtn")
+    cancel_btn = window.FindName("CancelBtn")
 
-if not references:
-    print("No columns selected.")
-else:
-    t = Transaction(doc, "Generate Column Footprint Lines")
+    for item in link_items:
+        link_list_box.Items.Add(item)
+
+    if link_list_box.Items.Count > 0:
+        link_list_box.SelectedIndex = 0
+
+    result_holder = [None]  # mutable container (IronPython 2.7 closure workaround)
+
+    def on_next(sender, args):
+        selected = link_list_box.SelectedItem
+        if selected is not None:
+            result_holder[0] = selected
+        window.Close()
+
+    def on_cancel(sender, args):
+        result_holder[0] = None
+        window.Close()
+
+    next_btn.Click += on_next
+    cancel_btn.Click += on_cancel
+    link_list_box.MouseDoubleClick += on_next
+
+    show_modeless(window)
+
+    return result_holder[0]  # LinkItem or None
+
+
+# ---------------------------------------------------------------------
+# STEP 2 - PICK CATEGORIES
+# ---------------------------------------------------------------------
+def pick_categories(cat_counts):
+    """cat_counts: dict {cat_id_val: [Category, count]}"""
+
+    rows = [CategoryRow(cat, count) for (cat, count) in
+            sorted(cat_counts.values(), key=lambda pair: pair[0].Name)]
+
+    xaml = build_category_picker_xaml()
+    window = XamlReader.Parse(xaml)  # type: Window
+
+    category_list = window.FindName("CategoryList")
+    copy_btn = window.FindName("CopyBtn")
+    cancel_btn = window.FindName("CancelBtn")
+    select_all_btn = window.FindName("SelectAllBtn")
+    clear_all_btn = window.FindName("ClearAllBtn")
+
+    category_list.ItemsSource = rows
+
+    result_holder = [None]
+
+    def on_select_all(sender, args):
+        for r in rows:
+            r.IsChecked = True
+        category_list.ItemsSource = None
+        category_list.ItemsSource = rows  # force refresh (no INotifyPropertyChanged)
+
+    def on_clear_all(sender, args):
+        for r in rows:
+            r.IsChecked = False
+        category_list.ItemsSource = None
+        category_list.ItemsSource = rows
+
+    def on_copy(sender, args):
+        chosen = [r.category for r in rows if r.IsChecked]
+        result_holder[0] = chosen
+        window.Close()
+
+    def on_cancel(sender, args):
+        result_holder[0] = None
+        window.Close()
+
+    select_all_btn.Click += on_select_all
+    clear_all_btn.Click += on_clear_all
+    copy_btn.Click += on_copy
+    cancel_btn.Click += on_cancel
+
+    show_modeless(window)
+
+    return result_holder[0]  # list of Category or None
+
+
+# ---------------------------------------------------------------------
+# MAIN
+# ---------------------------------------------------------------------
+def main():
+    # STEP 1: pick the linked model
+    link_item = pick_link_instance()
+    if link_item is None:
+        script.exit()
+
+    lnkd_doc = link_item.link_instance.GetLinkDocument()
+
+    # STEP 2: collect categories present in the link, let user pick
+    cat_counts = get_categories_with_elements(lnkd_doc)
+    if not cat_counts:
+        TaskDialog.Show("B-Dare95", "The selected link contains no model elements.")
+        script.exit()
+
+    chosen_categories = pick_categories(cat_counts)
+    if not chosen_categories:
+        script.exit()
+
+    category_ids = set()
+    for cat in chosen_categories:
+        cat_id_val = cat.Id.Value if hasattr(cat.Id, "Value") else cat.Id.IntegerValue
+        category_ids.add(cat_id_val)
+
+    # STEP 3: one representative element per distinct type, across all chosen categories
+    representative_ids = get_one_element_per_type(lnkd_doc, category_ids)
+
+    if not representative_ids:
+        TaskDialog.Show("B-Dare95", "No elements found for the selected categories.")
+        script.exit()
+
+    list_el_ids = List[ElementId](representative_ids)
+
+    t = Transaction(doc, "Bulk Copy from Link")
     t.Start()
+
     try:
-        for ref in references:
-            link_instance  = doc.GetElement(ref.ElementId)
-            linked_doc     = link_instance.GetLinkDocument()
-            transform      = link_instance.GetTotalTransform()
-
-            column         = linked_doc.GetElement(ref.LinkedElementId)
-            base_elevation = get_base_elevation(column, linked_doc)
-            if base_elevation is None:
-                print("Could not determine base elevation for element: {}".format(column.Id))
-                continue
-
-            transformed_origin  = transform.OfPoint(XYZ(0, 0, base_elevation))
-            host_base_elevation = transformed_origin.Z
-
-            curves = get_footprint_curves(column, base_elevation, transform)
-            if not curves:
-                print("No footprint curves found for element: {}".format(column.Id))
-                continue
-
-            ordered_curves = sort_curves_into_loop(curves)
-            curveloop      = CurveLoop.Create(ordered_curves)
-
-            host_level_id = get_nearest_host_level_id(doc, host_base_elevation)
-            if host_level_id is None:
-                print("No host level found for element: {}".format(column.Id))
-                continue
-
-            new_column_guard = Railing.Create(doc, curveloop, selected_rail_id, host_level_id)
-
-            new_column_guard.Flip()
-
+        copied_ids = ElementTransformUtils.CopyElements(
+            lnkd_doc, list_el_ids, doc,
+            Transform.CreateTranslation(XYZ(0, 0, 0)),
+            CopyPasteOptions()
+        )
+        for el_id in copied_ids:
+            copied_el = doc.GetElement(el_id)
+            copied_el.Pinned = True
         t.Commit()
-
-    except Exception as e:
-        print(e)
+    except Exception as ex:
         t.RollBack()
+        TaskDialog.Show("B-Dare95", "Copy failed:\n{0}".format(ex))
+        script.exit()
+
+    TaskDialog.Show(
+        "B-Dare95",
+        "Copied {0} element(s) (one per distinct type) across {1} category(ies).".format(
+            len(list(copied_ids)), len(chosen_categories)
+        )
+    )
+
+
+main()

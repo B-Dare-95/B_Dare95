@@ -50,4 +50,4 @@ for lnk_elem in ref_selected_elements:
 
     lnkd_selected_element = linked_doc.GetElement(ref_lnk_id)
 
-    print("Element Name : " + lnkd_selected_element.Name + " >> ID: " + str(ref_lnk_id.IntegerValue))
+    print("Element Name : " + lnkd_selected_element.Name + " >> Link : " + linked_doc.Title + " >> ID: " + str(ref_lnk_id.IntegerValue))
