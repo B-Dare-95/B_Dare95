@@ -473,7 +473,8 @@ def element_matches_filters_with_ops(elem, param_filters):
     Evaluate param_filters against elem using per-row operators.
 
     param_filters  – list of (param_name, param_value, operator)
-                     Operator on the first item is ignored (it is the base).
+                     Operator on the first item is either 'AND' (normal
+                     base match) or 'NOT' (base match negated).
 
     Operators:
       'AND'  →  result = result AND  match(this row)
@@ -486,9 +487,10 @@ def element_matches_filters_with_ops(elem, param_filters):
     if not param_filters:
         return True
 
-    result = element_matches_single_param(
+    base_match = element_matches_single_param(
         elem, param_filters[0][0], param_filters[0][1]
     )
+    result = (not base_match) if param_filters[0][2] == 'NOT' else base_match
 
     for i in range(1, len(param_filters)):
         pname, pval, op = param_filters[i]
@@ -728,6 +730,8 @@ def show_category_picker(all_categories):
             GridLength(1, GridUnitType.Star),
             GridLength(8),
             GridLength.Auto,
+            GridLength(6),
+            GridLength.Auto,
         ]:
             cd = Controls.ColumnDefinition()
             cd.Width = w
@@ -786,6 +790,47 @@ def show_category_picker(all_categories):
         Controls.Grid.SetColumn(remove_btn, 4)
         grid.Children.Add(remove_btn)
 
+        # ── NOT toggle (row 0 only) ─────────────────────────────────────────
+        # The base row has no connector pill (nothing precedes it), so a
+        # standalone NOT toggle lets the user negate the base match itself.
+        if len(rows) == 1:
+            not_border = Controls.Border()
+            not_border.CornerRadius    = CornerRadius(9)
+            not_border.Padding         = Thickness(9, 3, 9, 3)
+            not_border.Cursor          = WinInput.Cursors.Hand
+            not_border.VerticalAlignment = System.Windows.VerticalAlignment.Center
+
+            not_tb = Controls.TextBlock()
+            not_tb.Text       = "NOT"
+            not_tb.FontSize   = 10
+            not_tb.FontWeight = System.Windows.FontWeights.SemiBold
+            not_tb.VerticalAlignment   = System.Windows.VerticalAlignment.Center
+            not_tb.HorizontalAlignment = System.Windows.HorizontalAlignment.Center
+
+            not_border.Child = not_tb
+            Controls.Grid.SetColumn(not_border, 6)
+            grid.Children.Add(not_border)
+
+            def _refresh_not():
+                if row['operator'][0] == 'NOT':
+                    not_border.Background      = ACCENT_BRUSH
+                    not_border.BorderThickness = Thickness(0)
+                    not_tb.Foreground          = BG_BRUSH
+                    not_tb.Opacity             = 1.0
+                else:
+                    not_border.Background      = SURFACE_BRUSH
+                    not_border.BorderBrush     = MUTED_BRUSH
+                    not_border.BorderThickness = Thickness(1)
+                    not_tb.Foreground          = TEXT_BRUSH
+                    not_tb.Opacity             = 0.45
+
+            def _on_not_click(s, e, r=row):
+                r['operator'][0] = 'NOT' if r['operator'][0] != 'NOT' else 'AND'
+                _refresh_not()
+
+            not_border.MouseLeftButtonDown += _on_not_click
+            _refresh_not()
+
         # ── Back-fill the row dict ─────────────────────────────────────────
         row['grid']        = grid
         row['param_combo'] = param_combo
@@ -842,9 +887,11 @@ def show_category_picker(all_categories):
             p = _combo_value(row['param_combo'])
             v = _combo_value(row['value_combo'])
             if p is not None and v is not None:
-                # First row's operator is the base; subsequent rows carry
-                # whichever of AND/OR/NOT the user selected on their connector.
-                op = row['operator'][0] if i > 0 else 'AND'
+                # Row 0 has no connector pill — its operator comes from the
+                # standalone NOT toggle (AND if untoggled, NOT if toggled).
+                # Rows after the first carry whichever of AND/OR/NOT the
+                # user selected on their connector.
+                op = row['operator'][0]
                 param_filters.append((p, v, op))
         result_holder[0] = (cat, param_filters)
         window.Close()

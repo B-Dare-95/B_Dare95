@@ -1,27 +1,41 @@
 # -*- coding: utf-8 -*-
 __title__     = "Bulk Copy from Link"
 __author__    = "Mohamed Bedair"
-__version__   = 'Version = 2.0'
-__doc__       = """Version = 2.0
+__version__   = 'Version = 2.2'
+__doc__       = """Version = 2.2
 Date    = 22.06.2026
 _____________________________________________________________________
 Description:
 
 Copies one element per distinct Type, from one or more selected
-Categories, out of a chosen Linked Model, into the active model
+Model Categories, out of a chosen Linked Model, into the active model
 in the same place (pinned).
 _____________________________________________________________________
 How-to:
 
 -> Run the script
--> Pick a Linked Model from the list
--> Pick one or more Categories from the list
-   (only categories that actually exist in that link are shown)
+-> Pick a Linked Model from the list (use the search bar to filter)
+-> Pick one or more Categories from the list (use the search bar to filter)
+   (only Model categories that actually exist in that link are shown)
 -> Click Copy
 -> One element per distinct Type under the selected Categories will
    be copied into the active model, in place, and pinned.
 _____________________________________________________________________
+Precautions:
+- Curtain Panels masquerading as Doors (door panels placed in a
+  curtain grid) are skipped when copying the Doors category, since
+  they fail to copy via CopyElements.
+- Any hosted element (door, window, etc.) automatically brings its
+  Host element along, even if the host's category wasn't selected.
+- The category list only shows Model Categories (Annotation,
+  Internal, and Analytical Model categories are excluded).
+_____________________________________________________________________
 Last update:
+- [22.06.2026] - 2.2 RELEASE - Skip curtain-panel-as-door elements,
+                                auto-include hosts of hosted elements,
+                                restrict category list to Model Categories
+- [22.06.2026] - 2.1 RELEASE - Added live search/filter bar to both the
+                                link picker and category picker
 - [22.06.2026] - 2.0 RELEASE - Link picker + multi-category picker +
                                 one-per-type copy logic
 - [21.12.2023] - 1.0 RELEASE
@@ -44,7 +58,8 @@ from System.Windows.Threading import Dispatcher, DispatcherFrame
 
 from Autodesk.Revit.DB import (
     FilteredElementCollector, RevitLinkInstance, ElementId, Transaction,
-    ElementTransformUtils, Transform, XYZ, CopyPasteOptions
+    ElementTransformUtils, Transform, XYZ, CopyPasteOptions, CategoryType,
+    FamilyInstance, Wall, WallKind, BuiltInCategory
 )
 from Autodesk.Revit.UI import TaskDialog
 from pyrevit import script
@@ -139,10 +154,28 @@ def build_link_picker_xaml():
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="SearchBox" TargetType="TextBox">
+            <Setter Property="Background" Value="{theme_surface}"/>
+            <Setter Property="Foreground" Value="{theme_text}"/>
+            <Setter Property="CaretBrush" Value="{theme_text}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="10,7"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="6">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid Margin="16">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -152,9 +185,12 @@ def build_link_picker_xaml():
         <TextBlock Grid.Row="0" Text="Select Linked Model" FontSize="18" FontWeight="Bold"
                    Foreground="{theme_text}" Margin="0,0,0,4"/>
         <TextBlock Grid.Row="1" Text="Choose the linked model to copy elements from."
-                   FontSize="12" Foreground="{theme_subtext}" Margin="0,0,0,12"/>
+                   FontSize="12" Foreground="{theme_subtext}" Margin="0,0,0,10"/>
 
-        <Border Grid.Row="2" Background="{theme_card}" CornerRadius="8" Padding="8">
+        <TextBox Grid.Row="2" x:Name="SearchBox" Style="{StaticResource SearchBox}"
+                  Tag="Search linked models..." Margin="0,0,0,8"/>
+
+        <Border Grid.Row="3" Background="{theme_card}" CornerRadius="8" Padding="8">
             <ListBox x:Name="LinkList" Background="Transparent" BorderThickness="0"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBox.ItemTemplate>
@@ -165,7 +201,7 @@ def build_link_picker_xaml():
             </ListBox>
         </Border>
 
-        <Grid Grid.Row="3" Margin="0,14,0,0">
+        <Grid Grid.Row="4" Margin="0,14,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
@@ -225,10 +261,28 @@ def build_category_picker_xaml():
             <Setter Property="Padding" Value="8,8"/>
             <Setter Property="FontSize" Value="13"/>
         </Style>
+        <Style x:Key="SearchBox" TargetType="TextBox">
+            <Setter Property="Background" Value="{theme_surface}"/>
+            <Setter Property="Foreground" Value="{theme_text}"/>
+            <Setter Property="CaretBrush" Value="{theme_text}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="10,7"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="6">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid Margin="16">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -241,7 +295,10 @@ def build_category_picker_xaml():
         <TextBlock Grid.Row="1" x:Name="SubtitleText" Text="Categories found in the selected link."
                    FontSize="12" Foreground="{theme_subtext}" Margin="0,0,0,10"/>
 
-        <Grid Grid.Row="2" Margin="0,0,0,8">
+        <TextBox Grid.Row="2" x:Name="SearchBox" Style="{StaticResource SearchBox}"
+                  Tag="Search categories..." Margin="0,0,0,8"/>
+
+        <Grid Grid.Row="3" Margin="0,0,0,8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
@@ -254,7 +311,7 @@ def build_category_picker_xaml():
                     Style="{StaticResource RoundButtonSecondary}" Padding="10,4"/>
         </Grid>
 
-        <Border Grid.Row="3" Background="{theme_card}" CornerRadius="8" Padding="8">
+        <Border Grid.Row="4" Background="{theme_card}" CornerRadius="8" Padding="8">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <ItemsControl x:Name="CategoryList">
                     <ItemsControl.ItemTemplate>
@@ -269,7 +326,7 @@ def build_category_picker_xaml():
             </ScrollViewer>
         </Border>
 
-        <Grid Grid.Row="4" Margin="0,14,0,0">
+        <Grid Grid.Row="5" Margin="0,14,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
@@ -329,7 +386,9 @@ def get_link_instances():
 
 def get_categories_with_elements(lnkd_doc):
     """Return a dict {category_id_value: (category, count)} for every
-    category in the linked document that has at least one model element."""
+    MODEL category in the linked document that has at least one model
+    element. Annotation, Internal, and AnalyticalModel categories are
+    excluded - this tool only copies physical model elements."""
     all_elements = FilteredElementCollector(lnkd_doc) \
         .WhereElementIsNotElementType() \
         .ToElements()
@@ -338,6 +397,8 @@ def get_categories_with_elements(lnkd_doc):
     for el in all_elements:
         cat = el.Category
         if cat is None:
+            continue
+        if cat.CategoryType != CategoryType.Model:
             continue
         cat_id_val = cat.Id.Value if hasattr(cat.Id, "Value") else cat.Id.IntegerValue
         if cat_id_val in cat_counts:
@@ -348,14 +409,78 @@ def get_categories_with_elements(lnkd_doc):
     return cat_counts
 
 
-def get_one_element_per_type(lnkd_doc, category_ids):
+def is_curtain_panel_masquerading_as_door(el):
+    """Detect a Curtain Panel that is reporting under the Doors category
+    (a 'door panel' placed in a curtain grid). These elements typically
+    fail to copy via ElementTransformUtils.CopyElements and should be
+    skipped when bulk-copying the Doors category.
+
+    Two independent signals are checked, since family/category metadata
+    can vary across Revit versions and curtain panel setups:
+      1. FamilyInstance.Symbol.Family.IsCurtainPanelFamily
+      2. The element's Host is a Wall whose WallType.Kind is Curtain
+    """
+    if not isinstance(el, FamilyInstance):
+        return False
+
+    try:
+        symbol = el.Symbol
+        if symbol is not None and symbol.Family is not None:
+            if symbol.Family.IsCurtainPanelFamily:
+                return True
+    except Exception:
+        pass
+
+    try:
+        host = el.Host
+        if isinstance(host, Wall) and host.WallType is not None:
+            if host.WallType.Kind == WallKind.Curtain:
+                return True
+    except Exception:
+        pass
+
+    return False
+
+
+def get_host_id(el):
+    """Return the ElementId of el's Host if it has one and is hosted
+    by a real element (not a face/work-plane based host without an
+    Element), otherwise None."""
+    try:
+        host = el.Host
+    except Exception:
+        return None
+
+    if host is None:
+        return None
+
+    try:
+        host_id = host.Id
+    except Exception:
+        return None
+
+    if host_id is None or host_id == ElementId.InvalidElementId:
+        return None
+
+    return host_id
+
+
+def get_one_element_per_type(lnkd_doc, category_ids, doors_category_id=None):
     """For the given list of Category Ids (linked doc category ids),
     collect every element in those categories, group by ElementType Id,
     and return a list of one representative ElementId per distinct type.
 
     Elements with no type (TypeId == InvalidElementId) are each treated
     as their own distinct 'type' bucket, keyed by element Id, so nothing
-    is silently dropped."""
+    is silently dropped.
+
+    Precautions applied:
+    - If doors_category_id is provided and an element belongs to it,
+      Curtain Panels masquerading as Doors are skipped entirely.
+    - Any hosted element (window, door, etc.) automatically pulls its
+      Host element's Id into the copy set as well, so the host comes
+      along regardless of whether it was independently selected.
+    """
 
     collector = FilteredElementCollector(lnkd_doc) \
         .WhereElementIsNotElementType() \
@@ -365,6 +490,7 @@ def get_one_element_per_type(lnkd_doc, category_ids):
 
     seen_type_ids = set()
     representative_ids = []
+    host_ids_to_add = set()  # collected separately, deduped, added at the end
 
     for el in collector:
         if el.Category is None:
@@ -372,6 +498,11 @@ def get_one_element_per_type(lnkd_doc, category_ids):
         cat_id_val = el.Category.Id.Value if hasattr(el.Category.Id, "Value") else el.Category.Id.IntegerValue
         if cat_id_val not in category_ids:
             continue
+
+        # PRECAUTION 1: skip Curtain Panels masquerading as Doors
+        if doors_category_id is not None and cat_id_val == doors_category_id:
+            if is_curtain_panel_masquerading_as_door(el):
+                continue
 
         type_id = el.GetTypeId()
 
@@ -386,6 +517,22 @@ def get_one_element_per_type(lnkd_doc, category_ids):
 
         seen_type_ids.add(key)
         representative_ids.append(el.Id)
+
+        # PRECAUTION 2: if this element requires a host, bring the host along
+        host_id = get_host_id(el)
+        if host_id is not None:
+            host_ids_to_add.add(host_id.Value if hasattr(host_id, "Value") else host_id.IntegerValue)
+
+    # Merge in hosts that aren't already part of the representative set
+    existing_id_vals = set(
+        (rid.Value if hasattr(rid, "Value") else rid.IntegerValue) for rid in representative_ids
+    )
+    for host_id_val in host_ids_to_add:
+        if host_id_val not in existing_id_vals:
+            host_element = lnkd_doc.GetElement(ElementId(host_id_val))
+            if host_element is not None:
+                representative_ids.append(host_element.Id)
+                existing_id_vals.add(host_id_val)
 
     return representative_ids
 
@@ -403,17 +550,27 @@ def pick_link_instance():
     xaml = build_link_picker_xaml()
     window = XamlReader.Parse(xaml)  # type: Window
 
+    search_box = window.FindName("SearchBox")
     link_list_box = window.FindName("LinkList")
     next_btn = window.FindName("NextBtn")
     cancel_btn = window.FindName("CancelBtn")
 
-    for item in link_items:
-        link_list_box.Items.Add(item)
+    link_list_box.ItemsSource = link_items
 
     if link_list_box.Items.Count > 0:
         link_list_box.SelectedIndex = 0
 
     result_holder = [None]  # mutable container (IronPython 2.7 closure workaround)
+
+    def on_search_changed(sender, args):
+        query = search_box.Text.strip().lower() if search_box.Text else u""
+        if not query:
+            filtered = link_items
+        else:
+            filtered = [i for i in link_items if query in i.DocTitle.lower()]
+        link_list_box.ItemsSource = filtered
+        if link_list_box.Items.Count > 0:
+            link_list_box.SelectedIndex = 0
 
     def on_next(sender, args):
         selected = link_list_box.SelectedItem
@@ -425,6 +582,7 @@ def pick_link_instance():
         result_holder[0] = None
         window.Close()
 
+    search_box.TextChanged += on_search_changed
     next_btn.Click += on_next
     cancel_btn.Click += on_cancel
     link_list_box.MouseDoubleClick += on_next
@@ -446,27 +604,44 @@ def pick_categories(cat_counts):
     xaml = build_category_picker_xaml()
     window = XamlReader.Parse(xaml)  # type: Window
 
+    search_box = window.FindName("SearchBox")
     category_list = window.FindName("CategoryList")
     copy_btn = window.FindName("CopyBtn")
     cancel_btn = window.FindName("CancelBtn")
     select_all_btn = window.FindName("SelectAllBtn")
     clear_all_btn = window.FindName("ClearAllBtn")
 
-    category_list.ItemsSource = rows
+    visible_rows = [None]  # tracks the currently-filtered subset (mutable container)
+
+    def refresh_list():
+        category_list.ItemsSource = None
+        category_list.ItemsSource = visible_rows[0]  # force refresh (no INotifyPropertyChanged)
+
+    def apply_filter():
+        query = search_box.Text.strip().lower() if search_box.Text else u""
+        if not query:
+            visible_rows[0] = rows
+        else:
+            visible_rows[0] = [r for r in rows if query in r.category.Name.lower()]
+        refresh_list()
+
+    apply_filter()
 
     result_holder = [None]
 
+    def on_search_changed(sender, args):
+        apply_filter()
+
     def on_select_all(sender, args):
-        for r in rows:
+        # Only affects categories currently visible under the active filter
+        for r in visible_rows[0]:
             r.IsChecked = True
-        category_list.ItemsSource = None
-        category_list.ItemsSource = rows  # force refresh (no INotifyPropertyChanged)
+        refresh_list()
 
     def on_clear_all(sender, args):
-        for r in rows:
+        for r in visible_rows[0]:
             r.IsChecked = False
-        category_list.ItemsSource = None
-        category_list.ItemsSource = rows
+        refresh_list()
 
     def on_copy(sender, args):
         chosen = [r.category for r in rows if r.IsChecked]
@@ -477,6 +652,7 @@ def pick_categories(cat_counts):
         result_holder[0] = None
         window.Close()
 
+    search_box.TextChanged += on_search_changed
     select_all_btn.Click += on_select_all
     clear_all_btn.Click += on_clear_all
     copy_btn.Click += on_copy
@@ -509,12 +685,18 @@ def main():
         script.exit()
 
     category_ids = set()
+    doors_category_id = None
     for cat in chosen_categories:
         cat_id_val = cat.Id.Value if hasattr(cat.Id, "Value") else cat.Id.IntegerValue
         category_ids.add(cat_id_val)
+        try:
+            if cat.Id == ElementId(BuiltInCategory.OST_Doors):
+                doors_category_id = cat_id_val
+        except Exception:
+            pass
 
     # STEP 3: one representative element per distinct type, across all chosen categories
-    representative_ids = get_one_element_per_type(lnkd_doc, category_ids)
+    representative_ids = get_one_element_per_type(lnkd_doc, category_ids, doors_category_id)
 
     if not representative_ids:
         TaskDialog.Show("B-Dare95", "No elements found for the selected categories.")
@@ -542,7 +724,7 @@ def main():
 
     TaskDialog.Show(
         "B-Dare95",
-        "Copied {0} element(s) (one per distinct type) across {1} category(ies).".format(
+        "Copied {0} element(s) (one per distinct type, hosts included) across {1} category(ies).".format(
             len(list(copied_ids)), len(chosen_categories)
         )
     )
