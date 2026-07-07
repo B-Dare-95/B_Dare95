@@ -11,22 +11,22 @@ wall's run - no wall segment is created inside the column footprint.
 A wall running through 2 columns therefore becomes 3 wall segments
 (before col 1, between col 1 and col 2, after col 2).
 
-SCOPE WINDOW:
-  Before anything is changed, a WPF window reports how many walls in
-  the WHOLE PROJECT need splitting, then lets the user pick the scope
-  of the actual operation:
-    - Entire project
-    - Active view only
-    - Select walls manually (rectangle pick, walls only)
-
 HOSTED ELEMENTS (doors/windows/openings):
-  Each surviving segment is created by literally COPYING the original
-  wall in place (ElementTransformUtils.CopyElements), which also
-  duplicates every element hosted on it. For each copy we then delete
-  the duplicated hosted elements that don't belong to that segment
-  (based on their position along the wall axis) and resize the copy's
-  curve down to the segment's extents. Type, all instance parameters,
-  structural usage, flip state, etc. come along automatically.
+  Rather than rebuilding walls from scratch (which loses hosted
+  elements), each surviving segment is created by literally COPYING
+  the original wall in place (ElementTransformUtils.CopyElements),
+  which also duplicates every element hosted on it. For each copy we
+  then delete the duplicated hosted elements that don't belong to that
+  segment (based on their position along the wall axis) and resize
+  the copy's curve down to the segment's extents. This means:
+    - Type, all instance parameters, structural usage, flip state,
+      etc. come along automatically (no manual parameter copying).
+    - A door/window ends up on exactly the one segment it actually
+      sits on.
+    - A hosted element that happens to sit inside a column's footprint
+      (i.e. in a gap, not in any surviving segment) cannot be
+      preserved - it is reported as a warning instead of silently
+      vanishing, so it can be handled manually.
 
 ASSUMPTIONS / LIMITATIONS (read before running):
   - Only straight (Line-based) walls of WallKind.Basic are processed.
@@ -37,9 +37,6 @@ ASSUMPTIONS / LIMITATIONS (read before running):
     links are handled), projected onto the wall's axis.
   - A column only affects a wall if its footprint's perpendicular
     projection overlaps the wall's thickness band (+ PERP_TOL slack).
-  - A hosted element that sits inside a column's footprint (not on any
-    surviving segment) cannot be preserved - it is reported as a
-    warning instead of silently vanishing.
   - Run this on a saved/backed-up model. The whole operation is
     wrapped in a single TransactionGroup so it can be undone in one
     Ctrl+Z if needed.
@@ -54,13 +51,8 @@ import clr
 clr.AddReference('RevitAPI')
 clr.AddReference('RevitAPIUI')
 clr.AddReference('System')
-clr.AddReference('PresentationFramework')
-clr.AddReference('PresentationCore')
-clr.AddReference('WindowsBase')
 
 from System.Collections.Generic import List
-from System.Windows import RoutedEventHandler
-from System.Windows.Markup import XamlReader
 
 from Autodesk.Revit.DB import (
     FilteredElementCollector, BuiltInCategory,
@@ -68,12 +60,10 @@ from Autodesk.Revit.DB import (
     Line, XYZ, LocationCurve, ElementId,
     ElementTransformUtils, Transaction, TransactionGroup
 )
-from Autodesk.Revit.UI.Selection import ISelectionFilter
 
 from pyrevit import revit, forms, script
 
 doc = revit.doc
-uidoc = revit.uidoc
 output = script.get_output()
 
 # ---------------------------------------------------------------------------
@@ -90,7 +80,7 @@ HOSTED_U_TOL = 0.05          # slack (ft) when deciding which segment a hosted
 
 
 def eid_str(eid):
-    """Version-safe ElementId -> string, also used as a dict/set key."""
+    """Version-safe ElementId -> string for reporting."""
     try:
         return str(eid.Value)
     except AttributeError:
@@ -290,6 +280,9 @@ def split_wall(doc, wall, segments):
     direction = (p1 - p0).Normalize()
     wall_id = wall.Id
 
+    # Hosted elements on the ORIGINAL wall, checked once so we can warn
+    # about any that don't land inside ANY surviving segment (i.e. sit
+    # inside a column footprint and would otherwise be silently lost).
     original_hosted = get_hosted_u_positions(doc, wall_id, p0, direction)
     unrecoverable = []
     for eid, u in original_hosted:
@@ -304,6 +297,9 @@ def split_wall(doc, wall, segments):
         new_wall_id = copied_ids[0]
         new_wall = doc.GetElement(new_wall_id)
 
+        # Hosted duplicates on this copy - still at the ORIGINAL wall's
+        # world position at this point, since translation was (0,0,0)
+        # and the copy's curve hasn't been resized yet.
         hosted_on_copy = get_hosted_u_positions(doc, new_wall_id, p0, direction)
         for eid, u in hosted_on_copy:
             if not u_in_segment(u, s, e):
@@ -322,194 +318,6 @@ def split_wall(doc, wall, segments):
 
 
 # ---------------------------------------------------------------------------
-# 5. Scope selection - WPF window + helpers
-# ---------------------------------------------------------------------------
-class WallOnlyFilter(ISelectionFilter):
-    def AllowElement(self, elem):
-        return isinstance(elem, Wall)
-
-    def AllowReference(self, reference, point):
-        return False
-
-
-def pick_walls_by_rectangle(uidoc):
-    try:
-        picked = uidoc.Selection.PickElementsByRectangle(
-            WallOnlyFilter(),
-            'Draw a rectangle around the walls to process (only walls will be picked)')
-    except Exception:
-        return None
-    return list(picked)
-
-
-def get_view_wall_id_strings(doc, view):
-    ids = set()
-    collector = FilteredElementCollector(doc, view.Id)\
-        .OfClass(Wall).WhereElementIsNotElementType()
-    for w in collector:
-        ids.add(eid_str(w.Id))
-    return ids
-
-
-SCOPE_XAML = u"""
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Split Walls at Columns"
-        Width="440" Height="430"
-        WindowStartupLocation="CenterScreen"
-        ResizeMode="NoResize"
-        Topmost="True"
-        Background="#1E1E2E">
-    <Window.Resources>
-        <Style x:Key="RadioCard" TargetType="RadioButton">
-            <Setter Property="Padding" Value="14,10"/>
-            <Setter Property="Margin" Value="0,0,0,8"/>
-            <Setter Property="Foreground" Value="#CDD6F4"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="bd" Background="#313244" CornerRadius="8"
-                                Padding="{TemplateBinding Padding}"
-                                BorderBrush="#45475A" BorderThickness="1">
-                            <ContentPresenter VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#F0A500"/>
-                                <Setter TargetName="bd" Property="BorderBrush" Value="#F0A500"/>
-                            </Trigger>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="BorderBrush" Value="#F0A500"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-        <Style x:Key="AccentButton" TargetType="Button">
-            <Setter Property="Background" Value="#F0A500"/>
-            <Setter Property="Foreground" Value="#1E1E2E"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="18,8"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" CornerRadius="6">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-        <Style x:Key="MutedButton" TargetType="Button">
-            <Setter Property="Background" Value="#45475A"/>
-            <Setter Property="Foreground" Value="#CDD6F4"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="18,8"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" CornerRadius="6">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-    </Window.Resources>
-
-    <Grid Margin="20">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
-
-        <Border Grid.Row="0" Background="#2A2A3C" CornerRadius="8" Padding="16" Margin="0,0,0,16">
-            <StackPanel>
-                <TextBlock Text="Walls detected for splitting" Foreground="#A6ADC8" FontSize="12"/>
-                <TextBlock x:Name="CountText" Text="0 walls" Foreground="#F0A500" FontSize="28" FontWeight="Bold" Margin="0,4,0,0"/>
-                <TextBlock Text="across the entire project" Foreground="#A6ADC8" FontSize="12"/>
-            </StackPanel>
-        </Border>
-
-        <TextBlock Grid.Row="1" Text="Choose scope" Foreground="#CDD6F4" FontSize="13" FontWeight="Bold" Margin="0,0,0,8"/>
-
-        <StackPanel Grid.Row="2">
-            <RadioButton x:Name="OptProject" GroupName="Scope" Style="{StaticResource RadioCard}" IsChecked="True">
-                <StackPanel>
-                    <TextBlock Text="Entire project" FontWeight="Bold"/>
-                    <TextBlock Text="Process every wall in the model" FontSize="11" Opacity="0.85"/>
-                </StackPanel>
-            </RadioButton>
-            <RadioButton x:Name="OptView" GroupName="Scope" Style="{StaticResource RadioCard}">
-                <StackPanel>
-                    <TextBlock Text="Active view only" FontWeight="Bold"/>
-                    <TextBlock Text="Process only walls visible in the current view" FontSize="11" Opacity="0.85"/>
-                </StackPanel>
-            </RadioButton>
-            <RadioButton x:Name="OptSelect" GroupName="Scope" Style="{StaticResource RadioCard}">
-                <StackPanel>
-                    <TextBlock Text="Select walls (rectangle)" FontWeight="Bold"/>
-                    <TextBlock Text="Pick a rectangle after closing this window - only walls are picked" FontSize="11" Opacity="0.85"/>
-                </StackPanel>
-            </RadioButton>
-        </StackPanel>
-
-        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-            <Button x:Name="CancelBtn" Content="Cancel" Style="{StaticResource MutedButton}" Margin="0,0,8,0"/>
-            <Button x:Name="RunBtn" Content="Run" Style="{StaticResource AccentButton}"/>
-        </StackPanel>
-    </Grid>
-</Window>
-"""
-
-
-def show_scope_window(project_wall_count):
-    """Shows the Catppuccin scope-picker window. Returns 'project', 'view',
-    'select', or None if the user cancelled."""
-    window = XamlReader.Parse(SCOPE_XAML)
-
-    count_text = window.FindName('CountText')
-    count_text.Text = '{} wall{}'.format(
-        project_wall_count, '' if project_wall_count == 1 else 's')
-
-    opt_project = window.FindName('OptProject')
-    opt_view = window.FindName('OptView')
-    opt_select = window.FindName('OptSelect')
-    run_btn = window.FindName('RunBtn')
-    cancel_btn = window.FindName('CancelBtn')
-
-    result = ['cancel']  # mutable container (IronPython 2.7 has no nonlocal)
-
-    def on_run(sender, args):
-        if opt_project.IsChecked:
-            result[0] = 'project'
-        elif opt_view.IsChecked:
-            result[0] = 'view'
-        elif opt_select.IsChecked:
-            result[0] = 'select'
-        window.Close()
-
-    def on_cancel(sender, args):
-        result[0] = 'cancel'
-        window.Close()
-
-    run_btn.Click += RoutedEventHandler(on_run)
-    cancel_btn.Click += RoutedEventHandler(on_cancel)
-
-    window.ShowDialog()
-
-    return None if result[0] == 'cancel' else result[0]
-
-
-# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 def main():
@@ -523,7 +331,7 @@ def main():
     walls = FilteredElementCollector(doc).OfClass(Wall)\
         .WhereElementIsNotElementType().ToElements()
 
-    plan = []       # (wall, [segments]) - every wall in the project needing a split
+    plan = []       # (wall, [segments])
     skipped = []    # (wall_id, reason)
 
     for wall in walls:
@@ -549,42 +357,17 @@ def main():
         forms.alert(msg, title='Split Walls at Columns')
         return
 
-    # ---- Scope picker window ----
-    mode = show_scope_window(len(plan))
-    if mode is None:
-        return  # user cancelled
-
-    if mode == 'project':
-        final_plan = plan
-
-    elif mode == 'view':
-        view = doc.ActiveView
-        view_wall_ids = get_view_wall_id_strings(doc, view)
-        final_plan = [(w, s) for (w, s) in plan if eid_str(w.Id) in view_wall_ids]
-        if not final_plan:
-            forms.alert('None of the walls needing a split are visible in '
-                         'the active view.', title='Split Walls at Columns')
-            return
-
-    else:  # 'select'
-        picked = pick_walls_by_rectangle(uidoc)
-        if picked is None:
-            return  # user cancelled the pick
-        picked_ids = set(eid_str(w.Id) for w in picked)
-        final_plan = [(w, s) for (w, s) in plan if eid_str(w.Id) in picked_ids]
-        if not final_plan:
-            forms.alert('None of the selected walls need splitting (no '
-                         'column crosses them).', title='Split Walls at Columns')
-            return
-
-    total_new = sum(len(segs) for _, segs in final_plan)
+    total_new = sum(len(segs) for _, segs in plan)
     summary = (
-        '{} wall(s) will be split into {} wall segment(s) total.\n\n'
+        '{} wall(s) will be split into {} wall segment(s) total, based on '
+        '{} column(s) found (active + linked).\n\n'
+        '{} wall(s) skipped (curved/stacked/curtain/unreadable).\n'
+        '{} linked file(s) skipped (not loaded).\n\n'
         'Proceed?'
-    ).format(len(final_plan), total_new)
+    ).format(len(plan), total_new, len(all_columns), len(skipped), len(skipped_links))
 
     if not forms.alert(summary, title='Split Walls at Columns', yes=True, no=True):
-        return
+        script.exit()
 
     tg = TransactionGroup(doc, 'Split Walls at Columns')
     tg.Start()
@@ -592,7 +375,7 @@ def main():
     done = 0
     errors = []
     all_unrecoverable = []
-    for wall, segments in final_plan:
+    for wall, segments in plan:
         t = Transaction(doc, 'Split wall {}'.format(eid_str(wall.Id)))
         t.Start()
         try:
@@ -607,8 +390,7 @@ def main():
     tg.Assimilate()
 
     output.print_md('### Split Walls at Columns - Done')
-    output.print_md('- Scope: **{}**'.format(mode))
-    output.print_md('- Walls split: **{}** / {}'.format(done, len(final_plan)))
+    output.print_md('- Walls split: **{}** / {}'.format(done, len(plan)))
     if errors:
         output.print_md('- Errors:')
         for wid, msg in errors:
@@ -620,7 +402,7 @@ def main():
         for eid in all_unrecoverable:
             output.print_md('  - Element {}'.format(eid_str(eid)))
     if skipped:
-        output.print_md('- Skipped walls (project-wide): {}'.format(len(skipped)))
+        output.print_md('- Skipped walls: {}'.format(len(skipped)))
     if skipped_links:
         output.print_md('- Unloaded links skipped: {}'.format(', '.join(skipped_links)))
 
