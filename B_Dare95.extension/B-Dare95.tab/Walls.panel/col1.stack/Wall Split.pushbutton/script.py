@@ -1,50 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-Split Walls at Columns
------------------------
-Scans the entire project for straight, basic walls that pass through
-columns (both "Columns" and "Structural Columns" categories), where the
-columns may live in the ACTIVE document and/or in LINKED documents.
-
-Each wall is split so it STOPS at the column's near/far FACE along the
-wall's run - no wall segment is created inside the column footprint.
-A wall running through 2 columns therefore becomes 3 wall segments
-(before col 1, between col 1 and col 2, after col 2).
-
-HOSTED ELEMENTS (doors/windows/openings):
-  Rather than rebuilding walls from scratch (which loses hosted
-  elements), each surviving segment is created by literally COPYING
-  the original wall in place (ElementTransformUtils.CopyElements),
-  which also duplicates every element hosted on it. For each copy we
-  then delete the duplicated hosted elements that don't belong to that
-  segment (based on their position along the wall axis) and resize
-  the copy's curve down to the segment's extents. This means:
-    - Type, all instance parameters, structural usage, flip state,
-      etc. come along automatically (no manual parameter copying).
-    - A door/window ends up on exactly the one segment it actually
-      sits on.
-    - A hosted element that happens to sit inside a column's footprint
-      (i.e. in a gap, not in any surviving segment) cannot be
-      preserved - it is reported as a warning instead of silently
-      vanishing, so it can be handled manually.
-
-ASSUMPTIONS / LIMITATIONS (read before running):
-  - Only straight (Line-based) walls of WallKind.Basic are processed.
-    Curved walls, stacked walls, and curtain walls are skipped and
-    reported at the end.
-  - The column's face positions are derived from its bounding box (all
-    8 corners transformed into host coordinates, so rotated/mirrored
-    links are handled), projected onto the wall's axis.
-  - A column only affects a wall if its footprint's perpendicular
-    projection overlaps the wall's thickness band (+ PERP_TOL slack).
-  - Run this on a saved/backed-up model. The whole operation is
-    wrapped in a single TransactionGroup so it can be undone in one
-    Ctrl+Z if needed.
-
-Tested target: pyRevit / IronPython 2.7, Revit 2019-2027 API surface.
+Split Walls at Columns - Select Only
+--------------------------------------
+    1. User draws a rectangle (walls only are picked).
+    2. The script counts, AFTER selection, how many of the picked walls
+       actually need splitting and shows a Proceed / Cancel prompt.
+    3. If the user proceeds, those walls are split (columns can be in
+       the active document and/or linked documents, categories
+       "Columns" and "Structural Columns").
+    4. Once done, the user is asked to select again or exit.
 """
 
-__title__ = 'Split Walls\nat Columns'
+__title__ = 'Split Walls\nat Columns\n(Select)'
 __author__ = 'B-Dare95'
 
 import clr
@@ -52,35 +19,32 @@ clr.AddReference('RevitAPI')
 clr.AddReference('RevitAPIUI')
 clr.AddReference('System')
 
-from System.Collections.Generic import List
-
 from Autodesk.Revit.DB import (
-    FilteredElementCollector, BuiltInCategory,
+    FilteredElementCollector, BuiltInCategory, BuiltInParameter,
     Wall, WallKind, RevitLinkInstance, Transform,
-    Line, XYZ, LocationCurve, ElementId,
-    ElementTransformUtils, Transaction, TransactionGroup
+    Line, XYZ, LocationCurve, FamilyInstance,
+    Transaction, TransactionGroup
 )
+from Autodesk.Revit.DB.Structure import StructuralType
+from Autodesk.Revit.UI.Selection import ISelectionFilter
 
 from pyrevit import revit, forms, script
 
 doc = revit.doc
+uidoc = revit.uidoc
 output = script.get_output()
 
 # ---------------------------------------------------------------------------
 # Tunable tolerances (feet, since Revit's internal units are always feet)
 # ---------------------------------------------------------------------------
-Z_OVERLAP_TOL = 0.5          # vertical overlap tolerance between wall & column
-PERP_TOL = 0.5               # extra slack added to wall half-thickness when
-                              # checking whether a column's footprint reaches
-                              # the wall band
-MIN_SEGMENT_LENGTH = 0.1     # drop wall segments shorter than this
-MIN_SPLIT_SPACING = 0.5      # merge column intervals closer than this together
-HOSTED_U_TOL = 0.05          # slack (ft) when deciding which segment a hosted
-                              # element belongs to
+Z_OVERLAP_TOL = 0.5
+PERP_TOL = 0.5
+MIN_SEGMENT_LENGTH = 0.1
+MIN_SPLIT_SPACING = 0.5
+HOSTED_U_TOL = 0.05
 
 
 def eid_str(eid):
-    """Version-safe ElementId -> string for reporting."""
     try:
         return str(eid.Value)
     except AttributeError:
@@ -89,13 +53,12 @@ def eid_str(eid):
 
 # ---------------------------------------------------------------------------
 # 1. Collect all columns (active doc + all loaded links), both categories
+#    (done once, reused for every selection round)
 # ---------------------------------------------------------------------------
 COLUMN_CATS = [BuiltInCategory.OST_Columns, BuiltInCategory.OST_StructuralColumns]
 
 
 def collect_columns_from_doc(source_doc, transform):
-    """Returns list of dicts: {corners (8 XYZ in host coords), z_min, z_max,
-    elem, source_doc}"""
     results = []
     for bic in COLUMN_CATS:
         collector = FilteredElementCollector(source_doc)\
@@ -143,7 +106,6 @@ def collect_all_columns(host_doc):
 
 # ---------------------------------------------------------------------------
 # 2. For each straight basic wall, find the column-occupied intervals
-#    (in wall-axis parameter space) that must become gaps
 # ---------------------------------------------------------------------------
 def get_wall_z_range(wall):
     bbox = wall.get_BoundingBox(None)
@@ -153,9 +115,6 @@ def get_wall_z_range(wall):
 
 
 def find_wall_gaps(wall, columns):
-    """Returns (merged_intervals, reason). merged_intervals is a sorted list
-    of [u_min, u_max] (floats, in the wall's own 0..length parameter space)
-    representing column footprints to be cut out of the wall."""
     loc = wall.Location
     if not isinstance(loc, LocationCurve):
         return None, 'no LocationCurve'
@@ -195,11 +154,11 @@ def find_wall_gaps(wall, columns):
 
         v_min, v_max = min(vs), max(vs)
         if v_max < -band or v_min > band:
-            continue  # column footprint never reaches the wall's band
+            continue
 
         u_min, u_max = max(min(us), 0.0), min(max(us), length)
         if u_max - u_min < 0.01:
-            continue  # negligible / effectively outside the wall run
+            continue
 
         raw_intervals.append((u_min, u_max))
 
@@ -218,7 +177,6 @@ def find_wall_gaps(wall, columns):
 
 
 def gaps_to_segments(merged_intervals, length):
-    """Complement of the merged column intervals within [0, length]."""
     segments = []
     prev_end = 0.0
     for a, b in merged_intervals:
@@ -230,118 +188,200 @@ def gaps_to_segments(merged_intervals, length):
     return segments
 
 
-# ---------------------------------------------------------------------------
-# 3. Hosted-element helpers
-# ---------------------------------------------------------------------------
-def get_hosted_u_positions(doc, host_wall_id, p0, direction):
-    """Find elements directly hosted on host_wall_id (doors, windows,
-    openings, etc. - anything with a .Host pointing at this wall) and
-    return [(element_id, u_position_along_wall_axis), ...]."""
-    host_wall = doc.GetElement(host_wall_id)
-    dependent_ids = host_wall.GetDependentElements(None)
-    result = []
-    for eid in dependent_ids:
-        el = doc.GetElement(eid)
-        if el is None:
-            continue
-        host = getattr(el, 'Host', None)
-        if host is None or host.Id != host_wall_id:
-            continue
-
-        pt = None
-        loc_el = el.Location
-        if loc_el is not None and hasattr(loc_el, 'Point'):
-            pt = loc_el.Point
-        if pt is None:
-            bbox = el.get_BoundingBox(None)
-            if bbox is not None:
-                pt = (bbox.Min + bbox.Max) * 0.5
-        if pt is None:
-            continue
-
-        u = (pt - p0).DotProduct(direction)
-        result.append((eid, u))
-    return result
-
-
 def u_in_segment(u, s, e):
     return (s - HOSTED_U_TOL) <= u <= (e + HOSTED_U_TOL)
 
 
 # ---------------------------------------------------------------------------
-# 4. Rebuild a wall as the surviving segments (gaps between column faces)
-#    by copying the wall in place per segment, keeping only the hosted
-#    duplicates that belong to that segment.
+# 3. Parameter copying helpers
+# ---------------------------------------------------------------------------
+WALL_COPY_PARAMS = [
+    BuiltInParameter.WALL_BASE_CONSTRAINT,
+    BuiltInParameter.WALL_BASE_OFFSET,
+    BuiltInParameter.WALL_HEIGHT_TYPE,        # top constraint
+    BuiltInParameter.WALL_TOP_OFFSET,
+    BuiltInParameter.WALL_USER_HEIGHT_PARAM,  # unconnected height
+    BuiltInParameter.WALL_KEY_REF_PARAM,      # location line
+    BuiltInParameter.WALL_STRUCTURAL_USAGE_PARAM,
+]
+
+HOSTED_COPY_PARAMS = [
+    BuiltInParameter.INSTANCE_SILL_HEIGHT_PARAM,
+    BuiltInParameter.INSTANCE_HEAD_HEIGHT_PARAM,
+    BuiltInParameter.ALL_MODEL_MARK,
+    BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS,
+]
+
+
+def copy_params(src, dst, param_list):
+    for bip in param_list:
+        try:
+            sp = src.get_Parameter(bip)
+            dp = dst.get_Parameter(bip)
+            if sp is None or dp is None or dp.IsReadOnly:
+                continue
+            storage = sp.StorageType.ToString()
+            if storage == 'Double':
+                dp.Set(sp.AsDouble())
+            elif storage == 'Integer':
+                dp.Set(sp.AsInteger())
+            elif storage == 'ElementId':
+                dp.Set(sp.AsElementId())
+            elif storage == 'String':
+                v = sp.AsString()
+                if v is not None:
+                    dp.Set(v)
+        except Exception:
+            continue
+
+
+# ---------------------------------------------------------------------------
+# 4. Hosted element helpers (doors / windows - FamilyInstance only)
+# ---------------------------------------------------------------------------
+def get_hosted_family_instances(doc, wall):
+    hosted = []
+    for eid in wall.GetDependentElements(None):
+        el = doc.GetElement(eid)
+        if isinstance(el, FamilyInstance):
+            host = el.Host
+            if host is not None and host.Id == wall.Id:
+                hosted.append(el)
+    return hosted
+
+
+def recreate_hosted_instance(doc, old_instance, new_host_wall):
+    symbol = old_instance.Symbol
+    if not symbol.IsActive:
+        symbol.Activate()
+        doc.Regenerate()
+
+    point = old_instance.Location.Point
+
+    new_instance = doc.Create.NewFamilyInstance(
+        point, symbol, new_host_wall, StructuralType.NonStructural)
+    doc.Regenerate()
+
+    copy_params(old_instance, new_instance, HOSTED_COPY_PARAMS)
+
+    try:
+        if old_instance.FacingFlipped != new_instance.FacingFlipped:
+            new_instance.flipFacing()
+    except Exception:
+        pass
+    try:
+        if old_instance.HandFlipped != new_instance.HandFlipped:
+            new_instance.flipHand()
+    except Exception:
+        pass
+
+    return new_instance
+
+
+# ---------------------------------------------------------------------------
+# 5. Rebuild a wall as the surviving segments (gaps between column faces)
 # ---------------------------------------------------------------------------
 def split_wall(doc, wall, segments):
     curve = wall.Location.Curve
     p0 = curve.GetEndPoint(0)
     p1 = curve.GetEndPoint(1)
     direction = (p1 - p0).Normalize()
-    wall_id = wall.Id
 
-    # Hosted elements on the ORIGINAL wall, checked once so we can warn
-    # about any that don't land inside ANY surviving segment (i.e. sit
-    # inside a column footprint and would otherwise be silently lost).
-    original_hosted = get_hosted_u_positions(doc, wall_id, p0, direction)
+    wall_type_id = wall.WallType.Id
+    level_id = wall.LevelId
+    was_flipped = wall.Flipped
+
+    height_param = wall.get_Parameter(BuiltInParameter.WALL_USER_HEIGHT_PARAM)
+    height = height_param.AsDouble() if height_param and height_param.HasValue else 10.0
+
+    offset_param = wall.get_Parameter(BuiltInParameter.WALL_BASE_OFFSET)
+    base_offset = offset_param.AsDouble() if offset_param and offset_param.HasValue else 0.0
+
+    struct_param = wall.get_Parameter(BuiltInParameter.WALL_STRUCTURAL_USAGE_PARAM)
+    is_structural = bool(struct_param and struct_param.HasValue and struct_param.AsInteger() != 0)
+
+    hosted = get_hosted_family_instances(doc, wall)
+    hosted_u = []
+    for inst in hosted:
+        pt = inst.Location.Point
+        u = (pt - p0).DotProduct(direction)
+        hosted_u.append((inst, u))
+
     unrecoverable = []
-    for eid, u in original_hosted:
+    for inst, u in hosted_u:
         if not any(u_in_segment(u, s, e) for (s, e) in segments):
-            unrecoverable.append(eid)
+            unrecoverable.append(inst.Id)
 
     new_walls = []
-    id_list = List[ElementId]([wall_id])
-
     for (s, e) in segments:
-        copied_ids = ElementTransformUtils.CopyElements(doc, id_list, XYZ(0, 0, 0))
-        new_wall_id = copied_ids[0]
-        new_wall = doc.GetElement(new_wall_id)
-
-        # Hosted duplicates on this copy - still at the ORIGINAL wall's
-        # world position at this point, since translation was (0,0,0)
-        # and the copy's curve hasn't been resized yet.
-        hosted_on_copy = get_hosted_u_positions(doc, new_wall_id, p0, direction)
-        for eid, u in hosted_on_copy:
-            if not u_in_segment(u, s, e):
-                doc.Delete(eid)
-
         seg_start = p0 + direction.Multiply(s)
         seg_end = p0 + direction.Multiply(e)
-        new_wall.Location.Curve = Line.CreateBound(seg_start, seg_end)
+        seg_curve = Line.CreateBound(seg_start, seg_end)
+
+        new_wall = Wall.Create(doc, seg_curve, wall_type_id, level_id,
+                                height, base_offset, was_flipped, is_structural)
+        doc.Regenerate()
+        copy_params(wall, new_wall, WALL_COPY_PARAMS)
+
+        for inst, u in hosted_u:
+            if u_in_segment(u, s, e):
+                recreate_hosted_instance(doc, inst, new_wall)
 
         new_walls.append(new_wall)
 
-    doc.Delete(wall_id)
+    # Deleting the original wall also removes its now-superseded hosted
+    # instances (they're dependent elements of the wall being deleted).
+    doc.Delete(wall.Id)
     doc.Regenerate()
 
     return new_walls, unrecoverable
 
 
 # ---------------------------------------------------------------------------
-# Main
+# 6. Rectangle selection (walls only)
 # ---------------------------------------------------------------------------
-def main():
-    all_columns, skipped_links = collect_all_columns(doc)
-    if not all_columns:
-        forms.alert('No columns found in the active document or any loaded '
-                     'links (checked "Columns" and "Structural Columns" '
-                     'categories). Nothing to do.', title='Split Walls at Columns')
-        return
+class WallOnlyFilter(ISelectionFilter):
+    def AllowElement(self, elem):
+        return isinstance(elem, Wall)
 
-    walls = FilteredElementCollector(doc).OfClass(Wall)\
-        .WhereElementIsNotElementType().ToElements()
+    def AllowReference(self, reference, point):
+        return False
 
-    plan = []       # (wall, [segments])
-    skipped = []    # (wall_id, reason)
 
-    for wall in walls:
+def pick_walls_by_rectangle(uidoc):
+    try:
+        picked = uidoc.Selection.PickElementsByRectangle(
+            WallOnlyFilter(),
+            'Draw a rectangle around the walls to process (only walls will be picked)')
+    except Exception:
+        return None
+    return list(picked)
+
+
+# ---------------------------------------------------------------------------
+# Main loop
+# ---------------------------------------------------------------------------
+def process_selected_walls(all_columns):
+    """One full round: pick -> count -> confirm -> split. Returns True to
+    keep looping (select again), False to stop the script."""
+
+    picked = pick_walls_by_rectangle(uidoc)
+    if picked is None:
+        return False  # user hit Esc during the pick - stop the script
+
+    if not picked:
+        return forms.alert(
+            'No walls were picked. Select more walls?',
+            title='Split Walls at Columns', yes=True, no=True)
+
+    plan = []
+    skipped = []
+    for wall in picked:
         merged, reason = find_wall_gaps(wall, all_columns)
         if reason:
             skipped.append((wall.Id, reason))
             continue
         if not merged:
-            continue  # no column crosses this wall
-
+            continue
         length = wall.Location.Curve.Length
         segments = gaps_to_segments(merged, length)
         if not segments:
@@ -350,26 +390,27 @@ def main():
         plan.append((wall, segments))
 
     if not plan:
-        msg = 'No walls found that cross a column on their run.'
+        msg = 'None of the {} selected wall(s) need splitting.'.format(len(picked))
         if skipped:
-            msg += ' {} wall(s) were skipped (curved/stacked/curtain or ' \
-                   'unreadable geometry).'.format(len(skipped))
-        forms.alert(msg, title='Split Walls at Columns')
-        return
+            msg += ' ({} skipped: curved/stacked/curtain or fully consumed.)'\
+                .format(len(skipped))
+        msg += '\n\nSelect more walls?'
+        return forms.alert(msg, title='Split Walls at Columns', yes=True, no=True)
 
     total_new = sum(len(segs) for _, segs in plan)
     summary = (
-        '{} wall(s) will be split into {} wall segment(s) total, based on '
-        '{} column(s) found (active + linked).\n\n'
-        '{} wall(s) skipped (curved/stacked/curtain/unreadable).\n'
-        '{} linked file(s) skipped (not loaded).\n\n'
-        'Proceed?'
-    ).format(len(plan), total_new, len(all_columns), len(skipped), len(skipped_links))
+        'Selected {} wall(s).\n'
+        '{} of them need splitting, into {} wall segment(s) total.\n'
+        '{} skipped (curved/stacked/curtain/unreadable/no column).\n\n'
+        'Proceed with the split?'
+    ).format(len(picked), len(plan), total_new, len(skipped))
 
     if not forms.alert(summary, title='Split Walls at Columns', yes=True, no=True):
-        script.exit()
+        return forms.alert(
+            'Split cancelled. Select more walls?',
+            title='Split Walls at Columns', yes=True, no=True)
 
-    tg = TransactionGroup(doc, 'Split Walls at Columns')
+    tg = TransactionGroup(doc, 'Split Walls at Columns (Selection)')
     tg.Start()
 
     done = 0
@@ -389,22 +430,39 @@ def main():
 
     tg.Assimilate()
 
-    output.print_md('### Split Walls at Columns - Done')
+    output.print_md('### Split Walls at Columns - Round Complete')
     output.print_md('- Walls split: **{}** / {}'.format(done, len(plan)))
     if errors:
-        output.print_md('- Errors:')
+        output.print_md('- Walls skipped due to errors (no changes made to these):')
         for wid, msg in errors:
             output.print_md('  - Wall {}: {}'.format(eid_str(wid), msg))
     if all_unrecoverable:
         output.print_md('- **Hosted elements that could NOT be preserved** '
-                         '(they sit inside a column footprint, not on any '
-                         'surviving segment) - please re-place manually:')
+                         '(inside a column footprint) - please re-place manually:')
         for eid in all_unrecoverable:
             output.print_md('  - Element {}'.format(eid_str(eid)))
     if skipped:
-        output.print_md('- Skipped walls: {}'.format(len(skipped)))
+        output.print_md('- Skipped in this selection: {}'.format(len(skipped)))
+
+    return forms.alert(
+        'Done. Select more walls to process?',
+        title='Split Walls at Columns', yes=True, no=True)
+
+
+def main():
+    all_columns, skipped_links = collect_all_columns(doc)
+    if not all_columns:
+        forms.alert('No columns found in the active document or any loaded '
+                     'links (checked "Columns" and "Structural Columns" '
+                     'categories). Nothing to do.', title='Split Walls at Columns')
+        return
     if skipped_links:
-        output.print_md('- Unloaded links skipped: {}'.format(', '.join(skipped_links)))
+        output.print_md('Unloaded links skipped: {}'.format(', '.join(skipped_links)))
+
+    while True:
+        keep_going = process_selected_walls(all_columns)
+        if not keep_going:
+            break
 
 
 if __name__ == '__main__':

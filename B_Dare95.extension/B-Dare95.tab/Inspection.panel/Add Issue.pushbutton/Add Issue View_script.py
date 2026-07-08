@@ -32,11 +32,12 @@ from System.Windows          import (
 )
 from System.Windows.Controls import (
     Border, Grid as WpfGrid, ColumnDefinition, RowDefinition,
-    StackPanel, TextBlock, Image as WpfImage
+    StackPanel, TextBlock, Image as WpfImage, TextBox, Button
 )
-from System.Windows.Media         import SolidColorBrush, Color, Stretch as MediaStretch
+from System.Windows.Media         import SolidColorBrush, Color, Brushes, Stretch as MediaStretch
 from System.Windows.Media.Imaging import BitmapImage, BitmapCacheOption
 from System.Windows.Threading     import DispatcherFrame, Dispatcher
+from System.Windows.Input         import Cursors
 
 # ── I/O ─────────────────────────────────────────────────────────────────────
 from System.IO            import File, FileStream, FileMode, MemoryStream, StreamReader
@@ -52,7 +53,7 @@ from System.Drawing.Imaging import ImageFormat, PixelFormat
 
 # ── Process / Thread / Misc ──────────────────────────────────────────────────
 from System.Diagnostics import Process, ProcessStartInfo
-from System.Threading   import Thread, ThreadStart
+from System.Threading   import Thread, ThreadStart, ApartmentState
 from System             import Array, Byte, Action, DateTime
 from System.Text        import Encoding
 import System.Xml as SysXml
@@ -163,8 +164,35 @@ def _esc(text):
             .replace(u"'", u'&apos;'))
 
 
-def _build_xlsx(issues):
-    """Build xlsx from [(ts, comment, png_bytes|None), ...]. Returns Array[Byte]."""
+def _col_letter(idx0):
+    """0-based column index -> spreadsheet column letter(s), e.g. 0->A, 26->AA."""
+    n = idx0 + 1
+    s = u''
+    while n > 0:
+        n, r = divmod(n - 1, 26)
+        s = chr(65 + r) + s
+    return s
+
+
+def _parse_col_index(cell_ref):
+    """'B7' -> 1 (0-based column index)."""
+    i = 0
+    while i < len(cell_ref) and cell_ref[i].isalpha():
+        i += 1
+    letters = cell_ref[:i]
+    n = 0
+    for ch in letters:
+        n = n * 26 + (ord(ch.upper()) - 64)
+    return n - 1
+
+
+def _build_xlsx(columns, issues):
+    """
+    Build xlsx from:
+      columns - [name, ...]                          dynamic field headers
+      issues  - [(ts, values, png_bytes|None), ...]   values aligned to columns
+    Returns Array[Byte].
+    """
     out = MemoryStream()
     za  = ZipArchive(out, ZipArchiveMode.Create, True)
 
@@ -239,22 +267,39 @@ def _build_xlsx(issues):
        u'<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>'
        u'</styleSheet>')
 
-    ROW_H = 135
-    rows  = [
-        u'<row r="1">'
-        u'<c r="A1" t="inlineStr"><is><t>Timestamp</t></is></c>'
-        u'<c r="B1" t="inlineStr"><is><t>Comment</t></is></c>'
-        u'<c r="C1" t="inlineStr"><is><t>Screenshot</t></is></c>'
-        u'</row>'
-    ]
-    for i, (ts, cmt, _) in enumerate(issues):
-        rn = i + 2
+    ROW_H        = 135
+    n_cols       = len(columns)
+    shot_col_idx = 1 + n_cols     # 0-based: 0=Timestamp, 1..n_cols=fields, this=Screenshot
+
+    header_cells = [u'<c r="A1" t="inlineStr"><is><t>Timestamp</t></is></c>']
+    for i, name in enumerate(columns):
+        col = _col_letter(1 + i)
+        header_cells.append(
+            u'<c r="{c}1" t="inlineStr"><is><t>{v}</t></is></c>'.format(c=col, v=_esc(name)))
+    header_cells.append(
+        u'<c r="{c}1" t="inlineStr"><is><t>Screenshot</t></is></c>'.format(
+            c=_col_letter(shot_col_idx)))
+    rows = [u'<row r="1">' + u''.join(header_cells) + u'</row>']
+
+    for i, (ts, values, _) in enumerate(issues):
+        rn    = i + 2
+        cells = [u'<c r="A{r}" t="inlineStr"><is><t>{ts}</t></is></c>'.format(r=rn, ts=_esc(ts))]
+        for ci in range(n_cols):
+            val = values[ci] if ci < len(values) else u''
+            cells.append(
+                u'<c r="{c}{r}" t="inlineStr"><is><t>{v}</t></is></c>'.format(
+                    c=_col_letter(1 + ci), r=rn, v=_esc(val)))
         rows.append(
-            u'<row r="{r}" ht="{h}" customHeight="1">'
-            u'<c r="A{r}" t="inlineStr"><is><t>{ts}</t></is></c>'
-            u'<c r="B{r}" t="inlineStr"><is><t>{cmt}</t></is></c>'
-            u'</row>'.format(r=rn, h=ROW_H, ts=_esc(ts), cmt=_esc(cmt))
-        )
+            u'<row r="{r}" ht="{h}" customHeight="1">'.format(r=rn, h=ROW_H)
+            + u''.join(cells) + u'</row>')
+
+    cols_xml = [u'<col min="1" max="1" width="22" customWidth="1"/>']
+    for i in range(n_cols):
+        colnum = i + 2
+        cols_xml.append(
+            u'<col min="{n}" max="{n}" width="34" customWidth="1"/>'.format(n=colnum))
+    cols_xml.append(
+        u'<col min="{n}" max="{n}" width="45" customWidth="1"/>'.format(n=shot_col_idx + 1))
 
     sheet_r = (u' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
                if has_img else u'')
@@ -263,11 +308,7 @@ def _build_xlsx(issues):
        u'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
        + sheet_r + u'>'
        u'<sheetFormatPr defaultRowHeight="15"/>'
-       u'<cols>'
-       u'<col min="1" max="1" width="22" customWidth="1"/>'
-       u'<col min="2" max="2" width="50" customWidth="1"/>'
-       u'<col min="3" max="3" width="45" customWidth="1"/>'
-       u'</cols>'
+       u'<cols>' + u''.join(cols_xml) + u'</cols>'
        u'<sheetData>' + u''.join(rows) + u'</sheetData>'
        + (u'<drawing r:id="rId1"/>' if has_img else u'') +
        u'</worksheet>')
@@ -298,7 +339,7 @@ def _build_xlsx(issues):
                 u' Target="../media/image{n}.png"/>'.format(rid=rid, n=n))
             anchors.append(
                 u'<xdr:oneCellAnchor>'
-                u'<xdr:from><xdr:col>2</xdr:col><xdr:colOff>0</xdr:colOff>'
+                u'<xdr:from><xdr:col>{sc}</xdr:col><xdr:colOff>0</xdr:colOff>'
                 u'<xdr:row>{r}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>'
                 u'<xdr:ext cx="{cx}" cy="{cy}"/>'
                 u'<xdr:pic><xdr:nvPicPr>'
@@ -310,7 +351,7 @@ def _build_xlsx(issues):
                 u'<a:ext cx="{cx}" cy="{cy}"/></a:xfrm>'
                 u'<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'
                 u'</xdr:spPr></xdr:pic><xdr:clientData/>'
-                u'</xdr:oneCellAnchor>'.format(r=row0, cx=cx, cy=cy, n=n, rid=rid))
+                u'</xdr:oneCellAnchor>'.format(r=row0, cx=cx, cy=cy, n=n, rid=rid, sc=shot_col_idx))
             n += 1
 
         wt(u'xl/drawings/drawing1.xml',
@@ -330,8 +371,13 @@ def _build_xlsx(issues):
 
 
 def _read_xlsx(path):
-    """Read xlsx built by _build_xlsx. Returns [(ts, comment, png|None), ...] or []."""
-    issues = []
+    """
+    Read xlsx built by _build_xlsx.
+    Returns (columns, issues) where columns is [name, ...] and issues is
+    [(ts, values, png|None), ...] with values aligned to columns.
+    """
+    columns = []
+    issues  = []
     fs = za = None
     try:
         fs = FileStream(path, FileMode.Open)
@@ -339,7 +385,7 @@ def _read_xlsx(path):
 
         se = za.GetEntry(u'xl/worksheets/sheet1.xml')
         if se is None:
-            return issues
+            return columns, issues
         sr = StreamReader(se.Open(), Encoding.UTF8)
         sheet_xml = sr.ReadToEnd()
         sr.Dispose()
@@ -349,20 +395,28 @@ def _read_xlsx(path):
         sns = SysXml.XmlNamespaceManager(sdoc.NameTable)
         sns.AddNamespace(u'ss', u'http://schemas.openxmlformats.org/spreadsheetml/2006/main')
 
-        rows_data = {}
+        header   = {}
+        rows_raw = {}
         for row_nd in sdoc.SelectNodes(u'//ss:row', sns):
             rn = int(row_nd.GetAttribute(u'r') or u'0')
-            if rn < 2:
-                continue
             vals = {}
             for c in row_nd.SelectNodes(u'ss:c', sns):
                 ref = c.GetAttribute(u'r')
                 if not ref:
                     continue
-                tl = c.SelectNodes(u'ss:is/ss:t', sns)
-                if tl.Count > 0:
-                    vals[ref[0]] = tl.Item(0).InnerText
-            rows_data[rn] = (vals.get(u'A', u''), vals.get(u'B', u''))
+                tl   = c.SelectNodes(u'ss:is/ss:t', sns)
+                text = tl.Item(0).InnerText if tl.Count > 0 else u''
+                vals[_parse_col_index(ref)] = text
+            if rn == 1:
+                header = vals
+            elif rn > 1:
+                rows_raw[rn] = vals
+
+        if header:
+            max_ci  = max(header.keys())
+            # index 0 = Timestamp, 1..max_ci-1 = field columns, max_ci = Screenshot
+            columns = [header.get(ci, u'Field {0}'.format(ci)) for ci in range(1, max_ci)]
+        n_cols = len(columns)
 
         rid_to_rn = {}
         de = za.GetEntry(u'xl/drawings/drawing1.xml')
@@ -417,18 +471,22 @@ def _read_xlsx(path):
             ies.Dispose()
             img_by_rn[rn] = ms.ToArray()
 
-        for rn in sorted(rows_data.keys()):
-            ts, cmt = rows_data[rn]
-            issues.append((ts, cmt, img_by_rn.get(rn)))
+        for rn in sorted(rows_raw.keys()):
+            vals   = rows_raw[rn]
+            ts     = vals.get(0, u'')
+            values = [vals.get(1 + ci, u'') for ci in range(n_cols)]
+            issues.append((ts, values, img_by_rn.get(rn)))
 
     except Exception as ex:
         print(u'[IssueLogger] _read_xlsx error: ' + unicode(ex))
-        issues = []
+        columns, issues = [], []
     finally:
         if za:  za.Dispose()
         if fs:  fs.Dispose()
 
-    return issues
+    if not columns:
+        columns = [u'Comment']
+    return columns, issues
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -506,9 +564,12 @@ def _make_card_delete_btn():
     return btn
 
 
-def _make_issue_card(num, ts, cmt, png_bytes, delete_handler):
+def _make_issue_card(num, ts, columns, values, png_bytes, delete_handler, edit_handler):
     """
     Build one issue preview card entirely in Python (no extra XAML parsing).
+    `columns`/`values` are aligned lists of field names/values.
+    The screenshot thumbnail (if any) is clickable via `edit_handler`,
+    which loads this issue back into the left panel for re-editing.
     Returns a WPF Border element ready to be added to a StackPanel.
     """
     # ── outer card border ────────────────────────────────────────
@@ -557,27 +618,116 @@ def _make_issue_card(num, ts, cmt, png_bytes, delete_handler):
 
     inner.Children.Add(hdr)
 
-    # ── screenshot thumbnail ─────────────────────────────────────
+    # ── screenshot thumbnail (clickable → re-edit) ────────────────
     if png_bytes is not None:
         bmp = _bytes_to_bitmap(png_bytes)
         if bmp is not None:
-            img                    = WpfImage()
-            img.Source             = bmp
-            img.MaxHeight          = 150
-            img.Stretch            = MediaStretch.Uniform
-            img.HorizontalAlignment = HorizontalAlignment.Stretch
-            img.Margin             = Thickness(0, 0, 0, 6)
-            inner.Children.Add(img)
+            img_wrap                    = Border()
+            img_wrap.Cursor             = Cursors.Hand
+            img_wrap.Margin             = Thickness(0, 0, 0, 6)
+            img_wrap.ToolTip            = u'Click to load this issue for editing'
+            img                         = WpfImage()
+            img.Source                  = bmp
+            img.MaxHeight               = 150
+            img.Stretch                 = MediaStretch.Uniform
+            img.HorizontalAlignment     = HorizontalAlignment.Stretch
+            img_wrap.Child               = img
+            img_wrap.MouseLeftButtonUp  += edit_handler
+            inner.Children.Add(img_wrap)
 
-    # ── comment text ─────────────────────────────────────────────
-    cmt_lbl              = TextBlock()
-    cmt_lbl.Text         = cmt
-    cmt_lbl.FontSize     = 12
-    cmt_lbl.Foreground   = SolidColorBrush(_C_TEXT)
-    cmt_lbl.TextWrapping = TextWrapping.Wrap
-    inner.Children.Add(cmt_lbl)
+    # ── field values ────────────────────────────────────────────
+    for i, col_name in enumerate(columns):
+        val = values[i] if i < len(values) else u''
+        if not val.strip():
+            continue
+        field_stack        = StackPanel()
+        field_stack.Margin = Thickness(0, 0, 0, 5)
+
+        name_lbl              = TextBlock()
+        name_lbl.Text         = col_name + u':'
+        name_lbl.FontSize     = 10
+        name_lbl.FontWeight   = FontWeights.Bold
+        name_lbl.Foreground   = SolidColorBrush(_C_SUB)
+        field_stack.Children.Add(name_lbl)
+
+        val_lbl              = TextBlock()
+        val_lbl.Text         = val
+        val_lbl.FontSize     = 12
+        val_lbl.Foreground   = SolidColorBrush(_C_TEXT)
+        val_lbl.TextWrapping = TextWrapping.Wrap
+        field_stack.Children.Add(val_lbl)
+
+        inner.Children.Add(field_stack)
 
     return card
+
+
+def _make_field_row(name, value, delete_handler):
+    """
+    Build one editable field row for the left panel: a renamable title chip
+    next to a multi-line value TextBox, with a small remove button.
+    Returns (row, name_box, value_box).
+    """
+    row = WpfGrid()
+    row.Margin = Thickness(0, 0, 0, 8)
+    c0 = ColumnDefinition(); c0.Width = GridLength(92)
+    c1 = ColumnDefinition(); c1.Width = GridLength(1, GridUnitType.Star)
+    c2 = ColumnDefinition(); c2.Width = GridLength(24)
+    row.ColumnDefinitions.Add(c0)
+    row.ColumnDefinitions.Add(c1)
+    row.ColumnDefinitions.Add(c2)
+
+    # ── renamable title chip ────────────────────────────────────
+    name_wrap                  = Border()
+    name_wrap.Background       = SolidColorBrush(_C_SURFACE)
+    name_wrap.CornerRadius     = CornerRadius(6)
+    name_wrap.Padding          = Thickness(6, 5, 6, 5)
+    name_wrap.VerticalAlignment = VerticalAlignment.Top
+    name_wrap.Margin           = Thickness(0, 0, 8, 0)
+
+    name_box                = TextBox()
+    name_box.Text            = name
+    name_box.Background      = Brushes.Transparent
+    name_box.BorderThickness = Thickness(0)
+    name_box.Padding         = Thickness(0)
+    name_box.Foreground      = SolidColorBrush(_C_TEXT)
+    name_box.CaretBrush      = SolidColorBrush(_C_TEXT)
+    name_box.FontSize        = 12
+    name_box.FontWeight      = FontWeights.Bold
+    name_box.TextWrapping    = TextWrapping.Wrap
+    name_box.AcceptsReturn   = False
+    name_box.ToolTip         = u'Click to rename this field'
+    name_wrap.Child          = name_box
+    WpfGrid.SetColumn(name_wrap, 0)
+    row.Children.Add(name_wrap)
+
+    # ── value box ────────────────────────────────────────────────
+    value_box                          = TextBox()
+    value_box.Text                     = value
+    value_box.AcceptsReturn            = True
+    value_box.TextWrapping             = TextWrapping.Wrap
+    value_box.MinHeight                = 56
+    value_box.VerticalContentAlignment = VerticalAlignment.Top
+    WpfGrid.SetColumn(value_box, 1)
+    row.Children.Add(value_box)
+
+    # ── remove field button ─────────────────────────────────────
+    del_btn                    = Button()
+    del_btn.Content             = u'\u00d7'
+    del_btn.FontSize            = 13
+    del_btn.Width                = 22
+    del_btn.Height               = 22
+    del_btn.Padding              = Thickness(0)
+    del_btn.Background           = Brushes.Transparent
+    del_btn.Foreground           = SolidColorBrush(_C_SUB)
+    del_btn.Cursor               = Cursors.Hand
+    del_btn.ToolTip              = u'Remove this field'
+    del_btn.VerticalAlignment    = VerticalAlignment.Top
+    del_btn.Click               += delete_handler
+    WpfGrid.SetColumn(del_btn, 2)
+    row.Children.Add(del_btn)
+
+    return row, name_box, value_box
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -751,7 +901,9 @@ LOGGER_XAML = u"""<Window
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
@@ -784,29 +936,67 @@ LOGGER_XAML = u"""<Window
                                TextTrimming="CharacterEllipsis"/>
                 </Border>
 
-                <!-- Comment box -->
-                <TextBox Grid.Row="2" x:Name="CommentBox"
-                         AcceptsReturn="True" TextWrapping="Wrap"
-                         VerticalScrollBarVisibility="Auto"
-                         VerticalContentAlignment="Top"
-                         Margin="0,0,0,10"/>
+                <!-- Thumbnail + editing indicator -->
+                <Border Grid.Row="2" Background="#2A2A3C" CornerRadius="6"
+                        Padding="10" Margin="0,0,0,10">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="80"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Background="#181825" CornerRadius="4"
+                                Width="80" Height="80" HorizontalAlignment="Left">
+                            <Grid>
+                                <TextBlock x:Name="ThumbPlaceholder" Text="No image"
+                                           Foreground="#6C7086" FontSize="10"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           TextWrapping="Wrap" TextAlignment="Center"/>
+                                <Image x:Name="ThumbImage" Stretch="Uniform" Visibility="Collapsed"/>
+                            </Grid>
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                            <TextBlock x:Name="ThumbCaption"
+                                       Text="Take a screenshot to begin, or click a saved issue to re-edit it."
+                                       Foreground="#A6ADC8" FontSize="11" TextWrapping="Wrap"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Button x:Name="SnipBtn" Content="Take Screenshot"
+                                        FontSize="11" Padding="10,5"/>
+                                <Button x:Name="CancelEditBtn" Content="Cancel edit"
+                                        FontSize="10" Padding="8,5" Margin="8,0,0,0"
+                                        Visibility="Collapsed"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Dynamic fields (Comment + any user-added columns) -->
+                <ScrollViewer Grid.Row="3"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Margin="0,0,0,8">
+                    <StackPanel x:Name="FieldsPanel"/>
+                </ScrollViewer>
+
+                <Button Grid.Row="4" x:Name="AddFieldBtn" Content="+ Add Field"
+                        HorizontalAlignment="Left" FontSize="11" Padding="10,5"
+                        Margin="0,0,0,10"/>
 
                 <!-- Status bar -->
-                <Border Grid.Row="3" Background="#2A2A3C" CornerRadius="6"
+                <Border Grid.Row="5" Background="#2A2A3C" CornerRadius="6"
                         Padding="10,6" Margin="0,0,0,12">
                     <TextBlock x:Name="StatusLabel"
-                               Text="Ready &#x2014; take a screenshot, enter a comment, then save."
+                               Text="Ready &#x2014; take a screenshot, fill in the fields, then save."
                                Foreground="#A6ADC8" FontSize="11" TextWrapping="Wrap"/>
                 </Border>
 
                 <!-- Action buttons -->
-                <Grid Grid.Row="4">
+                <Grid Grid.Row="6">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="12"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <Button Grid.Column="0" x:Name="SnipBtn" Content="Take Screenshot"/>
+                    <Button Grid.Column="0" x:Name="NewIssueBtn" Content="New Issue"/>
                     <Button Grid.Column="2" x:Name="SaveBtn" Content="Save Issue"
                             Background="#F0A500" Foreground="#1E1E2E" FontWeight="Bold"/>
                 </Grid>
@@ -921,26 +1111,39 @@ def run_logger():
         return
 
     state = {
-        u'path':   xlsx_path_from(folder),
-        u'issues': []
+        u'path':          xlsx_path_from(folder),
+        u'columns':       [u'Comment'],
+        u'issues':        [],
+        u'field_rows':    [],   # [{'name_box':TextBox, 'value_box':TextBox}, ...]
+        u'pending_png':   None, # Array[Byte] of the screenshot staged for save
+        u'editing_index': None, # index into state['issues'] being re-edited, or None
     }
     if File.Exists(state[u'path']):
-        state[u'issues'] = _read_xlsx(state[u'path'])
+        cols, iss = _read_xlsx(state[u'path'])
+        if cols:
+            state[u'columns'] = cols
+        state[u'issues'] = iss
 
     # ── Find all named elements ──────────────────────────────────
-    window         = XamlReader.Parse(LOGGER_XAML)
-    path_chip      = window.FindName(u'PathChip')
-    comment_box    = window.FindName(u'CommentBox')
-    status_lbl     = window.FindName(u'StatusLabel')
-    snip_btn       = window.FindName(u'SnipBtn')
-    save_btn       = window.FindName(u'SaveBtn')
-    snip_pill_txt  = window.FindName(u'SnipPillText')
-    snip_pill      = window.FindName(u'SnipPill')
-    change_folder  = window.FindName(u'ChangeFolderBtn')
-    snip_warning   = window.FindName(u'SnipWarning')
-    get_snip_btn   = window.FindName(u'GetSnipBtn')
-    preview_header = window.FindName(u'PreviewHeader')
-    issues_panel   = window.FindName(u'IssuesPanel')
+    window            = XamlReader.Parse(LOGGER_XAML)
+    path_chip         = window.FindName(u'PathChip')
+    status_lbl        = window.FindName(u'StatusLabel')
+    snip_btn          = window.FindName(u'SnipBtn')
+    save_btn          = window.FindName(u'SaveBtn')
+    snip_pill_txt     = window.FindName(u'SnipPillText')
+    snip_pill         = window.FindName(u'SnipPill')
+    change_folder     = window.FindName(u'ChangeFolderBtn')
+    snip_warning      = window.FindName(u'SnipWarning')
+    get_snip_btn      = window.FindName(u'GetSnipBtn')
+    preview_header    = window.FindName(u'PreviewHeader')
+    issues_panel      = window.FindName(u'IssuesPanel')
+    fields_panel      = window.FindName(u'FieldsPanel')
+    add_field_btn     = window.FindName(u'AddFieldBtn')
+    thumb_image       = window.FindName(u'ThumbImage')
+    thumb_placeholder = window.FindName(u'ThumbPlaceholder')
+    thumb_caption     = window.FindName(u'ThumbCaption')
+    cancel_edit_btn   = window.FindName(u'CancelEditBtn')
+    new_issue_btn     = window.FindName(u'NewIssueBtn')
 
     # ── Helpers ──────────────────────────────────────────────────
     def set_status(msg, brush=None):
@@ -952,24 +1155,105 @@ def run_logger():
         path_chip.Text = u'{p}   ({n} issue{s})'.format(
             p=state[u'path'], n=n, s=u's' if n != 1 else u'')
 
+    def set_thumbnail(png_bytes):
+        bmp = _bytes_to_bitmap(png_bytes) if png_bytes else None
+        if bmp is not None:
+            thumb_image.Source           = bmp
+            thumb_image.Visibility       = Visibility.Visible
+            thumb_placeholder.Visibility = Visibility.Collapsed
+        else:
+            thumb_image.Source           = None
+            thumb_image.Visibility       = Visibility.Collapsed
+            thumb_placeholder.Visibility = Visibility.Visible
+
+    def sync_column_names():
+        """Pull any in-progress renames out of the title chips into state['columns']."""
+        for i, fr in enumerate(state[u'field_rows']):
+            if i < len(state[u'columns']):
+                txt = fr[u'name_box'].Text.strip()
+                if txt:
+                    state[u'columns'][i] = txt
+
+    def clear_field_values():
+        for fr in state[u'field_rows']:
+            fr[u'value_box'].Text = u''
+
+    def load_field_values(values):
+        for i, fr in enumerate(state[u'field_rows']):
+            fr[u'value_box'].Text = values[i] if i < len(values) else u''
+
+    def remove_column_everywhere(idx):
+        state[u'columns'].pop(idx)
+        for k, (ts, values, png) in enumerate(state[u'issues']):
+            if idx < len(values):
+                nv = list(values)
+                nv.pop(idx)
+                state[u'issues'][k] = (ts, nv, png)
+
+    def rebuild_fields_ui():
+        fields_panel.Children.Clear()
+        state[u'field_rows'] = []
+        for i, name in enumerate(state[u'columns']):
+            def make_delete(i=i):
+                def _del(s, e):
+                    if len(state[u'columns']) <= 1:
+                        set_status(u'At least one field must remain.', _BR_WARN)
+                        return
+                    sync_column_names()
+                    was_editing = state[u'editing_index']
+                    remove_column_everywhere(i)
+                    rebuild_fields_ui()
+                    if was_editing is not None:
+                        ts, values, png = state[u'issues'][was_editing]
+                        load_field_values(values)
+                    rebuild_preview()
+                    try:
+                        File.WriteAllBytes(
+                            state[u'path'], _build_xlsx(state[u'columns'], state[u'issues']))
+                    except Exception as ex:
+                        set_status(u'Field removed, but re-saving the file failed: ' + unicode(ex), _BR_WARN)
+                return _del
+            row, name_box, value_box = _make_field_row(name, u'', make_delete())
+            fields_panel.Children.Add(row)
+            state[u'field_rows'].append(
+                {u'name_box': name_box, u'value_box': value_box})
+
+    rebuild_fields_ui()
+
     def rebuild_preview():
         """Repopulate the right panel; newest issue shown first."""
         issues_panel.Children.Clear()
         n = len(state[u'issues'])
         preview_header.Text = u'Saved Issues  ({0})'.format(n)
-        for i, (ts, cmt, png) in enumerate(reversed(state[u'issues'])):
+        for i, (ts, values, png) in enumerate(reversed(state[u'issues'])):
             real_idx = n - 1 - i
             card = _make_issue_card(
-                real_idx + 1, ts, cmt, png,
-                lambda s, e, idx=real_idx: on_delete(idx)
+                real_idx + 1, ts, state[u'columns'], values, png,
+                lambda s, e, idx=real_idx: on_delete(idx),
+                lambda s, e, idx=real_idx: on_edit(idx)
             )
             issues_panel.Children.Add(card)
+
+    def reset_editing_state(msg=None, brush=None):
+        state[u'editing_index'] = None
+        state[u'pending_png']   = None
+        set_thumbnail(None)
+        clear_field_values()
+        thumb_caption.Text         = u'Take a screenshot to begin, or click a saved issue to re-edit it.'
+        cancel_edit_btn.Visibility = Visibility.Collapsed
+        save_btn.Content           = u'Save Issue'
+        if msg:
+            set_status(msg, brush)
 
     def on_delete(idx):
         deleted = state[u'issues'][idx]
         state[u'issues'].pop(idx)
         try:
-            File.WriteAllBytes(state[u'path'], _build_xlsx(state[u'issues']))
+            File.WriteAllBytes(state[u'path'], _build_xlsx(state[u'columns'], state[u'issues']))
+            if state[u'editing_index'] == idx:
+                reset_editing_state()
+            elif state[u'editing_index'] is not None and state[u'editing_index'] > idx:
+                state[u'editing_index'] -= 1
             rebuild_preview()
             update_path_chip()
             set_status(u'Issue #{0} deleted.'.format(idx + 1))
@@ -979,6 +1263,23 @@ def run_logger():
             set_status(
                 u'Delete failed \u2014 is the file open in Excel?  ' + unicode(ex),
                 _BR_WARN)
+
+    def on_edit(idx):
+        sync_column_names()
+        ts, values, png          = state[u'issues'][idx]
+        state[u'editing_index']  = idx
+        state[u'pending_png']    = png
+        set_thumbnail(png)
+        load_field_values(values)
+        thumb_caption.Text         = (
+            u'Editing Issue #{0} \u2014 take a new screenshot to replace it, '
+            u'then press Update.'.format(idx + 1))
+        cancel_edit_btn.Visibility = Visibility.Visible
+        save_btn.Content           = u'Update Issue #{0}'.format(idx + 1)
+        set_status(u'Editing Issue #{0}. Make your changes and press Update.'.format(idx + 1))
+
+    cancel_edit_btn.Click += lambda s, e: reset_editing_state(u'Edit cancelled.')
+    new_issue_btn.Click   += lambda s, e: reset_editing_state(u'Started a new issue \u2014 fields are cleared.')
 
     # ── Snipaste status ──────────────────────────────────────────
     if SNIPASTE_PATH:
@@ -1014,9 +1315,16 @@ def run_logger():
         if not new:
             return
         save_config(new)
-        state[u'path']   = xlsx_path_from(new)
-        state[u'issues'] = (_read_xlsx(state[u'path'])
-                            if File.Exists(state[u'path']) else [])
+        state[u'path'] = xlsx_path_from(new)
+        if File.Exists(state[u'path']):
+            cols, iss = _read_xlsx(state[u'path'])
+            state[u'columns'] = cols if cols else [u'Comment']
+            state[u'issues']  = iss
+        else:
+            state[u'columns'] = [u'Comment']
+            state[u'issues']  = []
+        rebuild_fields_ui()
+        reset_editing_state()
         update_path_chip()
         rebuild_preview()
         set_status(u'Folder updated \u2014 {0} issue(s) loaded.'.format(
@@ -1025,57 +1333,115 @@ def run_logger():
     change_folder.Click += on_change_folder
 
     # ── Take Screenshot ──────────────────────────────────────────
+    # Note: when Snipaste is already running in the background, invoking
+    # "Snipaste.exe snip" just relays the command to that instance and the
+    # spawned process exits almost immediately -- long before the user has
+    # actually drawn a selection. Waiting on proc.WaitForExit() therefore
+    # captures the clipboard too early. Instead we clear the clipboard first
+    # and poll (on an STA thread, required for clipboard access) until a new
+    # image actually lands there, so the thumbnail updates the moment the
+    # screenshot is really taken.
     def on_snip(s, e):
         if not SNIPASTE_PATH:
             set_status(u'Snipaste not found \u2014 install it from the Microsoft Store.',
                        _BR_WARN)
             return
         window.Hide()
+        try:
+            WFClipboard.Clear()
+        except Exception:
+            pass
+
         proc                     = Process()
         proc.StartInfo.FileName  = SNIPASTE_PATH
         proc.StartInfo.Arguments = u'snip'
         proc.Start()
 
         def watch():
-            proc.WaitForExit()
+            found = None
+            for _ in range(300):            # ~60s timeout (300 * 200ms)
+                Thread.Sleep(200)
+                try:
+                    if WFClipboard.ContainsImage():
+                        found = clipboard_to_png()
+                        if found is not None:
+                            break
+                except Exception:
+                    pass
+
             def restore():
                 window.Show()
-                set_status(
-                    u'Screenshot ready in clipboard \u2014 enter a comment and save.',
-                    _BR_SUCCESS)
+                if found is not None:
+                    state[u'pending_png'] = found
+                    set_thumbnail(found)
+                    set_status(u'Screenshot captured \u2014 fill in the fields and save.',
+                               _BR_SUCCESS)
+                else:
+                    set_status(u'No screenshot captured \u2014 the snip was cancelled or timed out.',
+                               _BR_WARN)
             window.Dispatcher.Invoke(Action(restore))
 
         t = Thread(ThreadStart(watch))
         t.IsBackground = True
+        t.SetApartmentState(ApartmentState.STA)
         t.Start()
 
     snip_btn.Click += on_snip
 
-    # ── Save Issue ───────────────────────────────────────────────
+    # ── Add Field (+) ───────────────────────────────────────────
+    def on_add_field(s, e):
+        sync_column_names()
+        state[u'columns'].append(u'Field {0}'.format(len(state[u'columns']) + 1))
+        rebuild_fields_ui()
+        if state[u'editing_index'] is not None:
+            ts, values, png = state[u'issues'][state[u'editing_index']]
+            load_field_values(values)
+        try:
+            last = state[u'field_rows'][-1][u'name_box']
+            last.Focus()
+            last.SelectAll()
+        except Exception:
+            pass
+
+    add_field_btn.Click += on_add_field
+
+    # ── Save / Update Issue ────────────────────────────────────────
     def on_save(s, e):
-        cmt = comment_box.Text.strip()
-        if not cmt:
-            set_status(u'Please enter a comment before saving.', _BR_WARN)
+        values = [fr[u'value_box'].Text.strip() for fr in state[u'field_rows']]
+        sync_column_names()
+        if not any(v for v in values):
+            set_status(u'Please fill in at least one field before saving.', _BR_WARN)
             return
-        png = clipboard_to_png()
+        png = state[u'pending_png']
         if png is None:
-            set_status(u'No image in clipboard \u2014 take a screenshot first.', _BR_WARN)
+            set_status(u'No screenshot captured \u2014 take one first.', _BR_WARN)
             return
 
-        ts = DateTime.Now.ToString(u'yyyy-MM-dd HH:mm:ss')
-        state[u'issues'].append((ts, cmt, png))
+        editing   = state[u'editing_index']
+        prev_item = state[u'issues'][editing] if editing is not None else None
+        if editing is not None:
+            ts = prev_item[0]
+            state[u'issues'][editing] = (ts, values, png)
+        else:
+            ts = DateTime.Now.ToString(u'yyyy-MM-dd HH:mm:ss')
+            state[u'issues'].append((ts, values, png))
 
         try:
-            File.WriteAllBytes(state[u'path'], _build_xlsx(state[u'issues']))
-            comment_box.Clear()
+            File.WriteAllBytes(state[u'path'], _build_xlsx(state[u'columns'], state[u'issues']))
+            n = len(state[u'issues'])
+            reset_editing_state()
             rebuild_preview()
             update_path_chip()
-            set_status(
-                u'Issue #{n} saved \u2192 {p}'.format(
-                    n=len(state[u'issues']), p=state[u'path']),
-                _BR_SUCCESS)
+            if editing is not None:
+                set_status(u'Issue #{0} updated \u2192 {1}'.format(editing + 1, state[u'path']),
+                           _BR_SUCCESS)
+            else:
+                set_status(u'Issue #{0} saved \u2192 {1}'.format(n, state[u'path']), _BR_SUCCESS)
         except Exception as ex:
-            state[u'issues'].pop()   # rollback
+            if editing is not None:
+                state[u'issues'][editing] = prev_item   # rollback
+            else:
+                state[u'issues'].pop()
             set_status(
                 u'Save failed \u2014 is the file open in Excel?  ' + unicode(ex),
                 _BR_WARN)
