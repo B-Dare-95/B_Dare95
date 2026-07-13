@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__title__     = "Bulk Copy from Link"
+__title__     = "Copy Selected from Link"
 __author__    = "Mohamed Bedair"
 __version__   = 'Version = 2.0'
 __doc__       = """Version = 2.0
