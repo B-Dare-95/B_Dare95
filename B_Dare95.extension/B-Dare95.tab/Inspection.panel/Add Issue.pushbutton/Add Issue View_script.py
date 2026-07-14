@@ -45,7 +45,7 @@ from System.IO.Compression import ZipArchive, ZipArchiveMode
 
 # ── Clipboard (WinForms path avoids WPF transparent-alpha bug) ───────────────
 from System.Windows.Forms   import (
-    FolderBrowserDialog, DialogResult as WFDialogResult,
+    SaveFileDialog, DialogResult as WFDialogResult,
     Clipboard as WFClipboard
 )
 from System.Drawing         import Bitmap, Graphics
@@ -114,20 +114,60 @@ SNIPASTE_PATH = find_snipaste()
 #  CONFIG PERSISTENCE
 # ═══════════════════════════════════════════════════════════════════════════
 
-def load_config():
-    if File.Exists(CONFIG_FILE):
-        txt = File.ReadAllText(CONFIG_FILE, Encoding.UTF8).strip()
-        if txt:
-            return txt
-    return None
-
-
-def save_config(folder):
-    File.WriteAllText(CONFIG_FILE, folder, Encoding.UTF8)
-
-
 def xlsx_path_from(folder):
     return os.path.join(folder, XLSX_FILENAME)
+
+
+def load_config():
+    """
+    Returns (paths, active) where paths is a list of .xlsx file paths and
+    active is the index of the last-used tab.
+
+    Config format (UTF-8, one item per line):
+        active=<index>
+        <path 1>
+        <path 2>
+        ...
+
+    Backward compatible with the old single-line format that stored just a
+    save *folder*: that folder is migrated to <folder>/Issue Logger.xlsx.
+    """
+    if not File.Exists(CONFIG_FILE):
+        return ([], 0)
+    txt = File.ReadAllText(CONFIG_FILE, Encoding.UTF8)
+    lines = [l.strip() for l in txt.replace(u'\r', u'').split(u'\n') if l.strip()]
+    if not lines:
+        return ([], 0)
+
+    active = 0
+    raw    = []
+    for l in lines:
+        if l.lower().startswith(u'active='):
+            try:
+                active = int(l.split(u'=', 1)[1])
+            except Exception:
+                active = 0
+        else:
+            raw.append(l)
+
+    paths = []
+    for p in raw:
+        if p.lower().endswith(u'.xlsx'):
+            paths.append(p)                       # already a file path
+        elif os.path.isdir(p):
+            paths.append(xlsx_path_from(p))        # migrate old folder-only config
+        else:
+            paths.append(p)                        # keep as-is (may be missing)
+
+    if active < 0 or active >= len(paths):
+        active = 0
+    return (paths, active)
+
+
+def save_config(paths, active):
+    lines = [u'active={0}'.format(active)]
+    lines.extend(paths)
+    File.WriteAllText(CONFIG_FILE, u'\n'.join(lines), Encoding.UTF8)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -493,13 +533,41 @@ def _read_xlsx(path):
 #  SHARED WPF HELPERS
 # ═══════════════════════════════════════════════════════════════════════════
 
-def _pick_folder(initial=u''):
-    dlg = FolderBrowserDialog()
-    dlg.Description         = u'Select folder for Issue Logger.xlsx'
-    dlg.ShowNewFolderButton = True
-    if initial and os.path.isdir(initial):
-        dlg.SelectedPath = initial
-    return dlg.SelectedPath if dlg.ShowDialog() == WFDialogResult.OK else None
+def _same_path(a, b):
+    """Case-insensitive path equality (Windows-friendly)."""
+    try:
+        return os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
+    except Exception:
+        return a == b
+
+
+def _default_dir():
+    """A sensible starting directory for the file dialogs."""
+    try:
+        docs = os.path.join(os.environ.get(u'USERPROFILE', u''), u'Documents')
+        if os.path.isdir(docs):
+            return docs
+    except Exception:
+        pass
+    return os.environ.get(u'USERPROFILE', u'')
+
+
+def _pick_new_file(initial_dir=u'', overwrite_prompt=False, default_name=u'Issues.xlsx',
+                   title=u'Create a new Issue Logger file'):
+    """Save-As dialog: user names + places a .xlsx. Returns full path or None.
+    overwrite_prompt=False lets the caller decide how to treat an existing file
+    (used by '+', which opens it instead of wiping it); Save As passes True so
+    the user is warned before replacing an unrelated file."""
+    dlg = SaveFileDialog()
+    dlg.Title           = title
+    dlg.Filter          = u'Excel Workbook (*.xlsx)|*.xlsx'
+    dlg.DefaultExt      = u'xlsx'
+    dlg.AddExtension    = True
+    dlg.OverwritePrompt = overwrite_prompt
+    dlg.FileName        = default_name
+    if initial_dir and os.path.isdir(initial_dir):
+        dlg.InitialDirectory = initial_dir
+    return dlg.FileName if dlg.ShowDialog() == WFDialogResult.OK else None
 
 
 def _push_frame(window):
@@ -731,6 +799,72 @@ def _make_field_row(name, value, delete_handler):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+#  TAB BAR HELPERS  (each tab = one .xlsx file)
+# ═══════════════════════════════════════════════════════════════════════════
+
+_C_ACCENT = Color.FromRgb(0xF0, 0xA5, 0x00)   # Catppuccin-style accent (amber)
+
+
+def _make_file_tab(label, tooltip, is_active, activate_handler, close_handler):
+    """
+    Build one file tab as a rounded chip:  [ filename  x ]
+    Active tabs get the surface background + accent, bold label.
+    The label and the close button are separate Buttons so clicking x
+    never also fires the activate handler.
+    Returns a WPF Border ready to add to the horizontal tab strip.
+    """
+    chip              = Border()
+    chip.CornerRadius = CornerRadius(6)
+    chip.Margin       = Thickness(0, 0, 6, 0)
+    chip.Background   = (SolidColorBrush(_C_SURFACE) if is_active else Brushes.Transparent)
+
+    grid = WpfGrid()
+    c0 = ColumnDefinition(); c0.Width = GridLength.Auto
+    c1 = ColumnDefinition(); c1.Width = GridLength.Auto
+    grid.ColumnDefinitions.Add(c0)
+    grid.ColumnDefinitions.Add(c1)
+
+    lbl            = Button()
+    lbl.Content    = label
+    lbl.ToolTip    = tooltip
+    lbl.Background  = Brushes.Transparent
+    lbl.Padding    = Thickness(11, 6, 6, 6)
+    lbl.FontSize   = 12
+    lbl.FontWeight = (FontWeights.Bold if is_active else FontWeights.Normal)
+    lbl.Foreground = (SolidColorBrush(_C_ACCENT) if is_active else SolidColorBrush(_C_SUB))
+    lbl.Click     += activate_handler
+    WpfGrid.SetColumn(lbl, 0)
+    grid.Children.Add(lbl)
+
+    x            = Button()
+    x.Content    = u'\u00d7'
+    x.ToolTip    = u'Close tab (the file stays on disk)'
+    x.Background  = Brushes.Transparent
+    x.Foreground = SolidColorBrush(_C_SUB)
+    x.Padding    = Thickness(2, 6, 10, 6)
+    x.FontSize   = 12
+    x.Click     += close_handler
+    WpfGrid.SetColumn(x, 1)
+    grid.Children.Add(x)
+
+    chip.Child = grid
+    return chip
+
+
+def _make_plus_tab(add_handler):
+    """The trailing '+' tab that creates a new file."""
+    b            = Button()
+    b.Content    = u'+'
+    b.ToolTip    = u'Create a new issue file'
+    b.FontSize   = 15
+    b.FontWeight = FontWeights.Bold
+    b.Padding    = Thickness(11, 3, 11, 3)
+    b.Foreground = SolidColorBrush(_C_ACCENT)
+    b.Click     += add_handler
+    return b
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 #  SHARED BUTTON / TEXTBOX STYLES  (injected into both windows)
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -785,58 +919,6 @@ _SHARED_STYLES = u"""
 """
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-#  CONFIG WINDOW XAML  (shift-click)
-# ═══════════════════════════════════════════════════════════════════════════
-
-CONFIG_XAML = (
-    u'<Window'
-    u'    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"'
-    u'    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
-    u'    Title="Issue Logger \u2014 Configure Save Location"'
-    u'    Width="520" Height="200" ResizeMode="NoResize"'
-    u'    WindowStartupLocation="CenterScreen" Background="#1E1E2E">'
-    + _SHARED_STYLES +
-    u'    <Grid Margin="20,16,20,16">'
-    u'        <Grid.RowDefinitions>'
-    u'            <RowDefinition Height="Auto"/>'
-    u'            <RowDefinition Height="Auto"/>'
-    u'            <RowDefinition Height="*"/>'
-    u'            <RowDefinition Height="Auto"/>'
-    u'        </Grid.RowDefinitions>'
-    u'        <TextBlock Grid.Row="0" Text="Configure Save Location"'
-    u'                   FontSize="17" FontWeight="Bold" Margin="0,0,0,14"/>'
-    u'        <Grid Grid.Row="1" Margin="0,0,0,8">'
-    u'            <Grid.ColumnDefinitions>'
-    u'                <ColumnDefinition Width="*"/>'
-    u'                <ColumnDefinition Width="10"/>'
-    u'                <ColumnDefinition Width="Auto"/>'
-    u'            </Grid.ColumnDefinitions>'
-    u'            <Border Grid.Column="0" Background="#2A2A3C" CornerRadius="6" Padding="10,7">'
-    u'                <TextBlock x:Name="PathDisplay" Text="(not configured)"'
-    u'                           Foreground="#A6ADC8" FontSize="12"'
-    u'                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>'
-    u'            </Border>'
-    u'            <Button Grid.Column="2" x:Name="BrowseBtn" Content="Browse..." Padding="12,7"/>'
-    u'        </Grid>'
-    u'        <TextBlock Grid.Row="2" x:Name="CfgStatus" Text=" "'
-    u'                   Foreground="#A6ADC8" FontSize="11" VerticalAlignment="Center"/>'
-    u'        <Grid Grid.Row="3">'
-    u'            <Grid.ColumnDefinitions>'
-    u'                <ColumnDefinition Width="*"/>'
-    u'                <ColumnDefinition Width="10"/>'
-    u'                <ColumnDefinition Width="Auto"/>'
-    u'            </Grid.ColumnDefinitions>'
-    u'            <Button Grid.Column="0" x:Name="SaveCfgBtn"'
-    u'                    Content="Save &amp; Close"'
-    u'                    Background="#F0A500" Foreground="#1E1E2E" FontWeight="Bold"/>'
-    u'            <Button Grid.Column="2" x:Name="CancelCfgBtn"'
-    u'                    Content="Cancel" Padding="18,9"/>'
-    u'        </Grid>'
-    u'    </Grid>'
-    u'</Window>'
-)
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  LOGGER WINDOW XAML  (normal click)
@@ -857,11 +939,21 @@ LOGGER_XAML = u"""<Window
     <Grid Margin="20,16,20,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
+        <!-- ── File tab bar (each tab = one .xlsx file, '+' adds a new one) ── -->
+        <Border Grid.Row="0" Margin="0,0,0,10" BorderBrush="#313244"
+                BorderThickness="0,0,0,1" Padding="0,0,0,6">
+            <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="TabStrip" Orientation="Horizontal"/>
+            </ScrollViewer>
+        </Border>
+
         <!-- ── Snipaste not-found warning banner (hidden when found) ── -->
-        <Border Grid.Row="0" x:Name="SnipWarning"
+        <Border Grid.Row="1" x:Name="SnipWarning"
                 Background="#3D2A1A" CornerRadius="6"
                 Padding="12,9" Margin="0,0,0,10"
                 Visibility="Collapsed">
@@ -885,7 +977,7 @@ LOGGER_XAML = u"""<Window
         </Border>
 
         <!-- ── Main two-column layout ── -->
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" MinWidth="340"/>
                 <ColumnDefinition Width="16"/>
@@ -923,7 +1015,7 @@ LOGGER_XAML = u"""<Window
                             <TextBlock x:Name="SnipPillText" Text="Snipaste: checking..."
                                        Foreground="#A6ADC8" FontSize="11"/>
                         </Border>
-                        <Button x:Name="ChangeFolderBtn" Content="Change Folder"
+                        <Button x:Name="SaveAsBtn" Content="Save As&#x2026;"
                                 FontSize="11" Padding="10,5"/>
                     </StackPanel>
                 </Grid>
@@ -1026,103 +1118,42 @@ LOGGER_XAML = u"""<Window
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  SHIFT-CLICK MODE  —  configure save folder
+#  NORMAL CLICK MODE  —  issue logger  (tabbed, one .xlsx file per tab)
 # ═══════════════════════════════════════════════════════════════════════════
-
-def run_config():
-    window     = XamlReader.Parse(CONFIG_XAML)
-    path_disp  = window.FindName(u'PathDisplay')
-    cfg_status = window.FindName(u'CfgStatus')
-    browse_btn = window.FindName(u'BrowseBtn')
-    save_btn   = window.FindName(u'SaveCfgBtn')
-    cancel_btn = window.FindName(u'CancelCfgBtn')
-
-    current = load_config() or u''
-    state   = {u'folder': current}
-    if current:
-        path_disp.Text = xlsx_path_from(current)
-
-    def on_browse(s, e):
-        new = _pick_folder(state[u'folder'])
-        if new:
-            state[u'folder']      = new
-            path_disp.Text        = xlsx_path_from(new)
-            cfg_status.Text       = u''
-            cfg_status.Foreground = _BR_SUBTEXT
-
-    def on_save(s, e):
-        if not state[u'folder']:
-            cfg_status.Text       = u'Please select a folder first.'
-            cfg_status.Foreground = _BR_WARN
-            return
-        save_config(state[u'folder'])
-        window.Close()
-
-    def on_cancel(s, e):
-        window.Close()
-
-    browse_btn.Click += on_browse
-    save_btn.Click   += on_save
-    cancel_btn.Click += on_cancel
-    _push_frame(window)
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  NORMAL CLICK MODE  —  issue logger
-# ═══════════════════════════════════════════════════════════════════════════
-
-def _show_no_config_prompt():
-    XAML = (
-        u'<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"'
-        u'        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
-        u'        Title="Issue Logger" Width="400" Height="160"'
-        u'        ResizeMode="NoResize" WindowStartupLocation="CenterScreen"'
-        u'        Background="#1E1E2E">'
-        u'    <StackPanel Margin="24" VerticalAlignment="Center">'
-        u'        <TextBlock Text="No save location configured."'
-        u'                   Foreground="#F38BA8" FontSize="14" FontWeight="Bold"'
-        u'                   Margin="0,0,0,8"/>'
-        u'        <TextBlock Text="Shift+click the button to choose where to save Issue Logger.xlsx."'
-        u'                   Foreground="#A6ADC8" FontSize="12" TextWrapping="Wrap"'
-        u'                   Margin="0,0,0,18"/>'
-        u'        <Button x:Name="OkBtn" Content="OK" Width="80" HorizontalAlignment="Right"'
-        u'                Background="#313244" Foreground="#CDD6F4"'
-        u'                BorderThickness="0" Padding="0,8" Cursor="Hand">'
-        u'            <Button.Template><ControlTemplate TargetType="Button">'
-        u'                <Border Background="{TemplateBinding Background}" CornerRadius="6"'
-        u'                        Padding="{TemplateBinding Padding}">'
-        u'                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>'
-        u'                </Border>'
-        u'            </ControlTemplate></Button.Template>'
-        u'        </Button>'
-        u'    </StackPanel>'
-        u'</Window>'
-    )
-    w  = XamlReader.Parse(XAML)
-    ok = w.FindName(u'OkBtn')
-    ok.Click += lambda s, e: w.Close()
-    _push_frame(w)
-
 
 def run_logger():
-    folder = load_config()
-    if not folder:
-        _show_no_config_prompt()
-        return
+    paths, active = load_config()
 
     state = {
-        u'path':          xlsx_path_from(folder),
-        u'columns':       [u'Comment'],
-        u'issues':        [],
-        u'field_rows':    [],   # [{'name_box':TextBox, 'value_box':TextBox}, ...]
-        u'pending_png':   None, # Array[Byte] of the screenshot staged for save
-        u'editing_index': None, # index into state['issues'] being re-edited, or None
+        u'tabs':          [],    # [{'path':..., 'columns':[...], 'issues':[...]}, ...]
+        u'active':        0,     # index into state['tabs'] (0 when empty)
+        u'path':          None,  # live view of the active tab's file path
+        u'columns':       [u'Comment'],   # live view of active tab's columns
+        u'issues':        [],    # live view of active tab's issues
+        u'field_rows':    [],    # [{'name_box':TextBox, 'value_box':TextBox}, ...]
+        u'pending_png':   None,  # Array[Byte] of the screenshot staged for save
+        u'editing_index': None,  # index into state['issues'] being re-edited, or None
     }
-    if File.Exists(state[u'path']):
-        cols, iss = _read_xlsx(state[u'path'])
-        if cols:
-            state[u'columns'] = cols
-        state[u'issues'] = iss
+
+    # Load every tracked file into a tab (missing files are kept as empty
+    # tabs and get (re)created on first save).
+    for p in paths:
+        if File.Exists(p):
+            cols, iss = _read_xlsx(p)
+            state[u'tabs'].append(
+                {u'path': p, u'columns': cols or [u'Comment'], u'issues': iss})
+        else:
+            state[u'tabs'].append(
+                {u'path': p, u'columns': [u'Comment'], u'issues': []})
+
+    if state[u'tabs']:
+        if active < 0 or active >= len(state[u'tabs']):
+            active = 0
+        state[u'active']  = active
+        t                 = state[u'tabs'][active]
+        state[u'path']    = t[u'path']
+        state[u'columns'] = t[u'columns']
+        state[u'issues']  = t[u'issues']
 
     # ── Find all named elements ──────────────────────────────────
     window            = XamlReader.Parse(LOGGER_XAML)
@@ -1132,7 +1163,8 @@ def run_logger():
     save_btn          = window.FindName(u'SaveBtn')
     snip_pill_txt     = window.FindName(u'SnipPillText')
     snip_pill         = window.FindName(u'SnipPill')
-    change_folder     = window.FindName(u'ChangeFolderBtn')
+    save_as_btn       = window.FindName(u'SaveAsBtn')
+    tab_strip         = window.FindName(u'TabStrip')
     snip_warning      = window.FindName(u'SnipWarning')
     get_snip_btn      = window.FindName(u'GetSnipBtn')
     preview_header    = window.FindName(u'PreviewHeader')
@@ -1151,6 +1183,9 @@ def run_logger():
         status_lbl.Foreground = brush if brush else _BR_SUBTEXT
 
     def update_path_chip():
+        if not state[u'path']:
+            path_chip.Text = u'No file yet \u2014 click  +  in the tab bar to create one.'
+            return
         n = len(state[u'issues'])
         path_chip.Text = u'{p}   ({n} issue{s})'.format(
             p=state[u'path'], n=n, s=u's' if n != 1 else u'')
@@ -1245,6 +1280,162 @@ def run_logger():
         if msg:
             set_status(msg, brush)
 
+    # ── Tab / multi-file management ──────────────────────────────
+    def persist_tabs():
+        save_config([t[u'path'] for t in state[u'tabs']], state[u'active'])
+
+    def load_active_into_views():
+        """Point the live views (path/columns/issues) at the active tab."""
+        if state[u'tabs']:
+            t                 = state[u'tabs'][state[u'active']]
+            state[u'path']    = t[u'path']
+            state[u'columns'] = t[u'columns']
+            state[u'issues']  = t[u'issues']
+        else:
+            state[u'path']    = None
+            state[u'columns'] = [u'Comment']
+            state[u'issues']  = []
+
+    def refresh_enabled():
+        """Enable/disable input controls based on whether a file is open."""
+        on = bool(state[u'tabs'])
+        save_btn.IsEnabled      = on
+        save_as_btn.IsEnabled   = on
+        add_field_btn.IsEnabled = on
+        new_issue_btn.IsEnabled = on
+        if SNIPASTE_PATH:
+            snip_btn.IsEnabled = on
+        if not on:
+            set_status(
+                u'No file yet \u2014 click  +  in the tab bar to create your first issue file.')
+
+    def rebuild_tab_bar():
+        tab_strip.Children.Clear()
+        for i, t in enumerate(state[u'tabs']):
+            base  = os.path.splitext(os.path.basename(t[u'path']))[0]
+            label = base if len(base) <= 24 else (base[:23] + u'\u2026')
+            chip  = _make_file_tab(
+                label, t[u'path'], i == state[u'active'],
+                (lambda s, e, idx=i: activate_tab(idx)),
+                (lambda s, e, idx=i: close_tab(idx)))
+            tab_strip.Children.Add(chip)
+        tab_strip.Children.Add(_make_plus_tab(lambda s, e: add_new_file()))
+
+    def refresh_all():
+        rebuild_fields_ui()
+        reset_editing_state()
+        rebuild_preview()
+        update_path_chip()
+        rebuild_tab_bar()
+        refresh_enabled()
+
+    def activate_tab(idx):
+        if idx < 0 or idx >= len(state[u'tabs']):
+            return
+        if idx == state[u'active'] and state[u'path'] is not None:
+            return
+        sync_column_names()          # keep any in-progress renames on the old tab
+        state[u'active'] = idx
+        load_active_into_views()
+        refresh_all()
+        persist_tabs()
+        set_status(u'Switched to \u201c{0}\u201d.'.format(
+            os.path.basename(state[u'path'])))
+
+    def add_new_file():
+        path = _pick_new_file(_default_dir() if not state[u'path']
+                              else os.path.dirname(state[u'path']))
+        if not path:
+            return
+        for i, t in enumerate(state[u'tabs']):        # already open? just switch
+            if _same_path(t[u'path'], path):
+                activate_tab(i)
+                return
+        if File.Exists(path):                         # exists → open (don't wipe)
+            cols, iss = _read_xlsx(path)
+            tab = {u'path': path, u'columns': cols or [u'Comment'], u'issues': iss}
+            msg = u'Opened existing \u201c{0}\u201d.'.format(os.path.basename(path))
+        else:                                         # new → create empty workbook
+            tab = {u'path': path, u'columns': [u'Comment'], u'issues': []}
+            try:
+                File.WriteAllBytes(path, _build_xlsx(tab[u'columns'], tab[u'issues']))
+            except Exception as ex:
+                set_status(u'Could not create file: ' + unicode(ex), _BR_WARN)
+                return
+            msg = u'Created \u201c{0}\u201d.'.format(os.path.basename(path))
+        state[u'tabs'].append(tab)
+        state[u'active'] = len(state[u'tabs']) - 1
+        load_active_into_views()
+        refresh_all()
+        persist_tabs()
+        set_status(msg, _BR_SUCCESS)
+
+    def save_as_file():
+        """Write the active file's contents to a new name/location, then point
+        the active tab at that new file. The original file is left on disk."""
+        if not state[u'path']:
+            set_status(u'No file open to save. Click  +  to create one.', _BR_WARN)
+            return
+        src = state[u'path']
+        new = _pick_new_file(
+            os.path.dirname(src),
+            overwrite_prompt=True,
+            default_name=os.path.basename(src),
+            title=u'Save As \u2014 choose a new name / location')
+        if not new:
+            return
+
+        sync_column_names()   # capture any in-progress field renames
+
+        if _same_path(new, src):
+            # Same target -> just re-save the current file in place.
+            try:
+                File.WriteAllBytes(new, _build_xlsx(state[u'columns'], state[u'issues']))
+                set_status(u'Saved in place \u2192 ' + new, _BR_SUCCESS)
+            except Exception as ex:
+                set_status(u'Save failed \u2014 is the file open in Excel?  ' + unicode(ex),
+                           _BR_WARN)
+            return
+
+        # Don't clobber a *different* file that's already open in another tab.
+        for i, t in enumerate(state[u'tabs']):
+            if i != state[u'active'] and _same_path(t[u'path'], new):
+                set_status(u'That file is already open in another tab \u2014 '
+                           u'pick a different name.', _BR_WARN)
+                return
+
+        try:
+            File.WriteAllBytes(new, _build_xlsx(state[u'columns'], state[u'issues']))
+        except Exception as ex:
+            set_status(u'Save As failed: ' + unicode(ex), _BR_WARN)
+            return
+
+        # Relocate the active tab to the new file (original stays on disk).
+        state[u'tabs'][state[u'active']][u'path'] = new
+        load_active_into_views()
+        refresh_all()
+        persist_tabs()
+        set_status(
+            u'Saved to new location \u2192 {0}   (the original file was left on disk)'.format(new),
+            _BR_SUCCESS)
+
+    def close_tab(idx):
+        if idx < 0 or idx >= len(state[u'tabs']):
+            return
+        name = os.path.basename(state[u'tabs'][idx][u'path'])
+        sync_column_names()
+        del state[u'tabs'][idx]
+        if not state[u'tabs']:
+            state[u'active'] = 0
+        elif idx < state[u'active']:
+            state[u'active'] -= 1
+        elif state[u'active'] >= len(state[u'tabs']):
+            state[u'active'] = len(state[u'tabs']) - 1
+        load_active_into_views()
+        refresh_all()
+        persist_tabs()
+        set_status(u'Closed tab \u201c{0}\u201d (the file is still on disk).'.format(name))
+
     def on_delete(idx):
         deleted = state[u'issues'][idx]
         state[u'issues'].pop(idx)
@@ -1309,28 +1500,8 @@ def run_logger():
 
     get_snip_btn.Click += on_get_snipaste
 
-    # ── Change Folder ────────────────────────────────────────────
-    def on_change_folder(s, e):
-        new = _pick_folder(os.path.dirname(state[u'path']))
-        if not new:
-            return
-        save_config(new)
-        state[u'path'] = xlsx_path_from(new)
-        if File.Exists(state[u'path']):
-            cols, iss = _read_xlsx(state[u'path'])
-            state[u'columns'] = cols if cols else [u'Comment']
-            state[u'issues']  = iss
-        else:
-            state[u'columns'] = [u'Comment']
-            state[u'issues']  = []
-        rebuild_fields_ui()
-        reset_editing_state()
-        update_path_chip()
-        rebuild_preview()
-        set_status(u'Folder updated \u2014 {0} issue(s) loaded.'.format(
-            len(state[u'issues'])))
-
-    change_folder.Click += on_change_folder
+    # ── Save As (re-save the active file into a new location) ────
+    save_as_btn.Click += lambda s, e: save_as_file()
 
     # ── Take Screenshot ──────────────────────────────────────────
     # Note: when Snipaste is already running in the background, invoking
@@ -1342,6 +1513,9 @@ def run_logger():
     # image actually lands there, so the thumbnail updates the moment the
     # screenshot is really taken.
     def on_snip(s, e):
+        if not state[u'path']:
+            set_status(u'Create or open a file first (click  +  in the tab bar).', _BR_WARN)
+            return
         if not SNIPASTE_PATH:
             set_status(u'Snipaste not found \u2014 install it from the Microsoft Store.',
                        _BR_WARN)
@@ -1390,6 +1564,9 @@ def run_logger():
 
     # ── Add Field (+) ───────────────────────────────────────────
     def on_add_field(s, e):
+        if not state[u'path']:
+            set_status(u'Create or open a file first (click  +  in the tab bar).', _BR_WARN)
+            return
         sync_column_names()
         state[u'columns'].append(u'Field {0}'.format(len(state[u'columns']) + 1))
         rebuild_fields_ui()
@@ -1407,6 +1584,9 @@ def run_logger():
 
     # ── Save / Update Issue ────────────────────────────────────────
     def on_save(s, e):
+        if not state[u'path']:
+            set_status(u'Create or open a file first (click  +  in the tab bar).', _BR_WARN)
+            return
         values = [fr[u'value_box'].Text.strip() for fr in state[u'field_rows']]
         sync_column_names()
         if not any(v for v in values):
@@ -1448,6 +1628,13 @@ def run_logger():
 
     save_btn.Click += on_save
 
+    # ── Tab bar init ─────────────────────────────────────────────
+    rebuild_tab_bar()
+    refresh_enabled()
+    if not state[u'tabs']:
+        # First run (or every file closed): jump straight to naming a new file.
+        add_new_file()
+
     _push_frame(window)
 
 
@@ -1460,7 +1647,7 @@ try:
 except NameError:
     _is_shift = False
 
-if _is_shift:
-    run_config()
-else:
-    run_logger()
+# Files are now named + placed per-tab (via the '+' tab and "Open File..."),
+# so the old shift-click "configure save folder" mode is obsolete. Both a
+# normal click and a shift-click open the tabbed logger.
+run_logger()

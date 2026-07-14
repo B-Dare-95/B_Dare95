@@ -5,14 +5,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="09d0a4df-0748-4405-a48e-7586ee4f5c90" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/Archved Code/EZ Dims Link/script.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Automations.panel/col3.stack/Quick View Duplicates.pushbutton/icon.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Automations.panel/col3.stack/Quick View Duplicates.pushbutton/script.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Shafts.panel/col1.stack/Shaft Text Note.pulldown/Linked Shafts.pushbutton/icon.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Shafts.panel/col1.stack/Shaft Text Note.pulldown/Linked Shafts.pushbutton/script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Links.panel/col1.stack/Copy from Link.pulldown/Copy Selected from Link.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Links.panel/col1.stack/Copy from Link.pulldown/Copy Selected from Link.pushbutton/script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Shafts.panel/col1.stack/Shaft Text Note.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Shafts.panel/col1.stack/Shaft Text Note.pulldown/Active Shafts.pushbutton/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Shafts.panel/col1.stack/Shaft Text Note.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Shafts.panel/col1.stack/Shaft Text Note.pulldown/Active Shafts.pushbutton/script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/.idea/.name" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/.idea/.name" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/Add Issue.pushbutton/Add Issue View_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/Add Issue.pushbutton/Add Issue View_script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/Test.tab/Test.panel/Test C.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/Test.tab/Test.panel/Test C.pushbutton/script.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -48,21 +44,21 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "RunOnceActivity.MCP Project settings loaded": "true",
-    "RunOnceActivity.OpenProjectViewOnStart": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
-    "git-widget-placeholder": "main",
-    "junie.onboarding.icon.badge.shown": "true",
-    "last_opened_file_path": "C:/Users/mohamed.bedair.SDCNT/Documents/GitHub/B_Dare95/B_Dare95.extension/B-Dare95.tab/Shafts.panel/col1.stack/Shaft Text Note.splitpushbutton/Linked Shafts.pushbutton",
-    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable",
-    "to.speed.mode.migration.done": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/mohamed.bedair.SDCNT/Documents/GitHub/B_Dare95&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;,
+    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="C:\Users\mohamed.bedair.SDCNT\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Shafts.panel\col1.stack\Shaft Text Note.splitpushbutton\Linked Shafts.pushbutton" />

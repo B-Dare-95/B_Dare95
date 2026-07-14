@@ -1,434 +1,454 @@
 # -*- coding: utf-8 -*-
-__title__ = "Shaft X Mark"
-__doc__ = "Draws boundary + X mark as Symbolic Lines on all Shafts. Overwrites existing ones."
+"""Shaft X-Marks
 
-import clr
+Lets the user rubber-band (rectangle) select Shaft Openings in the active view,
+asks for a Line Style (searchable, radio-style single-select), then for each shaft:
 
-clr.AddReference("RevitAPI")
-clr.AddReference("RevitAPIUI")
-clr.AddReference("PresentationFramework")
-clr.AddReference("PresentationCore")
-clr.AddReference("WindowsBase")
-clr.AddReference("System")
-clr.AddReference("System.Xml")
+    1. Deletes the existing X-mark symbolic lines (overwrite).
+    2. Redraws the shaft boundary + X-mark as SYMBOLIC LINES inside the shaft's
+       own Sketch (via SketchEditScope), NOT as standalone model/detail lines.
 
-from Autodesk.Revit.DB import (
-    FilteredElementCollector, BuiltInCategory, Transaction,
-    Line, XYZ, CurveArray, ModelLine, GraphicsStyle,
-    ElementId, ElementFilter
-)
-from Autodesk.Revit.UI import TaskDialog
-from System.Windows import Window, WindowStartupLocation, SizeToContent, Thickness, GridLength, GridUnitType
-from System.Windows.Controls import (
-    Grid, ColumnDefinition, RowDefinition, StackPanel, ListBox,
-    ListBoxItem, SelectionMode, Button, Label, TextBox, ScrollViewer,
-    Border, Orientation
-)
-from System.Windows.Media import SolidColorBrush, Color
-from System.Windows import FontWeights
-from System.Xml import XmlReader
-from System.IO import StringReader
-import System
+Why symbolic lines: the X-marks belong to the shaft's Sketch. Because they are
+sketch children, Element.GetDependentElements returns them, and they carry the
+"Lines" line style. Detection = dependent ModelCurves whose LineStyle is "Lines"
+or the chosen style. The shaft's boundary/profile curves use a different style,
+so they are never selected for deletion.
 
-doc = __revit__.ActiveUIDocument.Document
-uidoc = __revit__.ActiveUIDocument
-
-# ─────────────────────────────────────────────
-# 1. Collect all Shaft Openings
-# ─────────────────────────────────────────────
-shafts = FilteredElementCollector(doc) \
-    .OfCategory(BuiltInCategory.OST_ShaftOpening) \
-    .WhereElementIsNotElementType() \
-    .ToElements()
-
-if not shafts:
-    TaskDialog.Show("Shaft X Mark", "No Shaft Openings found in the project.")
-    raise SystemExit
-
-# ─────────────────────────────────────────────
-# 2. Collect Line Styles (GraphicsStyle of Model Lines)
-# ─────────────────────────────────────────────
-line_styles = FilteredElementCollector(doc) \
-    .OfClass(GraphicsStyle) \
-    .ToElements()
-
-# Filter to model-line-style subcategories only
-line_style_list = []
-for gs in line_styles:
-    cat = gs.GraphicsStyleCategory
-    if cat is None:
-        continue
-    parent = cat.Parent
-    if parent is not None and parent.Name == "Lines":
-        line_style_list.append(gs)
-    elif cat.Name == "Lines" and parent is None:
-        line_style_list.append(gs)
-
-line_style_list = sorted(line_style_list, key=lambda g: g.Name)
-
-if not line_style_list:
-    TaskDialog.Show("Shaft X Mark", "No Line Styles found.")
-    raise SystemExit
-
-# ─────────────────────────────────────────────
-# 3. WPF Dialog – Line Style Picker
-# ─────────────────────────────────────────────
-XAML = u"""
-<Window
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Shaft X Mark – Line Style"
-    Width="420" SizeToContent="Height"
-    WindowStartupLocation="CenterScreen"
-    Background="#1E1E2E">
-
-    <Window.Resources>
-        <Style TargetType="ListBoxItem">
-            <Setter Property="Foreground" Value="#CDD6F4"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Padding"    Value="8,5"/>
-            <Setter Property="FontSize"   Value="13"/>
-            <Style.Triggers>
-                <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#F0A500"/>
-                    <Setter Property="Foreground" Value="#1E1E2E"/>
-                    <Setter Property="FontWeight" Value="SemiBold"/>
-                </Trigger>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#313244"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-        <Style TargetType="Button">
-            <Setter Property="Background"   Value="#F0A500"/>
-            <Setter Property="Foreground"   Value="#1E1E2E"/>
-            <Setter Property="FontWeight"   Value="Bold"/>
-            <Setter Property="FontSize"     Value="13"/>
-            <Setter Property="Padding"      Value="18,8"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Cursor"       Value="Hand"/>
-        </Style>
-        <Style x:Key="CancelBtn" TargetType="Button">
-            <Setter Property="Background"   Value="#45475A"/>
-            <Setter Property="Foreground"   Value="#CDD6F4"/>
-            <Setter Property="FontWeight"   Value="Bold"/>
-            <Setter Property="FontSize"     Value="13"/>
-            <Setter Property="Padding"      Value="18,8"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Cursor"       Value="Hand"/>
-        </Style>
-    </Window.Resources>
-
-    <StackPanel Margin="18">
-
-        <!-- Header -->
-        <TextBlock Text="Shaft X Mark" FontSize="17" FontWeight="Bold"
-                   Foreground="#F0A500" Margin="0,0,0,4"/>
-        <TextBlock Text="Select a Line Style for the boundary and X mark."
-                   Foreground="#A6ADC8" FontSize="12" Margin="0,0,0,14"/>
-
-        <!-- Search -->
-        <Border Background="#313244" CornerRadius="6" Margin="0,0,0,8" Padding="8,4">
-            <TextBox x:Name="SearchBox" Background="Transparent" BorderThickness="0"
-                     Foreground="#CDD6F4" CaretBrush="#F0A500"
-                     FontSize="13" ToolTip="Filter line styles…"/>
-        </Border>
-
-        <!-- List -->
-        <Border Background="#2A2A3C" CornerRadius="6" Margin="0,0,0,14">
-            <ListBox x:Name="StyleList" SelectionMode="Single"
-                     Background="Transparent" BorderThickness="0"
-                     Height="260" ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
-        </Border>
-
-        <!-- Info -->
-        <TextBlock x:Name="InfoLabel" Foreground="#A6ADC8" FontSize="11"
-                   Margin="0,0,0,14" TextWrapping="Wrap"
-                   Text="No style selected."/>
-
-        <!-- Buttons -->
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="CancelBtn" Style="{StaticResource CancelBtn}"
-                    Content="Cancel" Margin="0,0,10,0"/>
-            <Button x:Name="OkBtn" Content="Draw X Marks"/>
-        </StackPanel>
-
-    </StackPanel>
-</Window>
+Adding the new curves inside SketchEditScope with the sketch's own SketchPlane
+makes them true sketch symbolic lines. Curves that don't close the boundary loop
+(the two diagonals) become symbolic and never affect the opening geometry.
 """
 
-# Build window
-reader = XmlReader.Create(StringReader(XAML))
-win = System.Windows.Markup.XamlReader.Load(reader)
+import clr
+clr.AddReference('RevitAPI')
+clr.AddReference('RevitAPIUI')
+clr.AddReference('PresentationCore')
+clr.AddReference('PresentationFramework')
+clr.AddReference('WindowsBase')
+clr.AddReference('System.Xaml')
 
-search_box = win.FindName("SearchBox")
-style_list = win.FindName("StyleList")
-ok_btn = win.FindName("OkBtn")
-cancel_btn = win.FindName("CancelBtn")
-info_label = win.FindName("InfoLabel")
+from Autodesk.Revit.DB import (
+    FilteredElementCollector, BuiltInCategory, GraphicsStyleType,
+    Transaction, ElementId, XYZ, Line,
+    ModelCurve, CurveElement, ElementClassFilter,
+    Sketch, SketchEditScope, IFailuresPreprocessor, FailureProcessingResult
+)
+from Autodesk.Revit.UI import TaskDialog
+from Autodesk.Revit.UI.Selection import ISelectionFilter
+from Autodesk.Revit.Exceptions import OperationCanceledException
 
+from System import EventHandler
+from System.Collections.Generic import List
+from System.Windows import Visibility, RoutedEventHandler
+from System.Windows.Controls import RadioButton, TextChangedEventHandler
+from System.Windows.Markup import XamlReader
+from System.Windows.Threading import Dispatcher, DispatcherFrame
 
-# Populate list helper
-def populate_list(filter_text=""):
-    style_list.Items.Clear()
-    for gs in line_style_list:
-        if filter_text.lower() not in gs.Name.lower():
-            continue
-        item = ListBoxItem()
-        item.Content = gs.Name
-        item.Tag = gs
-        style_list.Items.Add(item)
-    if style_list.Items.Count > 0:
-        style_list.SelectedIndex = 0
+uidoc = __revit__.ActiveUIDocument
+doc = uidoc.Document
 
-
-populate_list()
-
-
-# Search filter
-def on_search_changed(sender, e):
-    populate_list(search_box.Text)
+TITLE = "Shaft X-Marks"
 
 
-search_box.TextChanged += on_search_changed
+# --------------------------------------------------------------------------- #
+#  Helpers
+# --------------------------------------------------------------------------- #
+def eid_int(element_id):
+    """ElementId -> int, compatible with Revit 2025+ (.Value) and older (.IntegerValue)."""
+    try:
+        return element_id.Value
+    except AttributeError:
+        return element_id.IntegerValue
 
 
-# Selection change → info label
-def on_selection_changed(sender, e):
-    item = style_list.SelectedItem
-    if item:
-        info_label.Text = u"Selected: {}".format(item.Tag.Name)
-    else:
-        info_label.Text = u"No style selected."
+def get_line_styles():
+    """Return {name: GraphicsStyle} for the 'Lines' category and its subcategories."""
+    styles = {}
+    line_cat = doc.Settings.Categories.get_Item(BuiltInCategory.OST_Lines)
+    if line_cat is not None:
+        gs = line_cat.GetGraphicsStyle(GraphicsStyleType.Projection)
+        if gs is not None:
+            styles[line_cat.Name] = gs
+        for sub in line_cat.SubCategories:
+            g = sub.GetGraphicsStyle(GraphicsStyleType.Projection)
+            if g is not None:
+                styles[sub.Name] = g
+    return styles
 
 
-style_list.SelectionChanged += on_selection_changed
-
-# Result holder
-_result = [None]
-
-
-def on_ok(sender, e):
-    item = style_list.SelectedItem
-    if item is None:
-        info_label.Text = u"Please select a line style first."
-        return
-    _result[0] = item.Tag
-    win.Close()
+class KeepWarnings(IFailuresPreprocessor):
+    """Does not resolve or suppress anything - lets Revit show warnings normally."""
+    def PreprocessFailures(self, failures_accessor):
+        return FailureProcessingResult.Continue
 
 
-def on_cancel(sender, e):
-    win.Close()
-
-
-ok_btn.Click += System.Windows.RoutedEventHandler(on_ok)
-cancel_btn.Click += System.Windows.RoutedEventHandler(on_cancel)
-
-win.ShowDialog()
-
-chosen_style = _result[0]
-if chosen_style is None:
-    raise SystemExit
-
-# ─────────────────────────────────────────────
-# 4. Helper – get sketch plane of shaft
-# ─────────────────────────────────────────────
-from Autodesk.Revit.DB import SketchPlane, Plane
-
-
-def get_shaft_sketch_plane(shaft):
-    """Return the SketchPlane already owned by the shaft, or None."""
-    sp_id = shaft.SketchId if hasattr(shaft, "SketchId") else ElementId.InvalidElementId
-    if sp_id != ElementId.InvalidElementId:
-        return doc.GetElement(sp_id)
+def get_shaft_sketch(shaft):
+    """Return the Sketch element that defines the shaft opening, or None."""
+    try:
+        for did in shaft.GetDependentElements(ElementClassFilter(Sketch)):
+            el = doc.GetElement(did)
+            if isinstance(el, Sketch):
+                return el
+    except Exception:
+        pass
     return None
 
 
-# ─────────────────────────────────────────────
-# 5. Helper – get shaft boundary corner points
-#    Returns ordered list of XYZ from the profile curves
-# ─────────────────────────────────────────────
-def get_shaft_corners(shaft):
-    """
-    Extract corner XYZ points from the shaft's sketch profile.
-    Returns a flat list of unique XYZ in curve order.
-    """
-    sketch_id = ElementId.InvalidElementId
-    # Try to get the sketch element that owns the shaft profile
-    dep_ids = shaft.GetDependentElements(None)
-    sketch = None
-    for eid in dep_ids:
-        el = doc.GetElement(eid)
-        if el and el.GetType().Name == "Sketch":
-            sketch = el
-            break
+def get_sketch_geometry(sketch):
+    """Return (corners, boundary_curves) from the sketch's outer profile loop."""
+    corners = []
+    boundary = []
+    profile = sketch.Profile  # CurveArrArray
+    if profile is not None and profile.Size > 0:
+        outer = None
+        for loop in profile:  # CurveArray per loop
+            if outer is None or loop.Size > outer.Size:
+                outer = loop
+        if outer is not None:
+            for c in outer:
+                boundary.append(c)
+                corners.append(c.GetEndPoint(0))
+    return corners, boundary
 
-    curves = []
-    if sketch is not None:
-        profile = sketch.Profile  # CurveArrArray
-        for curve_arr in profile:
-            for curve in curve_arr:
-                curves.append(curve)
 
-    # Fallback: bounding box corners
-    if not curves:
-        bb = shaft.get_BoundingBox(None)
+def diagonals_for(corners, shaft, z):
+    """Two diagonal lines forming the X (corner 1->3, corner 2->4)."""
+    lines = []
+    if len(corners) == 4:
+        pairs = [(corners[0], corners[2]), (corners[1], corners[3])]
+    else:
+        # Non-rectangular / unusual profile: span the bounding box so an X still appears.
+        bb = shaft.get_BoundingBox(None)  # None = model space (never a view)
         if bb is None:
-            return None
-        mn, mx = bb.Min, bb.Max
-        z = mn.Z
-        return [
-            XYZ(mn.X, mn.Y, z),
-            XYZ(mx.X, mn.Y, z),
-            XYZ(mx.X, mx.Y, z),
-            XYZ(mn.X, mx.Y, z),
-        ]
-
-    # Collect ordered unique points from curves
-    pts = []
-    for c in curves:
-        p = c.GetEndPoint(0)
-        if not pts or pts[-1].DistanceTo(p) > 1e-6:
-            pts.append(p)
-    return pts
+            return lines
+        p1 = XYZ(bb.Min.X, bb.Min.Y, z)
+        p2 = XYZ(bb.Max.X, bb.Min.Y, z)
+        p3 = XYZ(bb.Max.X, bb.Max.Y, z)
+        p4 = XYZ(bb.Min.X, bb.Max.Y, z)
+        pairs = [(p1, p3), (p2, p4)]
+    for a, b in pairs:
+        if a.DistanceTo(b) > 1e-6:
+            lines.append(Line.CreateBound(a, b))
+    return lines
 
 
-# ─────────────────────────────────────────────
-# 6. Helper – delete existing symbolic lines on a shaft
-#    Uses GetDependentElements; deletes ModelLine where
-#    LineStyle.Name == "Lines"  (i.e. drawn by this tool)
-# ─────────────────────────────────────────────
-def delete_existing_symbolic_lines(shaft, t):
-    dep_ids = shaft.GetDependentElements(None)
-    deleted = 0
-    for eid in dep_ids:
-        el = doc.GetElement(eid)
-        if el is None:
-            continue
-        if not isinstance(el, ModelLine):
-            continue
+def get_existing_symbolic_ids(shaft, target_names):
+    """{int: ElementId} of the shaft's dependent symbolic model curves to overwrite."""
+    result = {}
+    try:
+        for did in shaft.GetDependentElements(ElementClassFilter(CurveElement)):
+            el = doc.GetElement(did)
+            if isinstance(el, ModelCurve):
+                ls = el.LineStyle
+                if ls is not None and ls.Name in target_names:
+                    result[eid_int(el.Id)] = el.Id
+    except Exception:
+        pass
+    return result
+
+
+# --------------------------------------------------------------------------- #
+#  Selection
+# --------------------------------------------------------------------------- #
+class ShaftFilter(ISelectionFilter):
+    """Restricts the rectangle pick to Shaft Openings only."""
+    _cat_id = ElementId(BuiltInCategory.OST_ShaftOpening)
+
+    def AllowElement(self, elem):
         try:
-            ls = el.LineStyle
-            if ls is not None and ls.Name == "Lines":
-                doc.Delete(eid)
-                deleted += 1
+            return elem.Category is not None and elem.Category.Id == ShaftFilter._cat_id
+        except Exception:
+            return False
+
+    def AllowReference(self, reference, point):
+        return False
+
+
+# --------------------------------------------------------------------------- #
+#  Line-style picker (WPF, searchable, radio-style single-select)
+# --------------------------------------------------------------------------- #
+XAML = u"""
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Shaft X-Marks" Height="580" Width="440"
+        WindowStartupLocation="CenterScreen" ResizeMode="CanResizeWithGrip"
+        Background="#1E1E2E" Foreground="#CDD6F4" FontFamily="Segoe UI" FontSize="13">
+  <Window.Resources>
+    <Style x:Key="ToggleItem" TargetType="RadioButton">
+      <Setter Property="Margin" Value="0,3,0,0"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RadioButton">
+            <Border x:Name="bd" CornerRadius="6" Padding="12,9" Background="#313244">
+              <TextBlock x:Name="txt" Text="{TemplateBinding Content}"
+                         Foreground="#CDD6F4" TextTrimming="CharacterEllipsis"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="#45475A"/>
+              </Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="#F0A500"/>
+                <Setter TargetName="txt" Property="Foreground" Value="#1E1E2E"/>
+                <Setter TargetName="txt" Property="FontWeight" Value="SemiBold"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="Btn" TargetType="Button">
+      <Setter Property="Height" Value="34"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="bd" CornerRadius="6" Background="#45475A">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="#585B70"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="BtnAccent" TargetType="Button">
+      <Setter Property="Height" Value="34"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Foreground" Value="#1E1E2E"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="bd" CornerRadius="6" Background="#F0A500">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="#F7B733"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </Window.Resources>
+
+  <Grid Margin="16">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <StackPanel Grid.Row="0" Margin="0,0,0,12">
+      <TextBlock Text="Select a Line Style" FontSize="16" FontWeight="SemiBold"/>
+      <TextBlock Text="The boundary and the X-mark will be drawn with this style."
+                 Foreground="#A6ADC8" Margin="0,3,0,0"/>
+    </StackPanel>
+
+    <Border Grid.Row="1" Background="#2A2A3C" CornerRadius="6" Padding="10,4" Margin="0,0,0,10">
+      <TextBox x:Name="SearchBox" BorderThickness="0" Background="Transparent"
+               Foreground="#CDD6F4" CaretBrush="#F0A500"
+               VerticalContentAlignment="Center" Height="26"/>
+    </Border>
+
+    <Border Grid.Row="2" Background="#2A2A3C" CornerRadius="6" Padding="8">
+      <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel x:Name="ListPanel"/>
+      </ScrollViewer>
+    </Border>
+
+    <Grid Grid.Row="3" Margin="0,12,0,0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="10"/>
+        <ColumnDefinition Width="*"/>
+      </Grid.ColumnDefinitions>
+      <Button x:Name="CancelBtn" Grid.Column="0" Content="Cancel" Style="{StaticResource Btn}"/>
+      <Button x:Name="OkBtn" Grid.Column="2" Content="Draw X-Marks" Style="{StaticResource BtnAccent}"/>
+    </Grid>
+  </Grid>
+</Window>
+"""
+
+
+def prompt_line_style(styles):
+    """Show the picker and return the chosen GraphicsStyle, or None if cancelled."""
+    window = XamlReader.Parse(XAML)
+    list_panel = window.FindName("ListPanel")
+    search_box = window.FindName("SearchBox")
+    ok_btn = window.FindName("OkBtn")
+    cancel_btn = window.FindName("CancelBtn")
+    rb_style = window.FindResource("ToggleItem")
+
+    radios = []
+    for name in sorted(styles.keys(), key=lambda s: s.lower()):
+        rb = RadioButton()
+        rb.Content = name
+        rb.GroupName = "lineStyles"
+        rb.Style = rb_style
+        list_panel.Children.Add(rb)
+        radios.append(rb)
+
+    state = {"name": None}
+
+    def on_search(sender, args):
+        q = search_box.Text.strip().lower()
+        for rb in radios:
+            show = (q == "" or q in str(rb.Content).lower())
+            rb.Visibility = Visibility.Visible if show else Visibility.Collapsed
+
+    def on_ok(sender, args):
+        chosen = None
+        for rb in radios:
+            if rb.IsChecked == True:
+                chosen = str(rb.Content)
+                break
+        if chosen is None:
+            TaskDialog.Show(TITLE, "Please select a line style first.")
+            return
+        state["name"] = chosen
+        window.Close()
+
+    def on_cancel(sender, args):
+        state["name"] = None
+        window.Close()
+
+    search_box.TextChanged += TextChangedEventHandler(on_search)
+    ok_btn.Click += RoutedEventHandler(on_ok)
+    cancel_btn.Click += RoutedEventHandler(on_cancel)
+
+    frame = DispatcherFrame()
+
+    def on_closed(sender, args):
+        frame.Continue = False
+
+    window.Closed += EventHandler(on_closed)
+    window.Show()
+    window.Activate()
+    search_box.Focus()
+    Dispatcher.PushFrame(frame)
+
+    if state["name"] is None:
+        return None
+    return styles[state["name"]]
+
+
+# --------------------------------------------------------------------------- #
+#  Per-shaft work
+# --------------------------------------------------------------------------- #
+def draw_shaft(shaft, gstyle, target_names, counters):
+    """Overwrite + redraw one shaft's symbolic X-mark inside its sketch."""
+    sketch = get_shaft_sketch(shaft)
+    if sketch is None:
+        counters["skipped"] += 1
+        return
+
+    corners, boundary = get_sketch_geometry(sketch)
+    if not boundary:
+        counters["skipped"] += 1
+        return
+
+    existing = get_existing_symbolic_ids(shaft, target_names)
+    z = corners[0].Z if corners else 0.0
+
+    scope = SketchEditScope(doc, "Edit shaft sketch")
+    try:
+        scope.Start(sketch.Id)
+
+        t = Transaction(doc, "Draw Shaft X-Mark (symbolic)")
+        t.Start()
+        try:
+            # 1) delete the previous symbolic lines
+            if existing:
+                id_list = List[ElementId]()
+                for e_id in existing.values():
+                    id_list.Add(e_id)
+                doc.Delete(id_list)
+                counters["deleted"] += id_list.Count
+
+            sp = sketch.SketchPlane
+
+            # 2) boundary as symbolic lines
+            for c in boundary:
+                mc = doc.Create.NewModelCurve(c, sp)
+                mc.LineStyle = gstyle
+                counters["drawn"] += 1
+
+            # 3) X-mark diagonals as symbolic lines
+            for ln in diagonals_for(corners, shaft, z):
+                mc = doc.Create.NewModelCurve(ln, sp)
+                mc.LineStyle = gstyle
+                counters["drawn"] += 1
+
+            t.Commit()
+        except Exception:
+            if t.HasStarted() and not t.HasEnded():
+                t.RollBack()
+            raise
+
+        scope.Commit(KeepWarnings())
+    except Exception:
+        try:
+            scope.Cancel()
         except Exception:
             pass
-    return deleted
+        counters["failed"] += 1
 
 
-# ─────────────────────────────────────────────
-# 7. Helper – draw a single model line on shaft's plane
-# ─────────────────────────────────────────────
-from Autodesk.Revit.DB import ModelCurve
+# --------------------------------------------------------------------------- #
+#  Main
+# --------------------------------------------------------------------------- #
+def main():
+    styles = get_line_styles()
+    if not styles:
+        TaskDialog.Show(TITLE, "No line styles were found.")
+        return
 
+    # 1) Rubber-band select the shafts to mark.
+    try:
+        picked = uidoc.Selection.PickElementsByRectangle(
+            ShaftFilter(), "Drag a rectangle across the shaft openings to mark.")
+    except OperationCanceledException:
+        return  # user pressed Esc
 
-def draw_line_on_shaft(start, end, sketch_plane, line_style):
-    """Create a ModelLine between start and end on the given SketchPlane."""
-    line = Line.CreateBound(start, end)
-    mc = doc.Create.NewModelCurve(line, sketch_plane)
-    mc.LineStyle = line_style
-    return mc
+    shafts = [e for e in picked] if picked is not None else []
+    if not shafts:
+        TaskDialog.Show(TITLE, "No shaft openings were inside the selection rectangle.")
+        return
 
+    # 2) Pick the line style.
+    gstyle = prompt_line_style(styles)
+    if gstyle is None:
+        return  # cancelled
 
-# ─────────────────────────────────────────────
-# 8. Main Transaction – Draw on all shafts
-# ─────────────────────────────────────────────
-drawn = 0
-skipped = 0
-errors = []
+    target_names = set(["Lines", gstyle.Name])
 
-t = Transaction(doc, "Shaft X Mark – Draw Symbolic Lines")
-t.Start()
-
-try:
+    # 3) Draw (one SketchEditScope per shaft).
+    counters = {"skipped": 0, "deleted": 0, "drawn": 0, "failed": 0}
     for shaft in shafts:
-        try:
-            # 8a. Locate or create sketch plane
-            dep_ids = shaft.GetDependentElements(None)
-            sp = None
-            for eid in dep_ids:
-                el = doc.GetElement(eid)
-                if el and el.GetType().Name == "Sketch":
-                    # Get the sketch plane from an existing ModelLine if present,
-                    # or build one from the sketch's plane
-                    sk = el
-                    try:
-                        sp = SketchPlane.Create(doc, sk.SketchPlane.GetPlane())
-                    except Exception:
-                        pass
-                    break
+        draw_shaft(shaft, gstyle, target_names, counters)
 
-            # Fallback: build plane from bounding box Z
-            if sp is None:
-                bb = shaft.get_BoundingBox(None)
-                if bb is None:
-                    skipped += 1
-                    continue
-                z = bb.Min.Z
-                plane = Plane.CreateByNormalAndOrigin(XYZ.BasisZ, XYZ(0, 0, z))
-                sp = SketchPlane.Create(doc, plane)
-
-            # 8b. Delete existing symbolic lines
-            delete_existing_symbolic_lines(shaft, t)
-
-            # 8c. Get corner points
-            pts = get_shaft_corners(shaft)
-            if pts is None or len(pts) < 3:
-                skipped += 1
-                continue
-
-            # 8d. Draw boundary (close the loop)
-            n = len(pts)
-            for i in range(n):
-                p0 = pts[i]
-                p1 = pts[(i + 1) % n]
-                # Flatten to sketch plane Z
-                z0 = sp.GetPlane().Origin.Z
-                p0 = XYZ(p0.X, p0.Y, z0)
-                p1 = XYZ(p1.X, p1.Y, z0)
-                if p0.DistanceTo(p1) < 1e-6:
-                    continue
-                draw_line_on_shaft(p0, p1, sp, chosen_style)
-
-            # 8e. Draw X mark: pt[0]→pt[2] and pt[1]→pt[3]
-            z0 = sp.GetPlane().Origin.Z
+    TaskDialog.Show(
+        TITLE,
+        "Done.\n\n"
+        "Shafts selected:         {0}\n"
+        "Skipped (no sketch):     {1}\n"
+        "Failed (see warnings):   {2}\n"
+        "Existing lines deleted:  {3}\n"
+        "New symbolic lines:      {4}\n"
+        "Line style:              {5}".format(
+            len(shafts), counters["skipped"], counters["failed"],
+            counters["deleted"], counters["drawn"], gstyle.Name
+        ),
+    )
 
 
-            def flat(p):
-                return XYZ(p.X, p.Y, z0)
-
-
-            # For non-rectangular shafts use bounding box corners for the X
-            bb = shaft.get_BoundingBox(None)
-            mn = bb.Min
-            mx = bb.Max
-            c0 = XYZ(mn.X, mn.Y, z0)  # bottom-left
-            c1 = XYZ(mx.X, mn.Y, z0)  # bottom-right
-            c2 = XYZ(mx.X, mx.Y, z0)  # top-right
-            c3 = XYZ(mn.X, mx.Y, z0)  # top-left
-
-            # Diagonal 1: c0 → c2  (pt1 → pt3)
-            draw_line_on_shaft(c0, c2, sp, chosen_style)
-            # Diagonal 2: c1 → c3  (pt2 → pt4)
-            draw_line_on_shaft(c1, c3, sp, chosen_style)
-
-            drawn += 1
-
-        except Exception as ex:
-            errors.append(u"{} – {}".format(shaft.Id, str(ex)))
-
-    t.Commit()
-
-except Exception as ex:
-    t.RollBack()
-    TaskDialog.Show("Error", str(ex))
-    raise
-
-# ─────────────────────────────────────────────
-# 9. Summary
-# ─────────────────────────────────────────────
-msg = u"Done.\n\nShafts drawn: {}\nShafts skipped: {}".format(drawn, skipped)
-if errors:
-    msg += u"\n\nErrors ({}):\n{}".format(len(errors), u"\n".join(errors[:10]))
-TaskDialog.Show("Shaft X Mark", msg)
+main()
