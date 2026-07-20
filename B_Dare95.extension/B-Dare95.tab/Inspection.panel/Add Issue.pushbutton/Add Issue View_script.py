@@ -32,7 +32,7 @@ from System.Windows          import (
 )
 from System.Windows.Controls import (
     Border, Grid as WpfGrid, ColumnDefinition, RowDefinition,
-    StackPanel, TextBlock, Image as WpfImage, TextBox, Button
+    StackPanel, WrapPanel, TextBlock, Image as WpfImage, TextBox, Button
 )
 from System.Windows.Media         import SolidColorBrush, Color, Brushes, Stretch as MediaStretch
 from System.Windows.Media.Imaging import BitmapImage, BitmapCacheOption
@@ -229,8 +229,9 @@ def _parse_col_index(cell_ref):
 def _build_xlsx(columns, issues):
     """
     Build xlsx from:
-      columns - [name, ...]                          dynamic field headers
-      issues  - [(ts, values, png_bytes|None), ...]   values aligned to columns
+      columns - [name, ...]                              dynamic field headers
+      issues  - [(ts, values, [png_bytes, ...]), ...]    values aligned to columns;
+                the third item is a list of PNG byte-arrays (0, 1, or many).
     Returns Array[Byte].
     """
     out = MemoryStream()
@@ -249,7 +250,7 @@ def _build_xlsx(columns, issues):
         s.Write(data, 0, data.Length)
         s.Dispose()
 
-    has_img = any(img is not None for _, _, img in issues)
+    has_img = any(bool(pngs) for _, _, pngs in issues)
 
     wt(u'[Content_Types].xml',
        u'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -317,7 +318,7 @@ def _build_xlsx(columns, issues):
         header_cells.append(
             u'<c r="{c}1" t="inlineStr"><is><t>{v}</t></is></c>'.format(c=col, v=_esc(name)))
     header_cells.append(
-        u'<c r="{c}1" t="inlineStr"><is><t>Screenshot</t></is></c>'.format(
+        u'<c r="{c}1" t="inlineStr"><is><t>Screenshots</t></is></c>'.format(
             c=_col_letter(shot_col_idx)))
     rows = [u'<row r="1">' + u''.join(header_cells) + u'</row>']
 
@@ -365,34 +366,42 @@ def _build_xlsx(columns, issues):
         anchors  = []
         img_rels = []
         n        = 1
-        for i, (_, _, png) in enumerate(issues):
-            if png is None:
+        IMG_W    = 300      # px per screenshot
+        IMG_H    = 170
+        GAP      = 14       # px gap between screenshots in the same row
+        for i, (_, _, pngs) in enumerate(issues):
+            if not pngs:
                 continue
             row0 = i + 1
-            cx   = _EMU_PX * 300
-            cy   = _EMU_PX * 170
-            rid  = u'rId{0}'.format(n)
-            wb(u'xl/media/image{0}.png'.format(n), png)
-            img_rels.append(
-                u'<Relationship Id="{rid}"'
-                u' Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"'
-                u' Target="../media/image{n}.png"/>'.format(rid=rid, n=n))
-            anchors.append(
-                u'<xdr:oneCellAnchor>'
-                u'<xdr:from><xdr:col>{sc}</xdr:col><xdr:colOff>0</xdr:colOff>'
-                u'<xdr:row>{r}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>'
-                u'<xdr:ext cx="{cx}" cy="{cy}"/>'
-                u'<xdr:pic><xdr:nvPicPr>'
-                u'<xdr:cNvPr id="{n}" name="Picture {n}"/>'
-                u'<xdr:cNvPicPr/></xdr:nvPicPr>'
-                u'<xdr:blipFill><a:blip r:embed="{rid}"/>'
-                u'<a:stretch><a:fillRect/></a:stretch></xdr:blipFill>'
-                u'<xdr:spPr><a:xfrm><a:off x="0" y="0"/>'
-                u'<a:ext cx="{cx}" cy="{cy}"/></a:xfrm>'
-                u'<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'
-                u'</xdr:spPr></xdr:pic><xdr:clientData/>'
-                u'</xdr:oneCellAnchor>'.format(r=row0, cx=cx, cy=cy, n=n, rid=rid, sc=shot_col_idx))
-            n += 1
+            for k, png in enumerate(pngs):
+                if png is None:
+                    continue
+                cx     = _EMU_PX * IMG_W
+                cy     = _EMU_PX * IMG_H
+                x_off  = _EMU_PX * (k * (IMG_W + GAP))   # slide each shot rightward
+                rid    = u'rId{0}'.format(n)
+                wb(u'xl/media/image{0}.png'.format(n), png)
+                img_rels.append(
+                    u'<Relationship Id="{rid}"'
+                    u' Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"'
+                    u' Target="../media/image{n}.png"/>'.format(rid=rid, n=n))
+                anchors.append(
+                    u'<xdr:oneCellAnchor>'
+                    u'<xdr:from><xdr:col>{sc}</xdr:col><xdr:colOff>{xo}</xdr:colOff>'
+                    u'<xdr:row>{r}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>'
+                    u'<xdr:ext cx="{cx}" cy="{cy}"/>'
+                    u'<xdr:pic><xdr:nvPicPr>'
+                    u'<xdr:cNvPr id="{n}" name="Picture {n}"/>'
+                    u'<xdr:cNvPicPr/></xdr:nvPicPr>'
+                    u'<xdr:blipFill><a:blip r:embed="{rid}"/>'
+                    u'<a:stretch><a:fillRect/></a:stretch></xdr:blipFill>'
+                    u'<xdr:spPr><a:xfrm><a:off x="0" y="0"/>'
+                    u'<a:ext cx="{cx}" cy="{cy}"/></a:xfrm>'
+                    u'<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'
+                    u'</xdr:spPr></xdr:pic><xdr:clientData/>'
+                    u'</xdr:oneCellAnchor>'.format(
+                        r=row0, cx=cx, cy=cy, n=n, rid=rid, sc=shot_col_idx, xo=x_off))
+                n += 1
 
         wt(u'xl/drawings/drawing1.xml',
            u'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -414,7 +423,10 @@ def _read_xlsx(path):
     """
     Read xlsx built by _build_xlsx.
     Returns (columns, issues) where columns is [name, ...] and issues is
-    [(ts, values, png|None), ...] with values aligned to columns.
+    [(ts, values, [png, ...]), ...] with values aligned to columns. The third
+    item is a list of PNG byte-arrays (empty if the row had no screenshots).
+    Files written by older single-screenshot versions read back as a 1-item
+    (or empty) list, so they keep working.
     """
     columns = []
     issues  = []
@@ -458,7 +470,7 @@ def _read_xlsx(path):
             columns = [header.get(ci, u'Field {0}'.format(ci)) for ci in range(1, max_ci)]
         n_cols = len(columns)
 
-        rid_to_rn = {}
+        anchor_seq = []   # [(embed_rid, row_number), ...] in document order
         de = za.GetEntry(u'xl/drawings/drawing1.xml')
         if de is not None:
             dr   = StreamReader(de.Open(), Encoding.UTF8)
@@ -476,7 +488,7 @@ def _read_xlsx(path):
                 if rn_nd and blip:
                     embed = blip.GetAttribute(u'embed', REL_NS)
                     if embed:
-                        rid_to_rn[embed] = int(rn_nd.InnerText) + 1
+                        anchor_seq.append((embed, int(rn_nd.InnerText) + 1))
 
         rid_to_media = {}
         re_ent = za.GetEntry(u'xl/drawings/_rels/drawing1.xml.rels')
@@ -493,8 +505,8 @@ def _read_xlsx(path):
                     u'xl/media/' + rel.GetAttribute(u'Target').split(u'/')[-1])
 
         img_by_rn = {}
-        for rid, rn in rid_to_rn.items():
-            media = rid_to_media.get(rid)
+        for embed, rn in anchor_seq:
+            media = rid_to_media.get(embed)
             if not media:
                 continue
             ie = za.GetEntry(media)
@@ -509,13 +521,13 @@ def _read_xlsx(path):
                     break
                 ms.Write(buf, 0, n)
             ies.Dispose()
-            img_by_rn[rn] = ms.ToArray()
+            img_by_rn.setdefault(rn, []).append(ms.ToArray())
 
         for rn in sorted(rows_raw.keys()):
             vals   = rows_raw[rn]
             ts     = vals.get(0, u'')
             values = [vals.get(1 + ci, u'') for ci in range(n_cols)]
-            issues.append((ts, values, img_by_rn.get(rn)))
+            issues.append((ts, values, img_by_rn.get(rn, [])))
 
     except Exception as ex:
         print(u'[IssueLogger] _read_xlsx error: ' + unicode(ex))
@@ -602,6 +614,41 @@ def _bytes_to_bitmap(png_bytes):
         return None
 
 
+def _make_input_thumb(bmp, delete_handler):
+    """An 80x80 staged-screenshot chip with a small red x delete button,
+    used in the left input panel while composing / editing an issue."""
+    g        = WpfGrid()
+    g.Width  = 80
+    g.Height = 80
+    g.Margin = Thickness(0, 0, 6, 0)
+
+    frame              = Border()
+    frame.Background   = SolidColorBrush(Color.FromRgb(0x18, 0x18, 0x25))
+    frame.CornerRadius = CornerRadius(4)
+    img                = WpfImage()
+    img.Source         = bmp
+    img.Stretch        = MediaStretch.Uniform
+    img.Margin         = Thickness(2)
+    frame.Child        = img
+    g.Children.Add(frame)
+
+    x                     = Button()
+    x.Content             = u'\u00d7'
+    x.ToolTip             = u'Remove this screenshot'
+    x.Width               = 18
+    x.Height              = 18
+    x.Padding             = Thickness(0)
+    x.FontSize            = 11
+    x.HorizontalAlignment = HorizontalAlignment.Right
+    x.VerticalAlignment   = VerticalAlignment.Top
+    x.Margin              = Thickness(0, 2, 2, 0)
+    x.Background          = SolidColorBrush(Color.FromRgb(0x3D, 0x1A, 0x22))
+    x.Foreground          = SolidColorBrush(Color.FromRgb(0xF3, 0x8B, 0xA8))
+    x.Click              += delete_handler
+    g.Children.Add(x)
+    return g
+
+
 # Parsed once; reused per card to avoid repeated XAML parsing.
 _DEL_BTN_XML = (
     u'<Button'
@@ -632,13 +679,13 @@ def _make_card_delete_btn():
     return btn
 
 
-def _make_issue_card(num, ts, columns, values, png_bytes, delete_handler, edit_handler):
+def _make_issue_card(num, ts, columns, values, pngs, delete_handler, edit_handler):
     """
     Build one issue preview card entirely in Python (no extra XAML parsing).
     `columns`/`values` are aligned lists of field names/values.
-    The screenshot thumbnail (if any) is clickable via `edit_handler`,
-    which loads this issue back into the left panel for re-editing.
-    Returns a WPF Border element ready to be added to a StackPanel.
+    `pngs` is a list of PNG byte-arrays; each thumbnail is clickable via
+    `edit_handler`, which loads this issue back into the left panel for
+    re-editing. Returns a WPF Border element ready to be added to a StackPanel.
     """
     # ── outer card border ────────────────────────────────────────
     card             = Border()
@@ -686,22 +733,27 @@ def _make_issue_card(num, ts, columns, values, png_bytes, delete_handler, edit_h
 
     inner.Children.Add(hdr)
 
-    # ── screenshot thumbnail (clickable → re-edit) ────────────────
-    if png_bytes is not None:
-        bmp = _bytes_to_bitmap(png_bytes)
-        if bmp is not None:
+    # ── screenshot thumbnails (each clickable → re-edit) ──────────
+    if pngs:
+        strip        = WrapPanel()
+        strip.Margin = Thickness(0, 0, 0, 6)
+        for png in pngs:
+            bmp = _bytes_to_bitmap(png)
+            if bmp is None:
+                continue
             img_wrap                    = Border()
             img_wrap.Cursor             = Cursors.Hand
-            img_wrap.Margin             = Thickness(0, 0, 0, 6)
+            img_wrap.Margin             = Thickness(0, 0, 6, 6)
             img_wrap.ToolTip            = u'Click to load this issue for editing'
             img                         = WpfImage()
             img.Source                  = bmp
-            img.MaxHeight               = 150
+            img.MaxHeight               = 110
             img.Stretch                 = MediaStretch.Uniform
-            img.HorizontalAlignment     = HorizontalAlignment.Stretch
-            img_wrap.Child               = img
-            img_wrap.MouseLeftButtonUp  += edit_handler
-            inner.Children.Add(img_wrap)
+            img_wrap.Child              = img
+            img_wrap.MouseLeftButtonUp += edit_handler
+            strip.Children.Add(img_wrap)
+        if strip.Children.Count > 0:
+            inner.Children.Add(strip)
 
     # ── field values ────────────────────────────────────────────
     for i, col_name in enumerate(columns):
@@ -1028,37 +1080,34 @@ LOGGER_XAML = u"""<Window
                                TextTrimming="CharacterEllipsis"/>
                 </Border>
 
-                <!-- Thumbnail + editing indicator -->
+                <!-- Screenshots + editing indicator -->
                 <Border Grid.Row="2" Background="#2A2A3C" CornerRadius="6"
                         Padding="10" Margin="0,0,0,10">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="80"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" Background="#181825" CornerRadius="4"
-                                Width="80" Height="80" HorizontalAlignment="Left">
+                    <StackPanel>
+                        <TextBlock x:Name="ThumbCaption"
+                                   Text="Take a screenshot to begin, or click a saved issue to re-edit it."
+                                   Foreground="#A6ADC8" FontSize="11" TextWrapping="Wrap"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,8">
+                            <Button x:Name="SnipBtn" Content="Take Screenshot"
+                                    FontSize="11" Padding="10,5"/>
+                            <Button x:Name="CancelEditBtn" Content="Cancel edit"
+                                    FontSize="10" Padding="8,5" Margin="8,0,0,0"
+                                    Visibility="Collapsed"/>
+                        </StackPanel>
+                        <Border Background="#181825" CornerRadius="4" Padding="6" MinHeight="94">
                             <Grid>
-                                <TextBlock x:Name="ThumbPlaceholder" Text="No image"
-                                           Foreground="#6C7086" FontSize="10"
+                                <TextBlock x:Name="ThumbPlaceholder"
+                                           Text="No screenshots yet &#8212; click &#8220;Take Screenshot&#8221; to add one (you can add several)."
+                                           Foreground="#6C7086" FontSize="11"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"
                                            TextWrapping="Wrap" TextAlignment="Center"/>
-                                <Image x:Name="ThumbImage" Stretch="Uniform" Visibility="Collapsed"/>
+                                <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                              VerticalScrollBarVisibility="Disabled">
+                                    <StackPanel x:Name="ThumbStrip" Orientation="Horizontal"/>
+                                </ScrollViewer>
                             </Grid>
                         </Border>
-                        <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
-                            <TextBlock x:Name="ThumbCaption"
-                                       Text="Take a screenshot to begin, or click a saved issue to re-edit it."
-                                       Foreground="#A6ADC8" FontSize="11" TextWrapping="Wrap"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                <Button x:Name="SnipBtn" Content="Take Screenshot"
-                                        FontSize="11" Padding="10,5"/>
-                                <Button x:Name="CancelEditBtn" Content="Cancel edit"
-                                        FontSize="10" Padding="8,5" Margin="8,0,0,0"
-                                        Visibility="Collapsed"/>
-                            </StackPanel>
-                        </StackPanel>
-                    </Grid>
+                    </StackPanel>
                 </Border>
 
                 <!-- Dynamic fields (Comment + any user-added columns) -->
@@ -1131,7 +1180,7 @@ def run_logger():
         u'columns':       [u'Comment'],   # live view of active tab's columns
         u'issues':        [],    # live view of active tab's issues
         u'field_rows':    [],    # [{'name_box':TextBox, 'value_box':TextBox}, ...]
-        u'pending_png':   None,  # Array[Byte] of the screenshot staged for save
+        u'pending_pngs':  [],    # list of Array[Byte] screenshots staged for save
         u'editing_index': None,  # index into state['issues'] being re-edited, or None
     }
 
@@ -1171,7 +1220,7 @@ def run_logger():
     issues_panel      = window.FindName(u'IssuesPanel')
     fields_panel      = window.FindName(u'FieldsPanel')
     add_field_btn     = window.FindName(u'AddFieldBtn')
-    thumb_image       = window.FindName(u'ThumbImage')
+    thumb_strip       = window.FindName(u'ThumbStrip')
     thumb_placeholder = window.FindName(u'ThumbPlaceholder')
     thumb_caption     = window.FindName(u'ThumbCaption')
     cancel_edit_btn   = window.FindName(u'CancelEditBtn')
@@ -1190,16 +1239,25 @@ def run_logger():
         path_chip.Text = u'{p}   ({n} issue{s})'.format(
             p=state[u'path'], n=n, s=u's' if n != 1 else u'')
 
-    def set_thumbnail(png_bytes):
-        bmp = _bytes_to_bitmap(png_bytes) if png_bytes else None
-        if bmp is not None:
-            thumb_image.Source           = bmp
-            thumb_image.Visibility       = Visibility.Visible
-            thumb_placeholder.Visibility = Visibility.Collapsed
-        else:
-            thumb_image.Source           = None
-            thumb_image.Visibility       = Visibility.Collapsed
-            thumb_placeholder.Visibility = Visibility.Visible
+    def rebuild_thumb_strip():
+        """Repopulate the staged-screenshot strip from state['pending_pngs']."""
+        thumb_strip.Children.Clear()
+        pngs = state[u'pending_pngs']
+        for k, png in enumerate(pngs):
+            bmp = _bytes_to_bitmap(png)
+            if bmp is None:
+                continue
+            chip = _make_input_thumb(bmp, (lambda s, e, idx=k: delete_pending(idx)))
+            thumb_strip.Children.Add(chip)
+        thumb_placeholder.Visibility = (
+            Visibility.Collapsed if pngs else Visibility.Visible)
+
+    def delete_pending(idx):
+        if 0 <= idx < len(state[u'pending_pngs']):
+            state[u'pending_pngs'].pop(idx)
+            rebuild_thumb_strip()
+            n = len(state[u'pending_pngs'])
+            set_status(u'Screenshot removed \u2014 {0} staged.'.format(n))
 
     def sync_column_names():
         """Pull any in-progress renames out of the title chips into state['columns']."""
@@ -1219,11 +1277,11 @@ def run_logger():
 
     def remove_column_everywhere(idx):
         state[u'columns'].pop(idx)
-        for k, (ts, values, png) in enumerate(state[u'issues']):
+        for k, (ts, values, pngs) in enumerate(state[u'issues']):
             if idx < len(values):
                 nv = list(values)
                 nv.pop(idx)
-                state[u'issues'][k] = (ts, nv, png)
+                state[u'issues'][k] = (ts, nv, pngs)
 
     def rebuild_fields_ui():
         fields_panel.Children.Clear()
@@ -1239,7 +1297,7 @@ def run_logger():
                     remove_column_everywhere(i)
                     rebuild_fields_ui()
                     if was_editing is not None:
-                        ts, values, png = state[u'issues'][was_editing]
+                        ts, values, pngs = state[u'issues'][was_editing]
                         load_field_values(values)
                     rebuild_preview()
                     try:
@@ -1260,10 +1318,10 @@ def run_logger():
         issues_panel.Children.Clear()
         n = len(state[u'issues'])
         preview_header.Text = u'Saved Issues  ({0})'.format(n)
-        for i, (ts, values, png) in enumerate(reversed(state[u'issues'])):
+        for i, (ts, values, pngs) in enumerate(reversed(state[u'issues'])):
             real_idx = n - 1 - i
             card = _make_issue_card(
-                real_idx + 1, ts, state[u'columns'], values, png,
+                real_idx + 1, ts, state[u'columns'], values, pngs,
                 lambda s, e, idx=real_idx: on_delete(idx),
                 lambda s, e, idx=real_idx: on_edit(idx)
             )
@@ -1271,8 +1329,8 @@ def run_logger():
 
     def reset_editing_state(msg=None, brush=None):
         state[u'editing_index'] = None
-        state[u'pending_png']   = None
-        set_thumbnail(None)
+        state[u'pending_pngs']  = []
+        rebuild_thumb_strip()
         clear_field_values()
         thumb_caption.Text         = u'Take a screenshot to begin, or click a saved issue to re-edit it.'
         cancel_edit_btn.Visibility = Visibility.Collapsed
@@ -1457,14 +1515,14 @@ def run_logger():
 
     def on_edit(idx):
         sync_column_names()
-        ts, values, png          = state[u'issues'][idx]
+        ts, values, pngs         = state[u'issues'][idx]
         state[u'editing_index']  = idx
-        state[u'pending_png']    = png
-        set_thumbnail(png)
+        state[u'pending_pngs']   = list(pngs)
+        rebuild_thumb_strip()
         load_field_values(values)
         thumb_caption.Text         = (
-            u'Editing Issue #{0} \u2014 take a new screenshot to replace it, '
-            u'then press Update.'.format(idx + 1))
+            u'Editing Issue #{0} \u2014 add more screenshots or remove any with '
+            u'the \u00d7, then press Update.'.format(idx + 1))
         cancel_edit_btn.Visibility = Visibility.Visible
         save_btn.Content           = u'Update Issue #{0}'.format(idx + 1)
         set_status(u'Editing Issue #{0}. Make your changes and press Update.'.format(idx + 1))
@@ -1546,10 +1604,12 @@ def run_logger():
             def restore():
                 window.Show()
                 if found is not None:
-                    state[u'pending_png'] = found
-                    set_thumbnail(found)
-                    set_status(u'Screenshot captured \u2014 fill in the fields and save.',
-                               _BR_SUCCESS)
+                    state[u'pending_pngs'].append(found)
+                    rebuild_thumb_strip()
+                    n = len(state[u'pending_pngs'])
+                    set_status(
+                        u'Screenshot captured ({0} staged) \u2014 add more, or fill in '
+                        u'the fields and save.'.format(n), _BR_SUCCESS)
                 else:
                     set_status(u'No screenshot captured \u2014 the snip was cancelled or timed out.',
                                _BR_WARN)
@@ -1571,7 +1631,7 @@ def run_logger():
         state[u'columns'].append(u'Field {0}'.format(len(state[u'columns']) + 1))
         rebuild_fields_ui()
         if state[u'editing_index'] is not None:
-            ts, values, png = state[u'issues'][state[u'editing_index']]
+            ts, values, pngs = state[u'issues'][state[u'editing_index']]
             load_field_values(values)
         try:
             last = state[u'field_rows'][-1][u'name_box']
@@ -1592,19 +1652,19 @@ def run_logger():
         if not any(v for v in values):
             set_status(u'Please fill in at least one field before saving.', _BR_WARN)
             return
-        png = state[u'pending_png']
-        if png is None:
-            set_status(u'No screenshot captured \u2014 take one first.', _BR_WARN)
+        pngs = list(state[u'pending_pngs'])
+        if not pngs:
+            set_status(u'No screenshot captured \u2014 take at least one first.', _BR_WARN)
             return
 
         editing   = state[u'editing_index']
         prev_item = state[u'issues'][editing] if editing is not None else None
         if editing is not None:
             ts = prev_item[0]
-            state[u'issues'][editing] = (ts, values, png)
+            state[u'issues'][editing] = (ts, values, pngs)
         else:
             ts = DateTime.Now.ToString(u'yyyy-MM-dd HH:mm:ss')
-            state[u'issues'].append((ts, values, png))
+            state[u'issues'].append((ts, values, pngs))
 
         try:
             File.WriteAllBytes(state[u'path'], _build_xlsx(state[u'columns'], state[u'issues']))

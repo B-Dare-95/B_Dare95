@@ -344,63 +344,127 @@ def prompt_line_style(styles):
 # --------------------------------------------------------------------------- #
 #  Per-shaft work
 # --------------------------------------------------------------------------- #
+def _log(counters, shaft, msg):
+    counters["errors"].append("Shaft {0}: {1}".format(eid_int(shaft.Id), msg))
+
+
 def draw_shaft(shaft, gstyle, target_names, counters):
-    """Overwrite + redraw one shaft's symbolic X-mark inside its sketch."""
-    sketch = get_shaft_sketch(shaft)
+    """Overwrite + redraw one shaft's symbolic X-mark.
+
+    Deletion of the old marks happens OUTSIDE the sketch edit (they are
+    independent elements; deleting them inside a SketchEditScope raises
+    "EditModeMgr element modifiable checker"). The new marks are then created
+    INSIDE the scope so they become true sketch symbolic lines. Any old mark
+    that is itself sketch-owned survives Phase A and is removed in Phase B.
+    """
+    # --- locate the sketch (scan all dependents; no class filter) ---
+    sketch = None
+    try:
+        for did in shaft.GetDependentElements(None):
+            el = doc.GetElement(did)
+            if isinstance(el, Sketch):
+                sketch = el
+                break
+    except Exception as ex:
+        counters["failed"] += 1
+        _log(counters, shaft, "dependent scan failed: {0}".format(ex))
+        return
+
     if sketch is None:
         counters["skipped"] += 1
+        _log(counters, shaft, "no Sketch found among dependents")
         return
 
     corners, boundary = get_sketch_geometry(sketch)
     if not boundary:
         counters["skipped"] += 1
+        _log(counters, shaft, "sketch profile has no curves")
         return
 
     existing = get_existing_symbolic_ids(shaft, target_names)
     z = corners[0].Z if corners else 0.0
 
+    # --- Phase A: delete old marks OUTSIDE the sketch edit ---
+    survivors = {}
+    if existing:
+        ta = Transaction(doc, "Clear old shaft marks")
+        ta.Start()
+        try:
+            for k, e_id in existing.items():
+                try:
+                    doc.Delete(e_id)
+                    counters["deleted"] += 1
+                except Exception:
+                    survivors[k] = e_id  # sketch-owned -> handle in Phase B
+            ta.Commit()
+        except Exception as ex:
+            if ta.HasStarted() and not ta.HasEnded():
+                ta.RollBack()
+            counters["failed"] += 1
+            _log(counters, shaft, "clear step failed: {0}".format(ex))
+            return
+
+    # --- Phase B: draw new marks INSIDE the sketch edit ---
     scope = SketchEditScope(doc, "Edit shaft sketch")
     try:
         scope.Start(sketch.Id)
-
-        t = Transaction(doc, "Draw Shaft X-Mark (symbolic)")
-        t.Start()
-        try:
-            # 1) delete the previous symbolic lines
-            if existing:
-                id_list = List[ElementId]()
-                for e_id in existing.values():
-                    id_list.Add(e_id)
-                doc.Delete(id_list)
-                counters["deleted"] += id_list.Count
-
-            sp = sketch.SketchPlane
-
-            # 2) boundary as symbolic lines
-            for c in boundary:
-                mc = doc.Create.NewModelCurve(c, sp)
-                mc.LineStyle = gstyle
-                counters["drawn"] += 1
-
-            # 3) X-mark diagonals as symbolic lines
-            for ln in diagonals_for(corners, shaft, z):
-                mc = doc.Create.NewModelCurve(ln, sp)
-                mc.LineStyle = gstyle
-                counters["drawn"] += 1
-
-            t.Commit()
-        except Exception:
-            if t.HasStarted() and not t.HasEnded():
-                t.RollBack()
-            raise
-
-        scope.Commit(KeepWarnings())
-    except Exception:
+    except Exception as ex:
+        counters["failed"] += 1
+        _log(counters, shaft, "SketchEditScope.Start failed: {0}".format(ex))
         try:
             scope.Cancel()
         except Exception:
             pass
+        return
+
+    t = Transaction(doc, "Draw Shaft X-Mark (symbolic)")
+    t.Start()
+    try:
+        # remove any sketch-owned marks that survived Phase A
+        if survivors:
+            id_list = List[ElementId]()
+            for e_id in survivors.values():
+                id_list.Add(e_id)
+            try:
+                doc.Delete(id_list)
+                counters["deleted"] += id_list.Count
+            except Exception:
+                pass
+
+        sp = sketch.SketchPlane
+
+        for c in boundary:
+            mc = doc.Create.NewModelCurve(c, sp)
+            mc.LineStyle = gstyle
+            counters["drawn"] += 1
+
+        for ln in diagonals_for(corners, shaft, z):
+            mc = doc.Create.NewModelCurve(ln, sp)
+            mc.LineStyle = gstyle
+            counters["drawn"] += 1
+
+        t.Commit()
+    except Exception as ex:
+        if t.HasStarted() and not t.HasEnded():
+            t.RollBack()
         counters["failed"] += 1
+        _log(counters, shaft, "draw failed: {0}".format(ex))
+        try:
+            scope.Cancel()
+        except Exception:
+            pass
+        return
+
+    # --- finalize the sketch edit ---
+    try:
+        scope.Commit(KeepWarnings())
+    except Exception as ex:
+        counters["failed"] += 1
+        _log(counters, shaft, "SketchEditScope.Commit failed: {0}".format(ex))
+        try:
+            scope.Cancel()
+        except Exception:
+            pass
 
 
 # --------------------------------------------------------------------------- #
@@ -432,21 +496,25 @@ def main():
     target_names = set(["Lines", gstyle.Name])
 
     # 3) Draw (one SketchEditScope per shaft).
-    counters = {"skipped": 0, "deleted": 0, "drawn": 0, "failed": 0}
+    counters = {"skipped": 0, "deleted": 0, "drawn": 0, "failed": 0, "errors": []}
     for shaft in shafts:
         draw_shaft(shaft, gstyle, target_names, counters)
+
+    detail = ""
+    if counters["errors"]:
+        detail = "\n\nDetails (first 5):\n- " + "\n- ".join(counters["errors"][:5])
 
     TaskDialog.Show(
         TITLE,
         "Done.\n\n"
         "Shafts selected:         {0}\n"
         "Skipped (no sketch):     {1}\n"
-        "Failed (see warnings):   {2}\n"
+        "Failed (see below):      {2}\n"
         "Existing lines deleted:  {3}\n"
         "New symbolic lines:      {4}\n"
-        "Line style:              {5}".format(
+        "Line style:              {5}{6}".format(
             len(shafts), counters["skipped"], counters["failed"],
-            counters["deleted"], counters["drawn"], gstyle.Name
+            counters["deleted"], counters["drawn"], gstyle.Name, detail
         ),
     )
 
