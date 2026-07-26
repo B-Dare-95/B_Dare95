@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 __title__   = "Wall Peeler"
-__doc__     = """Version = 4.0
-Date    = 2025
+__doc__     = """Version = 5.0
+Date    = 2026
 ________________________________________________________________
 Description:
 - Select a wall
@@ -10,6 +10,16 @@ Description:
 - Phase 2 : pick which resulting wall hosts doors / openings
 - Phase 3 : rename each resulting wall type before creation
 - Walls land at geometrically correct positions
+________________________________________________________________
+v5.0 fixes:
+  * Removed the double flip-correction. ShellLayerType.Exterior is already
+    flip-aware, so mirroring layer offsets for flipped walls was wrong.
+  * Group centre is now the MIDPOINT OF THE GROUP SPAN, not the mean of the
+    member layer centres. Those differ for mixed-width linked groups.
+  * New wall orientation is verified against the original after creation.
+  * Wall types reused by name are checked for matching thickness.
+  * Exterior face picked by largest area instead of refs[0].
+  * Walls with unreadable geometry are reported instead of silently skipped.
 ________________________________________________________________
 Authors: Erik Frits / Mohamed Bedair / Joven Mark Gumana"""
 
@@ -56,6 +66,10 @@ app   = __revit__.Application
 # ╠═╣║╣ ║  ╠═╝║╣ ╠╦╝╚═╗
 # ╩ ╩╚═╝╩═╝╩  ╚═╝╩╚═╚═╝
 #====================================================================================================
+TOL = 1e-9          # internal-unit tolerance for width comparisons
+DEBUG = False       # True -> print per-group span report to the pyRevit console
+
+
 def get_id_value(eid):
     try:
         return eid.Value
@@ -1098,7 +1112,7 @@ class LayerPickerWindow(Window):
             else:
                 groups  = [g for g in self._get_groups() if g['type'] == 'split']
                 linked  = [g for g in groups if len(g['indices']) > 1]
-                msg = "{} layer{} \u2192 {} output wall{}.".format(
+                msg = u"{} layer{} \u2192 {} output wall{}.".format(
                     split_count, 's' if split_count != 1 else '',
                     len(groups),  's' if len(groups)  != 1 else '')
                 if linked:
@@ -1117,7 +1131,7 @@ class LayerPickerWindow(Window):
             self.sec_lbl.Visibility      = Visibility.Visible
             self.next_btn.Visibility     = Visibility.Visible
             self.confirm_btn.Visibility  = Visibility.Collapsed
-            self.next_btn.Content        = "Next  \u2192"
+            self.next_btn.Content        = u"Next  \u2192"
             self.next_btn.IsEnabled      = self.host_key is not None
 
             self.info_border.Background = brush(Color.FromRgb(0x0A, 0x1E, 0x18))
@@ -1246,10 +1260,30 @@ def get_wall_type_by_name(name):
 
 
 def make_wall_type_for_group(base_wall_type, group_layers, type_name):
-    """Get existing WallType by name or create a new one."""
+    """
+    Get an existing WallType by name, or create a new one.
+
+    A name match alone is NOT enough. If a type with this name already exists
+    but its thickness does not match the group, reusing it would give the new
+    wall a different width than the centreline maths assumed - the wall would
+    land in the wrong place. In that case a disambiguated name is used instead.
+    """
+    expected = sum(ld.width for ld in group_layers)
+
     existing = get_wall_type_by_name(type_name)
     if existing:
-        return existing
+        cs = existing.GetCompoundStructure()
+        if cs is not None and abs(cs.GetWidth() - expected) < TOL:
+            return existing
+        # Name collision with a different thickness - disambiguate.
+        mm = UnitUtils.ConvertFromInternalUnits(expected, UnitTypeId.Millimeters)
+        type_name = '{} [{:.0f}mm]'.format(type_name, mm)
+        again = get_wall_type_by_name(type_name)
+        if again:
+            cs2 = again.GetCompoundStructure()
+            if cs2 is not None and abs(cs2.GetWidth() - expected) < TOL:
+                return again
+
     new_type = base_wall_type.Duplicate(type_name)
     compound = CompoundStructure.CreateSimpleCompoundStructure(
         [ld.layer for ld in group_layers])
@@ -1278,79 +1312,74 @@ def duplicate_wall(wall, keep_hosted):
     return new_w
 
 
-def get_interior_direction(wall):
+def get_wall_exterior_frame(wall):
     """
-    Return a unit XYZ vector pointing from the wall's physical exterior face
-    toward its interior, derived from actual wall geometry via HostObjectUtils.
-    No CreateOffset, no Flipped arithmetic — pure geometry.
+    Return (origin, normal, interior_dir) describing the wall's PHYSICAL
+    exterior face, or None if the geometry cannot be read.
+
+    ShellLayerType.Exterior is defined as the outward surface of compound
+    layer 0. Revit tracks that face through flips, so this frame is already
+    flip-aware - never apply a second Wall.Flipped correction on top of it.
+
+    The largest planar face is chosen rather than refs[0]: walls carrying
+    sweeps, reveals or an edited profile return several references, and a
+    sweep face sits proud of the true layer-0 plane.
     """
     try:
-        refs = HostObjectUtils.GetSideFaces(wall, ShellLayerType.Exterior)
-        face = wall.GetGeometryObjectFromReference(refs[0])
-        # FaceNormal points OUTWARD from the wall body; negate = toward interior
-        return face.FaceNormal.Negate()
-    except:
-        # Fallback for curved walls or API failure: derive from test offset + Flipped
-        crv     = wall.Location.Curve
-        pt_orig = crv.GetEndPoint(0)
-        pt_off  = crv.CreateOffset(1.0, XYZ.BasisZ).GetEndPoint(0)
-        raw_dir = (pt_off - pt_orig).Normalize()
-        return raw_dir if not wall.Flipped else raw_dir.Negate()
+        refs  = HostObjectUtils.GetSideFaces(wall, ShellLayerType.Exterior)
+        faces = []
+        for r in refs:
+            f = wall.GetGeometryObjectFromReference(r)
+            if f is not None and hasattr(f, 'FaceNormal'):
+                faces.append(f)
+        if not faces:
+            return None
+        face = max(faces, key=lambda f: f.Area)
+        return (face.Origin, face.FaceNormal, face.FaceNormal.Negate())
+    except Exception:
+        return None
 
 
 def compute_group_curve_absolute(original_curve, interior_dir,
-                                  ext_face_origin, ext_face_normal,
-                                  wall_flipped,
-                                  group_layers, all_real_layers):
+                                 ext_face_origin, ext_face_normal,
+                                 group_layers, all_real_layers):
     """
-    Compute the ABSOLUTE centerline curve for a new wall group.
+    Compute the ABSOLUTE centreline curve for a new wall group.
 
-    No offsets from the original location curve are used at all.
-    Everything is anchored to the physical exterior face of the original wall.
+    Nothing is offset from the original location curve. Everything is
+    anchored to the physical exterior face of the original wall.
 
-    Strategy (layer-average):
-      For each layer in the group, compute its centreline distance from the
-      PHYSICAL exterior face.  The new wall's curve sits at the AVERAGE of
-      those distances, translated from the exterior face along interior_dir.
+    Group centre
+    ------------
+    The centre is the MIDPOINT OF THE GROUP'S SPAN:
 
-    Physical layer ordering:
-      Flipped = False  →  compound layer 0 = physical exterior  (normal order)
-      Flipped = True   →  compound layer 0 = physical interior  (reversed order)
+        start  = sum of widths of all real layers before the group
+        centre = start + group_width / 2
 
-    Curve construction:
+    NOT the mean of the member layers' individual centres. The two are only
+    equal when every layer in the group has the same width, so single-layer
+    groups always agreed and mixed-width linked groups drifted. That was the
+    v4 bug that displaced linked groups even on unflipped walls.
+
+    Flip handling
+    -------------
+    None needed. ext_face_* comes from ShellLayerType.Exterior, which already
+    follows the wall through flips. v4 mirrored the offsets for flipped walls
+    on top of that, producing a mirrored layer stack.
+
+    Curve construction
+    ------------------
       1. Project the original curve's endpoints onto the exterior face plane.
-         This removes any dependency on where the original location line sits.
-      2. Translate those projected points by  avg_center × interior_dir.
-      3. Build an absolute Line.CreateBound(pt0, pt1).
+      2. Translate them inward by group_centre along interior_dir.
+      3. Build an absolute Line.CreateBound(pt0, pt1). Direction is preserved
+         so the new wall keeps the original's orientation convention.
     """
-    total_width = sum(ld.width for ld in all_real_layers)
-    first_idx   = all_real_layers.index(group_layers[0])
+    first_idx    = all_real_layers.index(group_layers[0])
+    start_offset = sum(ld.width for ld in all_real_layers[:first_idx])
+    group_width  = sum(ld.width for ld in group_layers)
+    group_center = start_offset + group_width / 2.0
 
-    # ── Layer centre positions from the PHYSICAL exterior face ────────────
-    centers = []
-    if not wall_flipped:
-        # Layer 0 is physical exterior — count inward
-        running = sum(ld.width for ld in all_real_layers[:first_idx])
-        for ld in group_layers:
-            centers.append(running + ld.width / 2.0)
-            running += ld.width
-    else:
-        # Layer 0 is physical INTERIOR — compound structure is reversed in space.
-        # Distance of compound layer k from physical exterior:
-        #   centre_from_phys_ext = total_width − (offset_from_layer0_face + width/2)
-        running_from_layer0 = sum(ld.width for ld in all_real_layers[:first_idx])
-        for ld in group_layers:
-            centre_from_layer0 = running_from_layer0 + ld.width / 2.0
-            centers.append(total_width - centre_from_layer0)
-            running_from_layer0 += ld.width
-
-    avg_center = sum(centers) / float(len(centers))
-
-    # ── Project original curve endpoints onto the exterior face plane ─────
-    # Plane:  (pt − ext_face_origin) · ext_face_normal = 0
-    # Projection of pt along ext_face_normal direction:
-    #   d       = (pt − origin) · normal          (signed distance from plane)
-    #   pt_proj = pt − d × normal
+    # Plane: (pt - ext_face_origin) . ext_face_normal = 0
     def proj(pt):
         d = (pt - ext_face_origin).DotProduct(ext_face_normal)
         return pt - ext_face_normal.Multiply(d)
@@ -1358,12 +1387,73 @@ def compute_group_curve_absolute(original_curve, interior_dir,
     pt0_ext = proj(original_curve.GetEndPoint(0))
     pt1_ext = proj(original_curve.GetEndPoint(1))
 
-    # ── Translate from exterior face toward interior by avg_center ────────
-    v       = interior_dir.Multiply(avg_center)
+    v       = interior_dir.Multiply(group_center)
     new_pt0 = XYZ(pt0_ext.X + v.X, pt0_ext.Y + v.Y, pt0_ext.Z + v.Z)
     new_pt1 = XYZ(pt1_ext.X + v.X, pt1_ext.Y + v.Y, pt1_ext.Z + v.Z)
 
     return Line.CreateBound(new_pt0, new_pt1)
+
+
+def align_wall_orientation(new_wall, target_ext_normal):
+    """
+    Safety net for flipped walls.
+
+    The new wall is a copy of the original, so it should inherit its flip
+    state - but assigning a new WallType and a new Location.Curve can reset
+    it. If the exterior side ends up facing the wrong way, the compound
+    layers stack in reverse.
+
+    With the location line set to Centerline, Wall.Flip() reverses the layer
+    order about the centreline without moving the wall body, so this is safe
+    to apply. Call doc.Regenerate() before this so Orientation is current.
+
+    Returns True if a flip was applied.
+    """
+    try:
+        if new_wall.Orientation.DotProduct(target_ext_normal) < 0:
+            new_wall.Flip()
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def validate_groups(groups, real_layers):
+    """
+    Every real layer belongs to exactly one contiguous group, so the group
+    spans must tile the wall thickness edge to edge. Returns (ok, report).
+    """
+    lines   = []
+    running = 0.0
+    for group in groups:
+        g_lds = [next((ld for ld in real_layers if ld.index == i), None)
+                 for i in group['indices']]
+        g_lds = [ld for ld in g_lds if ld is not None]
+        g_w   = sum(ld.width for ld in g_lds)
+        lines.append('  {:<10} {:>8.2f} -> {:>8.2f} cm   centre {:>8.2f} cm'.format(
+            ','.join(str(i) for i in group['indices']),
+            UnitUtils.ConvertFromInternalUnits(running, UnitTypeId.Centimeters),
+            UnitUtils.ConvertFromInternalUnits(running + g_w, UnitTypeId.Centimeters),
+            UnitUtils.ConvertFromInternalUnits(running + g_w / 2.0,
+                                               UnitTypeId.Centimeters)))
+        running += g_w
+
+    total = sum(ld.width for ld in real_layers)
+    ok    = abs(running - total) < TOL
+    if not ok:
+        lines.append('  MISMATCH: groups sum to {:.4f}, wall is {:.4f}'.format(
+            running, total))
+    return ok, '\n'.join(lines)
+
+
+def default_name_for_key(key, group_lds):
+    """Fallback type name when the phase-3 textbox was left empty."""
+    parts = []
+    for ld in group_lds:
+        cm = '{:.1f}'.format(ld.width_cm).rstrip('0').rstrip('.')
+        parts.append('{} ({}cm)'.format(ld.label, cm))
+    name = ' - '.join(parts) or ('Wall Peeler ' + key)
+    return name[:100]
 
 
 def join_walls(wall_list):
@@ -1428,55 +1518,111 @@ if apply_to_all:
 else:
     target_walls = [sel_wall]
 
+# ── Sanity-check the grouping before touching the model ───────────────────
+ok, report = validate_groups(groups, real_layers)
+if DEBUG:
+    print('Group layout (measured from the physical exterior face):')
+    print(report)
+if not ok:
+    forms.alert("Group widths do not add up to the wall thickness.\n\n"
+                + report + "\n\nAborted - nothing was changed.",
+                exitscript=True)
+
 # ── Cache geometry for every target wall BEFORE the transaction ───────────
 # Geometry queries (face normals, curves) must happen outside the transaction.
 wall_geom_cache = {}
+skipped_ids     = []
+
 for w in target_walls:
-    try:
-        i_dir  = get_interior_direction(w)
-        refs   = HostObjectUtils.GetSideFaces(w, ShellLayerType.Exterior)
-        face   = w.GetGeometryObjectFromReference(refs[0])
-        wall_geom_cache[get_id_value(w.Id)] = {
-            'curve'          : w.Location.Curve,
-            'flipped'        : w.Flipped,
-            'interior_dir'   : i_dir,
-            'ext_face_origin': face.Origin,
-            'ext_face_normal': face.FaceNormal,
-        }
-    except:
-        pass   # wall will be skipped in the transaction loop
+    frame = get_wall_exterior_frame(w)
+    loc   = w.Location
+    if frame is None or not isinstance(loc, LocationCurve):
+        skipped_ids.append(get_id_value(w.Id))
+        continue
+
+    origin, normal, i_dir = frame
+    crv = loc.Curve
+
+    # This tool builds straight Lines only - arcs and splines cannot be
+    # reconstructed by Line.CreateBound and would be silently straightened.
+    if not isinstance(crv, Line):
+        skipped_ids.append(get_id_value(w.Id))
+        continue
+
+    wall_geom_cache[get_id_value(w.Id)] = {
+        'curve'          : crv,
+        'flipped'        : w.Flipped,      # kept for reference only
+        'interior_dir'   : i_dir,
+        'ext_face_origin': origin,
+        'ext_face_normal': normal,
+    }
+
+if skipped_ids:
+    forms.alert("{} wall(s) will be skipped - curved, or the exterior face "
+                "could not be read.\n\nIDs: {}".format(
+                    len(skipped_ids),
+                    ', '.join(str(i) for i in skipped_ids[:25])
+                    + (' ...' if len(skipped_ids) > 25 else '')))
+
+if not wall_geom_cache:
+    forms.alert("No usable walls. Nothing was changed.", exitscript=True)
 
 # ── Execute ───────────────────────────────────────────────────────────────
 t = Transaction(doc, "Wall Peeler — Split Layers")
 t.Start()
 
-for w in target_walls:
-    geom = wall_geom_cache.get(get_id_value(w.Id))
-    if not geom:
-        continue                          # geometry read failed earlier — skip
+created_total = 0
+flipped_fixes = 0
 
-    new_walls = []
-    for group in groups:
-        group_lds = [next(ld for ld in real_layers if ld.index == i)
-                     for i in group['indices']]
-        is_host   = (host_key == ','.join(str(i) for i in group['indices']))
-        key       = ','.join(str(i) for i in group['indices'])
-        type_name = name_map.get(key, '')
+try:
+    for w in target_walls:
+        geom = wall_geom_cache.get(get_id_value(w.Id))
+        if not geom:
+            continue                          # unreadable or curved — already reported
 
-        new_type = make_wall_type_for_group(base_type, group_lds, type_name)
-        new_crv  = compute_group_curve_absolute(
-            geom['curve'],           geom['interior_dir'],
-            geom['ext_face_origin'], geom['ext_face_normal'],
-            geom['flipped'],         group_lds, real_layers)
+        new_walls = []
+        for group in groups:
+            key       = ','.join(str(i) for i in group['indices'])
+            group_lds = [next(ld for ld in real_layers if ld.index == i)
+                         for i in group['indices']]
+            is_host   = (host_key == key)
+            type_name = name_map.get(key, '') or default_name_for_key(key, group_lds)
 
-        new_wall = duplicate_wall(w, is_host)
-        new_wall.get_Parameter(BuiltInParameter.WALL_KEY_REF_PARAM).Set(
-            int(WallLocationLine.WallCenterline))
-        new_wall.WallType       = new_type
-        new_wall.Location.Curve = new_crv
-        new_walls.append(new_wall)
+            new_type = make_wall_type_for_group(base_type, group_lds, type_name)
+            new_crv  = compute_group_curve_absolute(
+                geom['curve'],           geom['interior_dir'],
+                geom['ext_face_origin'], geom['ext_face_normal'],
+                group_lds, real_layers)
 
-    join_walls(new_walls)
-    doc.Delete(w.Id)
+            new_wall = duplicate_wall(w, is_host)
 
-t.Commit()
+            # Centerline first, so the later type/curve changes stay symmetric
+            # about the curve and Flip() does not translate the wall body.
+            new_wall.get_Parameter(BuiltInParameter.WALL_KEY_REF_PARAM).Set(
+                int(WallLocationLine.WallCenterline))
+            new_wall.WallType       = new_type
+            new_wall.Location.Curve = new_crv
+            new_walls.append(new_wall)
+
+        # Orientation must be current before it can be compared.
+        doc.Regenerate()
+        for nw in new_walls:
+            if align_wall_orientation(nw, geom['ext_face_normal']):
+                flipped_fixes += 1
+
+        join_walls(new_walls)
+        doc.Delete(w.Id)
+        created_total += len(new_walls)
+
+    t.Commit()
+
+except Exception:
+    if t.HasStarted() and not t.HasEnded():
+        t.RollBack()
+    raise
+
+msg = "Created {} wall(s) from {} original wall(s).".format(
+    created_total, len(wall_geom_cache))
+if DEBUG and flipped_fixes:
+    msg += "\nRe-aligned orientation on {} wall(s).".format(flipped_fixes)
+forms.alert(msg)
