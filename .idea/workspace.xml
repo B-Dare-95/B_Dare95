@@ -6,9 +6,7 @@
   <component name="ChangeListManager">
     <list default="true" id="09d0a4df-0748-4405-a48e-7586ee4f5c90" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/Add Issue.pushbutton/Add Issue View_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/Add Issue.pushbutton/Add Issue View_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/Add Issue.pushbutton/issue_logger.cfg" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/Add Issue.pushbutton/issue_logger.cfg" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/Test.tab/Test.panel/Test C.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/Test.tab/Test.panel/Test C.pushbutton/script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/hooks/command-before-exec[ID_FILE_IMPORT].py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/hooks/doc-syncing.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
