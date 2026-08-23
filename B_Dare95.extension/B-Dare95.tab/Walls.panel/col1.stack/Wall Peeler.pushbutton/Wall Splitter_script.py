@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 __title__   = "Wall Peeler"
-__doc__     = """Version = 5.0
+__doc__     = """Version = 6.0
 Date    = 2026
 ________________________________________________________________
 Description:
@@ -11,16 +11,6 @@ Description:
 - Phase 3 : rename each resulting wall type before creation
 - Walls land at geometrically correct positions
 ________________________________________________________________
-v5.0 fixes:
-  * Removed the double flip-correction. ShellLayerType.Exterior is already
-    flip-aware, so mirroring layer offsets for flipped walls was wrong.
-  * Group centre is now the MIDPOINT OF THE GROUP SPAN, not the mean of the
-    member layer centres. Those differ for mixed-width linked groups.
-  * New wall orientation is verified against the original after creation.
-  * Wall types reused by name are checked for matching thickness.
-  * Exterior face picked by largest area instead of refs[0].
-  * Walls with unreadable geometry are reported instead of silently skipped.
-________________________________________________________________
 Authors: Erik Frits / Mohamed Bedair / Joven Mark Gumana"""
 
 # ╦╔╦╗╔═╗╔═╗╦═╗╔╦╗╔═╗
@@ -28,6 +18,7 @@ Authors: Erik Frits / Mohamed Bedair / Joven Mark Gumana"""
 # ╩╩ ╩╩  ╚═╝╩╚═ ╩ ╚═╝
 #====================================================================================================
 from Autodesk.Revit.DB import *
+from Autodesk.Revit.DB.Structure import StructuralType
 from Autodesk.Revit.UI.Selection import *
 from pyrevit import forms
 
@@ -66,8 +57,10 @@ app   = __revit__.Application
 # ╠═╣║╣ ║  ╠═╝║╣ ╠╦╝╚═╗
 # ╩ ╩╚═╝╩═╝╩  ╚═╝╩╚═╚═╝
 #====================================================================================================
-TOL = 1e-9          # internal-unit tolerance for width comparisons
-DEBUG = False       # True -> print per-group span report to the pyRevit console
+TOL       = 1e-9    # internal-unit tolerance for width comparisons
+POS_TOL   = 0.001   # ft (~0.3 mm) - "is this element where it should be?"
+MATCH_TOL = 0.0033  # ft (~1 mm)   - pairing a copied insert with its original
+DEBUG     = False   # True -> print per-group span report to the pyRevit console
 
 
 def get_id_value(eid):
@@ -1095,8 +1088,8 @@ class LayerPickerWindow(Window):
             self.phase_badge_text.Text       = "Phase 1 — select layers to split"
             self.phase_badge_text.Foreground = brush(C_SPLIT_BORDER)
             self.instr_lbl.Text = (
-                "Click layers to mark them for splitting. "
-                u"When two adjacent split layers appear, use the \U0001F517 connector to group them into one wall."
+                "Click layers to mark them for splitting. Make sure to select all layers \neven the layers you don't intend to split"
+                u"\nWhen two adjacent split layers appear, use the \U0001F517 connector to group them into one wall."
             )
             self.legend_panel.Visibility = Visibility.Visible
             self.sec_lbl.Visibility      = Visibility.Visible
@@ -1291,25 +1284,497 @@ def make_wall_type_for_group(base_wall_type, group_layers, type_name):
     return new_type
 
 
-def get_hosted_elements(wall):
-    result = []
-    for eid in wall.GetDependentElements(None):
-        el = doc.GetElement(eid)
-        if el is not None and el.Category is not None:
-            result.append(el)
-    return result
+# ║║║║╚═╗║╣ ╠╦╝ ║ ╚═╗
+# ╩╝╚╝╚═╝╚═╝╩╚═ ╩ ╚═╝  HOSTED ELEMENTS  (doors / windows / openings)
+#====================================================================================================
+#
+#  WHY THIS SECTION EXISTS
+#  -----------------------
+#  v5 handled hosted elements with two lines of code and both were wrong:
+#
+#    1) get_hosted_elements() used wall.GetDependentElements(None), which
+#       returns EVERY dependent - sketches, analytical members, wall sweeps,
+#       tags, dimensions - not just the wall's inserts. Deleting all of them
+#       destroyed unrelated data and still never proved the real doors were
+#       caught.
+#
+#    2) duplicate_wall() took new_ids[0] as "the copied wall". When a wall
+#       carries inserts, CopyElements returns the copied inserts in that same
+#       collection and the wall is NOT guaranteed to be first, so the script
+#       could silently start treating a door as if it were the new wall.
+#
+#    3) The host wall was repositioned with `Location.Curve = new_crv`. That
+#       REDEFINES the wall rather than moving it: Revit rebuilds the wall body
+#       on the new curve but leaves every insert at its old model coordinates.
+#       The door then no longer intersects its host, which is exactly the
+#       "cannot cut its host / delete the element?" warning, and on screen the
+#       door is left floating beside the wall.
+#
+#  The functions below replace all of that with an explicit capture -> move ->
+#  verify -> rebuild pipeline, so the inserts land correctly whether Revit
+#  drags them along, leaves them behind, or never copies them at all.
 
 
-def duplicate_wall(wall, keep_hosted):
-    new_ids = ElementTransformUtils.CopyElements(
-        doc, List[ElementId]([wall.Id]), XYZ(0, 0, 0))
-    new_w = doc.GetElement(new_ids[0])
-    if keep_hosted:
-        return new_w
-    for el in get_hosted_elements(new_w):
-        if not isinstance(el, Wall):
+def _bip(name):
+    """BuiltInParameter lookup that tolerates version-to-version renames."""
+    return getattr(BuiltInParameter, name, None)
+
+
+# Parameters that must NOT be copied onto a rebuilt insert: they are set by
+# the placement itself, or they fight with the ones that are.
+PARAM_SKIP = set(p for p in [
+    _bip('INSTANCE_HEAD_HEIGHT_PARAM'),      # derived from sill height
+    _bip('FAMILY_LEVEL_PARAM'),
+    _bip('SCHEDULE_LEVEL_PARAM'),
+    _bip('FAMILY_BASE_LEVEL_PARAM'),
+    _bip('INSTANCE_FREE_HOST_PARAM'),
+    _bip('INSTANCE_FREE_HOST_OFFSET_PARAM'),
+    _bip('ELEM_FAMILY_PARAM'),
+    _bip('ELEM_TYPE_PARAM'),
+    _bip('ELEM_FAMILY_AND_TYPE_PARAM'),
+    _bip('HOST_ID_PARAM'),
+] if p is not None)
+
+
+def _host_id_value(el):
+    """Id value of the element this element is hosted BY, or None."""
+    try:
+        h = el.Host
+    except Exception:
+        return None
+    if h is None:
+        return None
+    try:
+        return get_id_value(h.Id)
+    except Exception:
+        return None
+
+
+def get_hosted_inserts(wall):
+    """
+    Elements genuinely hosted BY this wall - doors, windows, rectangular
+    openings, shafts cutting it, and face-hosted families.
+
+    Wall.FindInserts is the documented way to ask a wall for its inserts.
+    Every candidate is then re-checked against .Host so a coincident wall
+    (there are several while the split runs) can never donate its doors to
+    the wrong copy.
+    """
+    out  = []
+    seen = set()
+    wid  = get_id_value(wall.Id)
+
+    def _add(el):
+        if el is None:
+            return
+        try:
+            k = get_id_value(el.Id)
+        except Exception:
+            return
+        if k in seen or k == wid:
+            return
+        if _host_id_value(el) != wid:
+            return
+        seen.add(k)
+        out.append(el)
+
+    try:
+        # addRectOpenings, includeShadows, includeEmbeddedWalls, includeSharedEmbeddedInserts
+        for eid in wall.FindInserts(True, False, True, True):
+            _add(doc.GetElement(eid))
+    except Exception:
+        pass
+
+    # Face-hosted families (lights, panels, casework) are not "inserts" and
+    # never come back from FindInserts, but they are still hosted by the wall.
+    try:
+        for eid in wall.GetDependentElements(ElementClassFilter(FamilyInstance)):
+            _add(doc.GetElement(eid))
+    except Exception:
+        pass
+
+    return out
+
+
+def capture_writable_params(el):
+    """Snapshot every writable instance parameter so a rebuild loses nothing."""
+    out = []
+    for p in el.Parameters:
+        try:
+            if p.IsReadOnly:
+                continue
+            d = p.Definition
+            if d is None:
+                continue
+            bip = None
+            try:
+                if isinstance(d, InternalDefinition):
+                    b = d.BuiltInParameter
+                    if b != BuiltInParameter.INVALID:
+                        bip = b
+            except Exception:
+                bip = None
+            if bip is not None and bip in PARAM_SKIP:
+                continue
+
+            st = p.StorageType
+            if st == StorageType.Double:
+                val = p.AsDouble()
+            elif st == StorageType.Integer:
+                val = p.AsInteger()
+            elif st == StorageType.String:
+                val = p.AsString()
+            elif st == StorageType.ElementId:
+                val = p.AsElementId()
+            else:
+                continue
+            if val is None:
+                continue
+            out.append((bip, d.Name, val))
+        except Exception:
+            continue
+    return out
+
+
+def apply_captured_params(state, el):
+    for bip, name, val in state.params:
+        p = None
+        if bip is not None:
+            try:
+                p = el.get_Parameter(bip)
+            except Exception:
+                p = None
+        if p is None:
+            try:
+                p = el.LookupParameter(name)
+            except Exception:
+                p = None
+        if p is None:
+            continue
+        try:
+            if not p.IsReadOnly:
+                p.Set(val)
+        except Exception:
+            pass
+
+
+class InsertState(object):
+    """
+    Everything needed to put one hosted element back exactly where it was,
+    captured BEFORE anything in the model moves.
+    """
+    def __init__(self, el, with_params=True):
+        self.id         = el.Id
+        self.is_opening = isinstance(el, Opening)
+        self.symbol_id  = None
+        self.level_id   = None
+        self.point      = None
+        self.bb_min     = None
+        self.bb_max     = None
+        self.facing     = None
+        self.hand       = None
+        self.params     = []
+        self.name       = 'Id {}'.format(get_id_value(el.Id))
+
+        try:
+            cat = el.Category.Name if el.Category is not None else 'Element'
+            self.name = '{} : {}'.format(cat, el.Name)
+        except Exception:
+            pass
+
+        loc = el.Location
+        if isinstance(loc, LocationPoint):
+            self.point = loc.Point
+
+        if isinstance(el, FamilyInstance):
+            try:
+                self.symbol_id = el.Symbol.Id
+            except Exception:
+                pass
+            try:
+                self.facing = el.FacingOrientation
+                self.hand   = el.HandOrientation
+            except Exception:
+                pass
+            try:
+                lid = el.LevelId
+                if lid is not None and \
+                   get_id_value(lid) != get_id_value(ElementId.InvalidElementId):
+                    self.level_id = lid
+            except Exception:
+                pass
+            if with_params:
+                self.params = capture_writable_params(el)
+
+        # Openings have no LocationPoint - fall back to the bounding box so the
+        # element still has a reference point to be matched and moved by.
+        bb = None
+        if self.point is None or self.is_opening:
+            try:
+                bb = el.get_BoundingBox(None)
+            except Exception:
+                bb = None
+        if bb is not None:
+            self.bb_min = bb.Min
+            self.bb_max = bb.Max
+            if self.point is None:
+                self.point = bb.Min.Add(bb.Max).Multiply(0.5)
+
+
+def capture_inserts(wall, with_params=True):
+    states = []
+    for el in get_hosted_inserts(wall):
+        try:
+            states.append(InsertState(el, with_params))
+        except Exception:
+            pass
+    return states
+
+
+def delete_hosted_inserts(wall):
+    """Strip inserts from a non-host wall copy - and ONLY from that copy."""
+    doc.Regenerate()          # a fresh copy will not report its inserts before this
+    for el in get_hosted_inserts(wall):
+        if isinstance(el, Wall):
+            continue                      # embedded curtain wall - leave alone
+        try:
             doc.Delete(el.Id)
-    return new_w
+        except Exception:
+            pass
+
+
+def duplicate_wall(wall):
+    """
+    Copy the wall in place and return the COPIED WALL.
+
+    CopyElements returns the copied inserts alongside the copied wall, so the
+    collection is scanned for the Wall instead of trusting index 0 (the v5
+    bug). Inserts are handled by the caller, not here.
+    """
+    new_ids = list(ElementTransformUtils.CopyElements(
+        doc, List[ElementId]([wall.Id]), XYZ(0, 0, 0)))
+
+    for nid in new_ids:
+        el = doc.GetElement(nid)
+        if isinstance(el, Wall):
+            return el
+    if new_ids:
+        return doc.GetElement(new_ids[0])
+    return None
+
+
+def match_copied_inserts(new_wall, orig_states):
+    """
+    Pair each insert of the fresh copy with the original it came from.
+
+    The copy is made with a zero translation, so a copied insert sits exactly
+    on top of its source: family symbol + location point is a safe key.
+    Returns a list of (original_state, copied_state_or_None). A None partner
+    means Revit did not copy that insert at all - it will be rebuilt.
+    """
+    doc.Regenerate()          # a fresh copy will not report its inserts before this
+    copies = capture_inserts(new_wall, with_params=False)
+    used   = set()
+    pairs  = []
+
+    for st in orig_states:
+        match = None
+        for c in copies:
+            k = get_id_value(c.id)
+            if k in used:
+                continue
+            s1 = get_id_value(st.symbol_id) if st.symbol_id is not None else None
+            s2 = get_id_value(c.symbol_id)  if c.symbol_id  is not None else None
+            if s1 != s2:
+                continue
+            if st.point is not None and c.point is not None:
+                if st.point.DistanceTo(c.point) > MATCH_TOL:
+                    continue
+            match = c
+            used.add(k)
+            break
+        pairs.append((st, match))
+    return pairs
+
+
+def restore_orientation(el, state):
+    """Re-apply the original swing / hand after a copy, flip or rebuild."""
+    try:
+        if state.facing is not None:
+            f = el.FacingOrientation
+            if f is not None and f.DotProduct(state.facing) < 0:
+                el.flipFacing()
+                doc.Regenerate()
+        if state.hand is not None:
+            h = el.HandOrientation
+            if h is not None and h.DotProduct(state.hand) < 0:
+                el.flipHand()
+                doc.Regenerate()
+    except Exception:
+        pass
+
+
+def reposition_insert(el, host_id, state, shift):
+    """
+    Bring one surviving insert to its target position on the new host wall.
+
+    Target = original position + the exact vector the wall body travelled.
+    Returns False when the insert cannot be trusted (wrong host, or it refused
+    to move because it is no longer really attached), which tells the caller to
+    rebuild it from scratch.
+    """
+    try:
+        if not el.IsValidObject:
+            return False
+        if _host_id_value(el) != host_id:
+            return False                    # got re-hosted to a coincident wall
+        if state.point is None:
+            restore_orientation(el, state)
+            return True
+
+        target = state.point.Add(shift)
+        loc    = el.Location
+
+        if isinstance(loc, LocationPoint):
+            if loc.Point.DistanceTo(target) > POS_TOL:
+                ElementTransformUtils.MoveElement(
+                    doc, el.Id, target.Subtract(loc.Point))
+                doc.Regenerate()
+                if el.Location.Point.DistanceTo(target) > POS_TOL:
+                    return False            # host will not accept it - rebuild
+        else:
+            bb = el.get_BoundingBox(None)
+            if bb is not None:
+                cur = bb.Min.Add(bb.Max).Multiply(0.5)
+                if cur.DistanceTo(target) > POS_TOL:
+                    ElementTransformUtils.MoveElement(
+                        doc, el.Id, target.Subtract(cur))
+                    doc.Regenerate()
+
+        restore_orientation(el, state)
+        return True
+    except Exception:
+        return False
+
+
+def rebuild_insert(state, host_wall, shift):
+    """
+    Last-resort recreation of an insert that was never copied, landed in the
+    wrong host, or refused to move.
+
+    NewFamilyInstance projects the supplied point onto the host, so the insert
+    lands centred in the new (thinner) wall while keeping its exact position
+    along the wall's length.
+    """
+    if state.point is None:
+        return None
+    target = state.point.Add(shift)
+    try:
+        if state.is_opening:
+            if state.bb_min is None or state.bb_max is None:
+                return None
+            return doc.Create.NewOpening(host_wall,
+                                         state.bb_min.Add(shift),
+                                         state.bb_max.Add(shift))
+
+        if state.symbol_id is None:
+            return None
+        sym = doc.GetElement(state.symbol_id)
+        if sym is None:
+            return None
+        if not sym.IsActive:
+            sym.Activate()
+            doc.Regenerate()
+
+        lvl = doc.GetElement(state.level_id) if state.level_id is not None else None
+        if lvl is None:
+            try:
+                lvl = doc.GetElement(host_wall.LevelId)
+            except Exception:
+                lvl = None
+
+        if lvl is not None:
+            new_el = doc.Create.NewFamilyInstance(
+                target, sym, host_wall, lvl, StructuralType.NonStructural)
+        else:
+            new_el = doc.Create.NewFamilyInstance(
+                target, sym, host_wall, StructuralType.NonStructural)
+        doc.Regenerate()
+        restore_orientation(new_el, state)
+        apply_captured_params(state, new_el)
+        doc.Regenerate()
+        return new_el
+    except Exception:
+        return None
+
+
+def restore_inserts(host_wall, pairs, shift):
+    """
+    Put every hosted element back on the host wall.
+    Returns (kept, rebuilt, failed_names).
+    """
+    kept    = 0
+    rebuilt = 0
+    failed  = []
+    hid     = get_id_value(host_wall.Id)
+
+    for state, copy_state in pairs:
+        el = None
+        if copy_state is not None:
+            el = doc.GetElement(copy_state.id)
+            try:
+                if el is not None and not el.IsValidObject:
+                    el = None
+            except Exception:
+                el = None
+
+        if el is not None and reposition_insert(el, hid, state, shift):
+            kept += 1
+            continue
+
+        if el is not None:
+            try:
+                doc.Delete(el.Id)
+                doc.Regenerate()
+            except Exception:
+                pass
+
+        if rebuild_insert(state, host_wall, shift) is not None:
+            rebuilt += 1
+        else:
+            failed.append(state.name)
+
+    return kept, rebuilt, failed
+
+
+def move_wall_to_curve(wall, target_curve):
+    """
+    Translate the wall so its centreline lands on target_curve.
+
+    v5 did `wall.Location.Curve = new_crv`, which redefines the wall and
+    strands its inserts. ElementTransformUtils.MoveElement is a real transform,
+    so Revit carries doors, windows and openings along with the host - the same
+    way dragging a wall in the UI does. Direct curve assignment is kept only as
+    a fallback for walls Revit refuses to move (constraints, pins, joins).
+    """
+    doc.Regenerate()
+    loc = wall.Location
+    if not isinstance(loc, LocationCurve):
+        return
+
+    cur   = loc.Curve
+    delta = target_curve.GetEndPoint(0).Subtract(cur.GetEndPoint(0))
+
+    if delta.GetLength() > POS_TOL:
+        try:
+            ElementTransformUtils.MoveElement(doc, wall.Id, delta)
+        except Exception:
+            pass
+
+    doc.Regenerate()
+    after = wall.Location.Curve
+    if after.GetEndPoint(0).DistanceTo(target_curve.GetEndPoint(0)) > POS_TOL:
+        wall.Location.Curve = target_curve      # fallback - inserts repaired later
 
 
 def get_wall_exterior_frame(wall):
@@ -1338,6 +1803,18 @@ def get_wall_exterior_frame(wall):
         return (face.Origin, face.FaceNormal, face.FaceNormal.Negate())
     except Exception:
         return None
+
+
+def group_center_offset(group_layers, all_real_layers):
+    """
+    Distance from the wall's PHYSICAL EXTERIOR FACE to the centreline of this
+    group - the midpoint of the group's span, not the mean of the member layer
+    centres. Used both to place the new wall and to work out exactly how far
+    the host wall's body (and therefore its doors) has to travel.
+    """
+    first_idx    = all_real_layers.index(group_layers[0])
+    start_offset = sum(ld.width for ld in all_real_layers[:first_idx])
+    return start_offset + sum(ld.width for ld in group_layers) / 2.0
 
 
 def compute_group_curve_absolute(original_curve, interior_dir,
@@ -1374,10 +1851,7 @@ def compute_group_curve_absolute(original_curve, interior_dir,
       3. Build an absolute Line.CreateBound(pt0, pt1). Direction is preserved
          so the new wall keeps the original's orientation convention.
     """
-    first_idx    = all_real_layers.index(group_layers[0])
-    start_offset = sum(ld.width for ld in all_real_layers[:first_idx])
-    group_width  = sum(ld.width for ld in group_layers)
-    group_center = start_offset + group_width / 2.0
+    group_center = group_center_offset(group_layers, all_real_layers)
 
     # Plane: (pt - ext_face_origin) . ext_face_normal = 0
     def proj(pt):
@@ -1518,6 +1992,16 @@ if apply_to_all:
 else:
     target_walls = [sel_wall]
 
+# ── A host group is mandatory ─────────────────────────────────────────────
+# Without one, every copy would have its inserts stripped and the original
+# wall would then be deleted - silently destroying every door and window.
+group_keys = [','.join(str(i) for i in g['indices']) for g in groups]
+if host_key not in group_keys:
+    forms.alert("No host wall was designated.\n\n"
+                "Every door, window and opening in the wall would be lost. "
+                "Re-run the tool and pick a host layer in phase 2.\n\n"
+                "Aborted - nothing was changed.", exitscript=True)
+
 # ── Sanity-check the grouping before touching the model ───────────────────
 ok, report = validate_groups(groups, real_layers)
 if DEBUG:
@@ -1571,8 +2055,11 @@ if not wall_geom_cache:
 t = Transaction(doc, "Wall Peeler — Split Layers")
 t.Start()
 
-created_total = 0
-flipped_fixes = 0
+created_total    = 0
+flipped_fixes    = 0
+inserts_kept     = 0
+inserts_rebuilt  = 0
+inserts_failed   = []
 
 try:
     for w in target_walls:
@@ -1580,7 +2067,17 @@ try:
         if not geom:
             continue                          # unreadable or curved — already reported
 
-        new_walls = []
+        i_dir   = geom['interior_dir']
+        total_w = sum(ld.width for ld in real_layers)
+
+        # Everything hosted BY this wall, captured before a single thing moves.
+        orig_inserts = capture_inserts(w)
+
+        new_walls  = []
+        host_wall  = None
+        host_pairs = []
+        host_shift = XYZ(0, 0, 0)
+
         for group in groups:
             key       = ','.join(str(i) for i in group['indices'])
             group_lds = [next(ld for ld in real_layers if ld.index == i)
@@ -1590,18 +2087,34 @@ try:
 
             new_type = make_wall_type_for_group(base_type, group_lds, type_name)
             new_crv  = compute_group_curve_absolute(
-                geom['curve'],           geom['interior_dir'],
+                geom['curve'],           i_dir,
                 geom['ext_face_origin'], geom['ext_face_normal'],
                 group_lds, real_layers)
 
-            new_wall = duplicate_wall(w, is_host)
+            new_wall = duplicate_wall(w)
+            if new_wall is None:
+                continue
+
+            if is_host:
+                host_wall = new_wall
+                # Pair copied inserts with their originals while the copy is
+                # still sitting exactly on top of the wall it came from.
+                host_pairs = match_copied_inserts(new_wall, orig_inserts)
+                # The wall body travels from the ORIGINAL centreline to this
+                # group's centreline. Inserts must travel by exactly the same
+                # vector, so it is computed analytically rather than inferred
+                # from whatever Revit did to the geometry.
+                host_shift = i_dir.Multiply(
+                    group_center_offset(group_lds, real_layers) - total_w / 2.0)
+            else:
+                delete_hosted_inserts(new_wall)
 
             # Centerline first, so the later type/curve changes stay symmetric
             # about the curve and Flip() does not translate the wall body.
             new_wall.get_Parameter(BuiltInParameter.WALL_KEY_REF_PARAM).Set(
                 int(WallLocationLine.WallCenterline))
-            new_wall.WallType       = new_type
-            new_wall.Location.Curve = new_crv
+            new_wall.WallType = new_type
+            move_wall_to_curve(new_wall, new_crv)
             new_walls.append(new_wall)
 
         # Orientation must be current before it can be compared.
@@ -1610,8 +2123,20 @@ try:
             if align_wall_orientation(nw, geom['ext_face_normal']):
                 flipped_fixes += 1
 
-        join_walls(new_walls)
+        # The original wall - and with it its own copy of every door - has to
+        # go BEFORE the inserts are repaired. Otherwise a repaired door sits on
+        # top of the original one for the rest of the transaction and Revit
+        # raises "there are identical instances in the same place" at commit.
         doc.Delete(w.Id)
+        doc.Regenerate()
+
+        if host_wall is not None and host_pairs:
+            kept, rebuilt, failed = restore_inserts(host_wall, host_pairs, host_shift)
+            inserts_kept    += kept
+            inserts_rebuilt += rebuilt
+            inserts_failed.extend(failed)
+
+        join_walls(new_walls)
         created_total += len(new_walls)
 
     t.Commit()
@@ -1623,6 +2148,20 @@ except Exception:
 
 msg = "Created {} wall(s) from {} original wall(s).".format(
     created_total, len(wall_geom_cache))
+
+total_inserts = inserts_kept + inserts_rebuilt + len(inserts_failed)
+if total_inserts:
+    msg += "\n\n{} hosted element(s) handled:".format(total_inserts)
+    msg += "\n  \u2022 {} moved with the host wall".format(inserts_kept)
+    if inserts_rebuilt:
+        msg += "\n  \u2022 {} rebuilt on the host wall".format(inserts_rebuilt)
+    if inserts_failed:
+        msg += "\n  \u2022 {} could NOT be restored:".format(len(inserts_failed))
+        for nm in inserts_failed[:10]:
+            msg += "\n      - {}".format(nm)
+        if len(inserts_failed) > 10:
+            msg += "\n      ..."
+
 if DEBUG and flipped_fixes:
     msg += "\nRe-aligned orientation on {} wall(s).".format(flipped_fixes)
 forms.alert(msg)
