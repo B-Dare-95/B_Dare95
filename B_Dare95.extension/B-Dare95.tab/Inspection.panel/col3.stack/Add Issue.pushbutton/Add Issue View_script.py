@@ -10,8 +10,20 @@ Replaces:
   COM / Excel  → zero-dependency xlsx  (ZipArchive + raw XML)
   PIL          → WinForms Clipboard + GDI+  (fixes transparent-alpha bug)
   subprocess   → System.Diagnostics.Process
-  threading    → System.Threading.Thread
+  waiting      → DispatcherTimer on the UI thread (never a worker thread —
+                 see the "Take Screenshot" section for why)
+  Dispatcher.PushFrame → modeless Show()  (see show_modeless() for why)
+
+NOTE ON __persistentengine__
+----------------------------
+This window is modeless: the pyRevit command returns immediately and Revit gets
+its message loop straight back. For that to work the IronPython engine has to
+outlive the script run, otherwise every Python event handler bound to the
+window dies the moment the command ends. The side effect is that edits to this
+file need a pyRevit reload (pyRevit ▸ Reload) before they take effect.
 """
+__persistentengine__ = True
+
 import clr
 import os
 
@@ -28,15 +40,17 @@ clr.AddReference('System')
 from System.Windows.Markup   import XamlReader
 from System.Windows          import (
     Visibility, Thickness, HorizontalAlignment, VerticalAlignment,
-    CornerRadius, GridLength, GridUnitType, FontWeights, TextWrapping
+    CornerRadius, GridLength, GridUnitType, FontWeights, TextWrapping,
+    WindowState
 )
+from System.Windows.Interop  import WindowInteropHelper
 from System.Windows.Controls import (
     Border, Grid as WpfGrid, ColumnDefinition, RowDefinition,
     StackPanel, WrapPanel, TextBlock, Image as WpfImage, TextBox, Button
 )
 from System.Windows.Media         import SolidColorBrush, Color, Brushes, Stretch as MediaStretch
 from System.Windows.Media.Imaging import BitmapImage, BitmapCacheOption
-from System.Windows.Threading     import DispatcherFrame, Dispatcher
+from System.Windows.Threading     import DispatcherTimer, DispatcherPriority
 from System.Windows.Input         import Cursors
 
 # ── I/O ─────────────────────────────────────────────────────────────────────
@@ -46,15 +60,14 @@ from System.IO.Compression import ZipArchive, ZipArchiveMode
 # ── Clipboard (WinForms path avoids WPF transparent-alpha bug) ───────────────
 from System.Windows.Forms   import (
     SaveFileDialog, DialogResult as WFDialogResult,
-    Clipboard as WFClipboard
+    Clipboard as WFClipboard, NativeWindow as WFNativeWindow
 )
 from System.Drawing         import Bitmap, Graphics
 from System.Drawing.Imaging import ImageFormat, PixelFormat
 
-# ── Process / Thread / Misc ──────────────────────────────────────────────────
+# ── Process / Misc ───────────────────────────────────────────────────────────
 from System.Diagnostics import Process, ProcessStartInfo
-from System.Threading   import Thread, ThreadStart, ApartmentState
-from System             import Array, Byte, Action, DateTime
+from System             import Array, Byte, Action, DateTime, TimeSpan, IntPtr
 from System.Text        import Encoding
 import System.Xml as SysXml
 
@@ -108,6 +121,13 @@ def find_snipaste():
 
 
 SNIPASTE_PATH = find_snipaste()
+
+# Process name (no extension) used to tell whether the snip overlay is on
+# screen — that is how a cancelled snip is detected instead of waiting out the
+# whole timeout with the tool window hidden.
+_SNIP_PROC_NAME = (
+    os.path.splitext(os.path.basename(SNIPASTE_PATH))[0]
+    if SNIPASTE_PATH else u'Snipaste')
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -177,20 +197,60 @@ def save_config(paths, active):
 # ═══════════════════════════════════════════════════════════════════════════
 
 def clipboard_to_png():
-    if not WFClipboard.ContainsImage():
+    """Grab the clipboard image as PNG bytes, or None.
+
+    MUST be called from the WPF UI thread. System.Windows.Forms.Clipboard is an
+    OLE call and needs an STA thread with a running message pump; the UI thread
+    has one, a bare worker thread does not.
+    """
+    img = None
+    rgb = None
+    ms  = None
+    try:
+        if not WFClipboard.ContainsImage():
+            return None
+        img = WFClipboard.GetImage()
+        if img is None:
+            return None
+        rgb = Bitmap(img.Width, img.Height, PixelFormat.Format24bppRgb)
+        g   = Graphics.FromImage(rgb)
+        try:
+            g.DrawImage(img, 0, 0, img.Width, img.Height)
+        finally:
+            g.Dispose()
+        ms = MemoryStream()
+        rgb.Save(ms, ImageFormat.Png)
+        return ms.ToArray()
+    finally:
+        for obj in (rgb, img, ms):
+            try:
+                if obj is not None:
+                    obj.Dispose()
+            except Exception:
+                pass
+
+
+def png_fingerprint(data):
+    """Cheap identity check for a clipboard image (length + sampled byte sum).
+
+    Used when Clipboard.Clear() is refused: it lets the poller tell a genuinely
+    new snip apart from whatever was already sitting on the clipboard.
+    """
+    if data is None:
         return None
-    img = WFClipboard.GetImage()
-    if img is None:
-        return None
-    rgb = Bitmap(img.Width, img.Height, PixelFormat.Format24bppRgb)
-    g   = Graphics.FromImage(rgb)
-    g.DrawImage(img, 0, 0, img.Width, img.Height)
-    g.Dispose()
-    ms = MemoryStream()
-    rgb.Save(ms, ImageFormat.Png)
-    rgb.Dispose()
-    img.Dispose()
-    return ms.ToArray()
+    try:
+        n = int(data.Length)
+    except Exception:
+        n = len(data)
+    if n <= 0:
+        return (0, 0)
+    step = n // 64 if n > 64 else 1
+    acc  = 0
+    i    = 0
+    while i < n:
+        acc += int(data[i])
+        i   += step
+    return (n, acc)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -579,17 +639,192 @@ def _pick_new_file(initial_dir=u'', overwrite_prompt=False, default_name=u'Issue
     dlg.FileName        = default_name
     if initial_dir and os.path.isdir(initial_dir):
         dlg.InitialDirectory = initial_dir
-    return dlg.FileName if dlg.ShowDialog() == WFDialogResult.OK else None
+    # Own the dialog to the tool window. The window is modeless now, so an
+    # unowned WinForms dialog can slip behind it -- and because the dialog is
+    # thread-modal the tool window would then stop responding and look hung.
+    owner = _dialog_owner()
+    if owner is not None:
+        ok = dlg.ShowDialog(owner)
+    else:
+        ok = dlg.ShowDialog()
+    return dlg.FileName if ok == WFDialogResult.OK else None
 
 
-def _push_frame(window):
-    """Show WPF window modeless; block pyRevit script thread via PushFrame."""
-    frame = [DispatcherFrame()]
-    def on_close(s, e):
-        frame[0].Continue = False
-    window.Closed += on_close
+# The one live tool window, and a WinForms-compatible owner handle for the
+# file dialogs it opens.
+_LIVE_WINDOW  = [None]
+_DIALOG_OWNER = [None]
+
+# Key under which the live window is parked in pyRevit's session environment.
+# Module globals are re-created on every run even with a persistent engine, so
+# the env var is what actually survives from one button click to the next.
+_ENVVAR_WINDOW = u'B_DARE95_ISSUE_LOGGER_WINDOW'
+
+
+def _get_session_window():
+    try:
+        from pyrevit import script
+        return script.get_envvar(_ENVVAR_WINDOW)
+    except Exception:
+        return None
+
+
+def _set_session_window(win):
+    try:
+        from pyrevit import script
+        script.set_envvar(_ENVVAR_WINDOW, win)
+    except Exception:
+        pass
+
+
+def _dialog_owner():
+    """IWin32Window wrapper around the tool window, or None."""
+    return _DIALOG_OWNER[0]
+
+
+def show_modeless(window):
+    """Show the tool window without taking over Revit's message loop.
+
+    This used to be Dispatcher.PushFrame, which runs a *nested* message loop on
+    Revit's UI thread. That kept the pyRevit external command 'executing' for
+    as long as the window was open, with two visible consequences:
+
+      * Esc stopped cancelling Revit commands. Revit is an MFC application and
+        its keyboard handling (Esc-to-cancel, two-letter shortcuts, the
+        accelerator table) lives in the PreTranslateMessage chain that Revit's
+        own loop runs before dispatching a message. A WPF nested frame pumps
+        the same queue through its own path, so that hook never saw the key.
+      * The Properties palette stopped following the selection. Revit defers
+        selection-driven UI refreshes (Properties, contextual ribbon tabs,
+        status bar) to idle processing, and idle work only runs when the
+        *owning* loop goes idle -- which it never did. Revit also suppresses
+        the Idling event while an external command is executing.
+
+    Showing modeless and returning immediately hands the loop back to Revit.
+    Safe here only because this script makes no Revit API calls at all; a
+    modeless window has no valid API context, so anything touching the API
+    would have to go through ExternalEvent / IExternalEventHandler.
+
+    Requires __persistentengine__ = True at the top of this file.
+    """
+    _LIVE_WINDOW[0] = window          # strong ref: keep GC away from it
+    _set_session_window(window)
+
+    def _on_closed(s, e):
+        _LIVE_WINDOW[0]  = None
+        _DIALOG_OWNER[0] = None
+        _set_session_window(None)
+
+    window.Closed += _on_closed
     window.Show()
-    Dispatcher.PushFrame(frame[0])
+
+    # Cache an owner handle for the WinForms file dialogs (see _pick_new_file).
+    try:
+        hwnd = WindowInteropHelper(window).Handle
+        if hwnd != IntPtr.Zero:
+            nw = WFNativeWindow()
+            nw.AssignHandle(hwnd)
+            _DIALOG_OWNER[0] = nw
+    except Exception:
+        _DIALOG_OWNER[0] = None
+
+    try:
+        window.Activate()
+    except Exception:
+        pass
+
+
+def focus_existing_window(win):
+    """Bring an already-open logger to the front. Returns False if the stored
+    window is stale (closed in a previous run), so the caller opens a fresh
+    one."""
+    try:
+        win.Show()          # throws if the window has already been closed
+        if win.WindowState == WindowState.Minimized:
+            win.WindowState = WindowState.Normal
+        win.Activate()
+        win.Topmost = True
+        win.Topmost = False
+        return True
+    except Exception:
+        return False
+
+
+def hide_pyrevit_console():
+    """Push pyRevit's output console out of the way.
+
+    The console is another WPF window owned by this running script. The moment
+    our tool window hides, Windows hands activation to the next top-level
+    window of the process — which is that console — so an empty black panel
+    pops up in front of Revit. Hiding it first stops that.
+
+    Deliberately uses the ``__window__`` builtin rather than
+    ``script.get_output()``: get_output() would *create* a console when none
+    exists, which is the opposite of what we want.
+    """
+    try:
+        w = __window__          # noqa: F821 — injected by pyRevit
+    except NameError:
+        return
+    if w is None:
+        return
+    for name in (u'Hide', u'Close'):
+        try:
+            fn = getattr(w, name, None)
+            if fn is not None:
+                fn()
+                return
+        except Exception:
+            pass
+
+
+def snipaste_overlay_open():
+    """True while Snipaste has a real (non-tray) window on screen.
+
+    When Snipaste is already resident, ``Snipaste.exe snip`` only relays the
+    command to the running instance and the spawned process exits immediately,
+    so process exit is useless as a signal. Watching for the overlay window
+    appearing and then disappearing is what lets an Esc-cancelled snip be
+    noticed straight away.
+    """
+    try:
+        procs = Process.GetProcessesByName(_SNIP_PROC_NAME)
+    except Exception:
+        return False
+    found = False
+    for p in procs:
+        try:
+            if not found and p.MainWindowHandle != IntPtr.Zero:
+                found = True
+        except Exception:
+            pass
+        try:
+            p.Dispose()
+        except Exception:
+            pass
+    return found
+
+
+def launch_snipaste():
+    """Start the snip overlay.
+
+    UseShellExecute is forced True on purpose. With it False the child process
+    inherits this script's stdio handles, and pyRevit has those wired to its
+    output console — which is enough on its own to make a blank console appear.
+    It is also the only mode that reliably launches the Microsoft Store app
+    alias under %LOCALAPPDATA%\\Microsoft\\WindowsApps.
+    """
+    psi                  = ProcessStartInfo()
+    psi.FileName         = SNIPASTE_PATH
+    psi.Arguments        = u'snip'
+    psi.UseShellExecute  = True
+    try:
+        d = os.path.dirname(SNIPASTE_PATH)
+        if d and os.path.isdir(d):
+            psi.WorkingDirectory = d
+    except Exception:
+        pass
+    return Process.Start(psi)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1562,15 +1797,130 @@ def run_logger():
     save_as_btn.Click += lambda s, e: save_as_file()
 
     # ── Take Screenshot ──────────────────────────────────────────
-    # Note: when Snipaste is already running in the background, invoking
-    # "Snipaste.exe snip" just relays the command to that instance and the
-    # spawned process exits almost immediately -- long before the user has
-    # actually drawn a selection. Waiting on proc.WaitForExit() therefore
-    # captures the clipboard too early. Instead we clear the clipboard first
-    # and poll (on an STA thread, required for clipboard access) until a new
-    # image actually lands there, so the thumbnail updates the moment the
-    # screenshot is really taken.
+    # This used to run on a background STA thread that slept and polled the
+    # clipboard. Three things were wrong with that:
+    #
+    #   1. Clipboard is an OLE/COM API. A bare Thread with
+    #      SetApartmentState(STA) has NO message pump, so the marshalling call
+    #      into the clipboard owner's apartment can block forever — that is the
+    #      hang. Revit's UI thread is an STA that *is* pumping, so a
+    #      DispatcherTimer is the safe place to poll from.
+    #   2. proc.Start() was not guarded and window.Hide() had no matching
+    #      Show() on the failure paths, so any launch error left the tool
+    #      invisible, the dispatcher frame spinning and the script unable to
+    #      finish — Revit looking frozen with the console still open.
+    #   3. Cancelling the snip meant sitting through the full 60s timeout with
+    #      the window hidden. The overlay is now watched so a cancel restores
+    #      the window in about a second.
+    _SNIP_POLL_MS   = 150
+    _SNIP_ARM_MS    = 250      # let the desktop repaint after Hide()
+    _SNIP_GRACE_MS  = 1200     # keep polling briefly after the overlay closes
+    _SNIP_TIMEOUT_S = 45
+
+    snip = {
+        u'timer':    None,     # the live DispatcherTimer, or None when idle
+        u'proc':     None,
+        u'elapsed':  0,
+        u'baseline': None,     # fingerprint of an image we could not clear
+        u'saw_ui':   False,    # the snip overlay has been seen on screen
+        u'grace':    None,     # ms left after the overlay went away
+    }
+
+    def _snip_stop_timer():
+        t = snip[u'timer']
+        snip[u'timer'] = None
+        if t is not None:
+            try:
+                t.Stop()
+            except Exception:
+                pass
+
+    def _restore_after_snip():
+        """Bring the tool window back. Called on EVERY exit path — success,
+        cancel, timeout and launch failure — so the window can never be left
+        hidden with the script still running."""
+        try:
+            window.Show()
+            window.Activate()
+            window.Topmost = True
+            window.Topmost = False
+        except Exception:
+            pass
+
+    def _snip_finish(found, msg=None, brush=None):
+        _snip_stop_timer()
+        p = snip[u'proc']
+        snip[u'proc'] = None
+        if p is not None:
+            try:
+                p.Dispose()
+            except Exception:
+                pass
+        _restore_after_snip()
+        snip_btn.IsEnabled = bool(SNIPASTE_PATH)
+        if found is not None:
+            state[u'pending_pngs'].append(found)
+            rebuild_thumb_strip()
+            n = len(state[u'pending_pngs'])
+            set_status(
+                u'Screenshot captured ({0} staged) \u2014 add more, or fill in '
+                u'the fields and save.'.format(n), _BR_SUCCESS)
+        else:
+            set_status(msg or u'No screenshot captured.', brush or _BR_WARN)
+
+    def _snip_tick(sender, args):
+        try:
+            snip[u'elapsed'] += _SNIP_POLL_MS
+
+            # 1 ── has a new image landed on the clipboard?
+            try:
+                if WFClipboard.ContainsImage():
+                    png = clipboard_to_png()
+                    if png is not None and png_fingerprint(png) != snip[u'baseline']:
+                        _snip_finish(png)
+                        return
+            except Exception:
+                pass          # clipboard momentarily locked — just try again
+
+            # 2 ── did the overlay come and go without producing an image?
+            if snipaste_overlay_open():
+                snip[u'saw_ui'] = True
+                snip[u'grace']  = None
+            elif snip[u'saw_ui']:
+                if snip[u'grace'] is None:
+                    snip[u'grace'] = _SNIP_GRACE_MS
+                else:
+                    snip[u'grace'] -= _SNIP_POLL_MS
+                    if snip[u'grace'] <= 0:
+                        _snip_finish(
+                            None,
+                            u'Snip cancelled \u2014 nothing was copied to the clipboard.')
+                        return
+
+            # 3 ── hard timeout, so the window is never stranded
+            if snip[u'elapsed'] >= _SNIP_TIMEOUT_S * 1000:
+                _snip_finish(
+                    None,
+                    u'Timed out after {0}s waiting for a screenshot.'.format(_SNIP_TIMEOUT_S))
+        except Exception as ex:
+            _snip_finish(None, u'Screenshot failed \u2014 ' + unicode(ex))
+
+    def _snip_begin_poll(sender, args):
+        _snip_stop_timer()                     # stop the arming timer
+        try:
+            snip[u'proc'] = launch_snipaste()
+        except Exception as ex:
+            _snip_finish(None, u'Could not start Snipaste \u2014 ' + unicode(ex))
+            return
+        poll          = DispatcherTimer(DispatcherPriority.Normal)
+        poll.Interval = TimeSpan.FromMilliseconds(_SNIP_POLL_MS)
+        poll.Tick    += _snip_tick
+        snip[u'timer'] = poll
+        poll.Start()
+
     def on_snip(s, e):
+        if snip[u'timer'] is not None:
+            return                              # a snip is already in flight
         if not state[u'path']:
             set_status(u'Create or open a file first (click  +  in the tab bar).', _BR_WARN)
             return
@@ -1578,49 +1928,47 @@ def run_logger():
             set_status(u'Snipaste not found \u2014 install it from the Microsoft Store.',
                        _BR_WARN)
             return
-        window.Hide()
+
+        # Clear the clipboard so a stale image is not mistaken for the new
+        # snip. If clearing is refused (another app holds the clipboard),
+        # fingerprint what is there and accept only something different.
+        snip[u'baseline'] = None
         try:
             WFClipboard.Clear()
         except Exception:
             pass
+        try:
+            if WFClipboard.ContainsImage():
+                snip[u'baseline'] = png_fingerprint(clipboard_to_png())
+        except Exception:
+            pass
 
-        proc                     = Process()
-        proc.StartInfo.FileName  = SNIPASTE_PATH
-        proc.StartInfo.Arguments = u'snip'
-        proc.Start()
+        snip[u'elapsed'] = 0
+        snip[u'saw_ui']  = False
+        snip[u'grace']   = None
+        snip_btn.IsEnabled = False
+        set_status(u'Waiting for Snipaste\u2026 draw a selection, or press Esc to cancel.')
 
-        def watch():
-            found = None
-            for _ in range(300):            # ~60s timeout (300 * 200ms)
-                Thread.Sleep(200)
-                try:
-                    if WFClipboard.ContainsImage():
-                        found = clipboard_to_png()
-                        if found is not None:
-                            break
-                except Exception:
-                    pass
+        hide_pyrevit_console()
+        window.Hide()
 
-            def restore():
-                window.Show()
-                if found is not None:
-                    state[u'pending_pngs'].append(found)
-                    rebuild_thumb_strip()
-                    n = len(state[u'pending_pngs'])
-                    set_status(
-                        u'Screenshot captured ({0} staged) \u2014 add more, or fill in '
-                        u'the fields and save.'.format(n), _BR_SUCCESS)
-                else:
-                    set_status(u'No screenshot captured \u2014 the snip was cancelled or timed out.',
-                               _BR_WARN)
-            window.Dispatcher.Invoke(Action(restore))
-
-        t = Thread(ThreadStart(watch))
-        t.IsBackground = True
-        t.SetApartmentState(ApartmentState.STA)
-        t.Start()
+        # Arm on a timer instead of firing immediately: Hide() only queues the
+        # repaint, and without this gap the tool window can still be sitting in
+        # the frame Snipaste captures.
+        arm          = DispatcherTimer(DispatcherPriority.Normal)
+        arm.Interval = TimeSpan.FromMilliseconds(_SNIP_ARM_MS)
+        arm.Tick    += _snip_begin_poll
+        snip[u'timer'] = arm            # also blocks a second click while arming
+        arm.Start()
 
     snip_btn.Click += on_snip
+
+    # If the window is closed mid-snip, kill the poller so no timer is left
+    # ticking against a dead window after the script has ended.
+    def on_window_closed(s, e):
+        _snip_stop_timer()
+
+    window.Closed += on_window_closed
 
     # ── Add Field (+) ───────────────────────────────────────────
     def on_add_field(s, e):
@@ -1695,7 +2043,7 @@ def run_logger():
         # First run (or every file closed): jump straight to naming a new file.
         add_new_file()
 
-    _push_frame(window)
+    show_modeless(window)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1710,4 +2058,12 @@ except NameError:
 # Files are now named + placed per-tab (via the '+' tab and "Open File..."),
 # so the old shift-click "configure save folder" mode is obsolete. Both a
 # normal click and a shift-click open the tabbed logger.
-run_logger()
+#
+# The window is modeless and the engine is persistent, so a second click while
+# it is open must re-focus the existing one rather than stack up a duplicate.
+_existing = _get_session_window()
+if _existing is not None and focus_existing_window(_existing):
+    pass
+else:
+    _set_session_window(None)
+    run_logger()
