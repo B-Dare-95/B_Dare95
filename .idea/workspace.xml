@@ -5,8 +5,12 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="09d0a4df-0748-4405-a48e-7586ee4f5c90" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/hooks/command-before-exec[ID_FILE_IMPORT].py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/hooks/doc-syncing.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Clashes.panel/MEP Wall Opening.pushbutton/icon.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Clashes.panel/MEP Wall Opening.pushbutton/script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/B_Dare95.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/B_Dare95.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/col3.stack/Add Issue.pushbutton/issue_logger.cfg" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/col3.stack/Add Issue.pushbutton/issue_logger.cfg" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/col3.stack/Clash Navigator.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Clashes.panel/Clash Navigator.pushbutton/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/col3.stack/Clash Navigator.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Clashes.panel/Clash Navigator.pushbutton/script.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -55,23 +59,27 @@
     "git-widget-placeholder": "main",
     "ignore.virus.scanning.warn.message": "true",
     "junie.onboarding.icon.badge.shown": "true",
-    "last_opened_file_path": "C:/Users/moham/Documents/GitHub/B_Dare95",
+    "last_opened_file_path": "C:/Users/moham/Documents/GitHub/B_Dare95/B_Dare95.extension/B-Dare95.tab/Clashes.panel/MEP Wall Opening.pushbutton",
+    "node.js.detected.package.jshint": "true",
+    "node.js.selected.package.jshint": "",
+    "nodejs_package_manager_path": "npm",
     "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable",
     "to.speed.mode.migration.done": "true"
   }
 }]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\Users\moham\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Clashes.panel\MEP Wall Opening.pushbutton" />
       <recent name="C:\Users\mohamed.bedair.SDCNT\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Shafts.panel\col1.stack\Shaft Text Note.splitpushbutton\Linked Shafts.pushbutton" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\B-Dare95.panel\col2.stack\Log File.pushbutton" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\B-Dare95.panel\col2.stack\Tally.urlbutton" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\moham\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Clashes.panel" />
       <recent name="C:\Users\mohamed.bedair.SDCNT\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Shafts.panel\col1.stack\Shaft Text Note.splitpushbutton" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Inspection.panel\MEP Filters.pushbutton" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Walls.panel\col1.stack" />
       <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Walls.panel" />
-      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\Archved Code" />
     </key>
   </component>
   <component name="SharedIndexes">
@@ -89,6 +97,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1720601004243</updated>
+      <workItem from="1788292839686" duration="157000" />
     </task>
     <servers />
   </component>

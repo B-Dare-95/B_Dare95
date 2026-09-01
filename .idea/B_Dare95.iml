@@ -6,7 +6,7 @@
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/B_Dare95.extension/.venv" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.14 (B_Dare95)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="~\Documents\GitHub\B_Dare95\.venv" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>
