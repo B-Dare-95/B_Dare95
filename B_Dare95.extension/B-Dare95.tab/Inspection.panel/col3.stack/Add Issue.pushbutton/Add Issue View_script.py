@@ -14,6 +14,15 @@ Replaces:
                  see the "Take Screenshot" section for why)
   Dispatcher.PushFrame → modeless Show()  (see show_modeless() for why)
 
+WHERE THE CONFIG LIVES
+----------------------
+issue_logger.cfg is stored per-machine under
+%LOCALAPPDATA%\\B_Dare95\\IssueLogger, NOT next to this script. It used to sit
+in the extension folder, so anything that syncs B_Dare95.extension between
+machines (Git, OneDrive, a copied folder) carried the file list across with it
+-- and those are absolute paths that mean nothing on the other PC. A config
+found in the old location is migrated once, on first run, and then deleted.
+
 NOTE ON __persistentengine__
 ----------------------------
 This window is modeless: the pyRevit command returns immediately and Revit gets
@@ -50,7 +59,9 @@ from System.Windows.Controls import (
 )
 from System.Windows.Media         import SolidColorBrush, Color, Brushes, Stretch as MediaStretch
 from System.Windows.Media.Imaging import BitmapImage, BitmapCacheOption
-from System.Windows.Threading     import DispatcherTimer, DispatcherPriority
+from System.Windows.Threading     import (
+    DispatcherFrame, Dispatcher, DispatcherTimer, DispatcherPriority
+)
 from System.Windows.Input         import Cursors
 
 # ── I/O ─────────────────────────────────────────────────────────────────────
@@ -77,7 +88,35 @@ import System.Xml as SysXml
 # ═══════════════════════════════════════════════════════════════════════════
 
 SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
-CONFIG_FILE   = os.path.join(SCRIPT_DIR, u'issue_logger.cfg')
+
+
+def _local_config_dir():
+    """Per-machine directory for this tool's settings.
+
+    LOCALAPPDATA on purpose, not APPDATA: APPDATA roams in domain
+    environments, which would put the config straight back to being shared
+    between machines -- the exact problem this avoids.
+    """
+    for base in (os.environ.get(u'LOCALAPPDATA', u''),
+                 os.environ.get(u'USERPROFILE',  u''),
+                 os.environ.get(u'TEMP',         u'')):
+        if not base:
+            continue
+        d = os.path.join(base, u'B_Dare95', u'IssueLogger')
+        try:
+            if not os.path.isdir(d):
+                os.makedirs(d)
+            return d
+        except Exception:
+            continue
+    return SCRIPT_DIR          # last resort: old behaviour beats no config
+
+
+CONFIG_DIR    = _local_config_dir()
+CONFIG_FILE   = os.path.join(CONFIG_DIR, u'issue_logger.cfg')
+
+# Where the config used to live, inside the (possibly synced) extension folder.
+LEGACY_CONFIG = os.path.join(SCRIPT_DIR, u'issue_logger.cfg')
 XLSX_FILENAME = u'Issue Logger.xlsx'
 _EMU_PX       = 9525          # 1 px @ 96 dpi → EMU
 
@@ -138,10 +177,10 @@ def xlsx_path_from(folder):
     return os.path.join(folder, XLSX_FILENAME)
 
 
-def load_config():
+def _read_config_file(path):
     """
-    Returns (paths, active) where paths is a list of .xlsx file paths and
-    active is the index of the last-used tab.
+    Parse a config file. Returns (paths, active) where paths is a list of
+    .xlsx file paths and active is the index of the last-used tab.
 
     Config format (UTF-8, one item per line):
         active=<index>
@@ -152,9 +191,9 @@ def load_config():
     Backward compatible with the old single-line format that stored just a
     save *folder*: that folder is migrated to <folder>/Issue Logger.xlsx.
     """
-    if not File.Exists(CONFIG_FILE):
+    if not File.Exists(path):
         return ([], 0)
-    txt = File.ReadAllText(CONFIG_FILE, Encoding.UTF8)
+    txt = File.ReadAllText(path, Encoding.UTF8)
     lines = [l.strip() for l in txt.replace(u'\r', u'').split(u'\n') if l.strip()]
     if not lines:
         return ([], 0)
@@ -184,9 +223,51 @@ def load_config():
     return (paths, active)
 
 
+def _migrate_legacy_config():
+    """One-time move of issue_logger.cfg out of the extension folder.
+
+    Only paths that exist on *this* machine are carried over -- the rest
+    belonged to whichever PC last wrote the synced config. The old file is
+    then deleted so it cannot sync back and win again.
+    """
+    try:
+        if File.Exists(CONFIG_FILE) or not File.Exists(LEGACY_CONFIG):
+            return
+        if _same_path(CONFIG_FILE, LEGACY_CONFIG):
+            return                      # config dir fell back to SCRIPT_DIR
+    except Exception:
+        return
+
+    try:
+        paths, active = _read_config_file(LEGACY_CONFIG)
+        keep = [p for p in paths if File.Exists(p)]
+        if active < 0 or active >= len(keep):
+            active = 0
+        save_config(keep, active)
+    except Exception:
+        return                          # leave the old file alone on failure
+
+    try:
+        File.Delete(LEGACY_CONFIG)
+    except Exception:
+        pass                            # read-only / git-locked: harmless now
+
+
+def load_config():
+    """Returns (paths, active) from this machine's config."""
+    _migrate_legacy_config()
+    return _read_config_file(CONFIG_FILE)
+
+
 def save_config(paths, active):
     lines = [u'active={0}'.format(active)]
     lines.extend(paths)
+    try:
+        d = os.path.dirname(CONFIG_FILE)
+        if d and not os.path.isdir(d):
+            os.makedirs(d)
+    except Exception:
+        pass
     File.WriteAllText(CONFIG_FILE, u'\n'.join(lines), Encoding.UTF8)
 
 
@@ -1803,8 +1884,9 @@ def run_logger():
     #   1. Clipboard is an OLE/COM API. A bare Thread with
     #      SetApartmentState(STA) has NO message pump, so the marshalling call
     #      into the clipboard owner's apartment can block forever — that is the
-    #      hang. Revit's UI thread is an STA that *is* pumping, so a
-    #      DispatcherTimer is the safe place to poll from.
+    #      hang. The WPF UI thread is an STA that *is* pumping (we sit inside
+    #      Dispatcher.PushFrame), so a DispatcherTimer is the safe place to
+    #      poll from.
     #   2. proc.Start() was not guarded and window.Hide() had no matching
     #      Show() on the failure paths, so any launch error left the tool
     #      invisible, the dispatcher frame spinning and the script unable to

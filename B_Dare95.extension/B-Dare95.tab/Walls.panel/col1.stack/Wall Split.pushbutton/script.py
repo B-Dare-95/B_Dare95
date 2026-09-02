@@ -30,11 +30,14 @@ from Autodesk.Revit.UI.Selection import ISelectionFilter
 
 from System.Collections.Generic import List
 
-from pyrevit import revit, forms, script
+from pyrevit import revit, forms
 
 doc = revit.doc
 uidoc = revit.uidoc
-output = script.get_output()
+
+# Notes gathered at startup, surfaced in the first completion dialog so the
+# pyRevit output console never has to open.
+STARTUP_NOTES = []
 
 # ---------------------------------------------------------------------------
 # Tunable tolerances (feet, since Revit's internal units are always feet)
@@ -44,6 +47,10 @@ PERP_TOL = 0.5
 MIN_SEGMENT_LENGTH = 0.1
 MIN_SPLIT_SPACING = 0.5
 HOSTED_U_TOL = 0.05
+
+# How much detail the completion dialog will list before truncating
+MAX_REPORT_ITEMS = 10
+MAX_REPORT_IDS = 30
 
 
 def eid_str(eid):
@@ -496,24 +503,40 @@ def process_selected_walls(all_columns):
 
     tg.Assimilate()
 
-    output.print_md('### Split Walls at Columns - Round Complete')
-    output.print_md('- Walls split: **{}** / {}'.format(done, len(plan)))
-    if errors:
-        output.print_md('- Walls skipped due to errors (no changes made to these):')
-        for wid, msg in errors:
-            output.print_md('  - Wall {}: {}'.format(eid_str(wid), msg))
-    if all_unrecoverable:
-        output.print_md('- **Hosted elements that could NOT be preserved** '
-                         '(inside a column footprint, or straddling a column '
-                         'face) - please re-place manually:')
-        for eid in all_unrecoverable:
-            output.print_md('  - Element {}'.format(eid_str(eid)))
+    lines = ['Round complete.',
+             'Walls split: {} / {}'.format(done, len(plan))]
     if skipped:
-        output.print_md('- Skipped in this selection: {}'.format(len(skipped)))
+        lines.append('Skipped in this selection: {}'.format(len(skipped)))
 
-    return forms.alert(
-        'Done. Select more walls to process?',
-        title='Split Walls at Columns', yes=True, no=True)
+    if errors:
+        lines.append('')
+        lines.append('Walls skipped due to errors (no changes made to these):')
+        for wid, msg in errors[:MAX_REPORT_ITEMS]:
+            lines.append('  Wall {}: {}'.format(eid_str(wid), msg))
+        if len(errors) > MAX_REPORT_ITEMS:
+            lines.append('  ... and {} more'.format(len(errors) - MAX_REPORT_ITEMS))
+
+    if all_unrecoverable:
+        lines.append('')
+        lines.append('Hosted elements that could NOT be preserved (inside a '
+                     'column footprint, or straddling a column face) - '
+                     'please re-place manually:')
+        shown = [eid_str(e) for e in all_unrecoverable[:MAX_REPORT_IDS]]
+        lines.append('  ' + ', '.join(shown))
+        if len(all_unrecoverable) > MAX_REPORT_IDS:
+            lines.append('  ... and {} more'
+                         .format(len(all_unrecoverable) - MAX_REPORT_IDS))
+
+    if STARTUP_NOTES:
+        lines.append('')
+        lines.extend(STARTUP_NOTES)
+        del STARTUP_NOTES[:]
+
+    lines.append('')
+    lines.append('Select more walls to process?')
+
+    return forms.alert('\n'.join(lines),
+                       title='Split Walls at Columns', yes=True, no=True)
 
 
 def main():
@@ -524,7 +547,8 @@ def main():
                      'categories). Nothing to do.', title='Split Walls at Columns')
         return
     if skipped_links:
-        output.print_md('Unloaded links skipped: {}'.format(', '.join(skipped_links)))
+        STARTUP_NOTES.append('Unloaded links skipped: {}'
+                             .format(', '.join(skipped_links)))
 
     while True:
         keep_going = process_selected_walls(all_columns)

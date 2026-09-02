@@ -5,12 +5,28 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="09d0a4df-0748-4405-a48e-7586ee4f5c90" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Clashes.panel/MEP Wall Opening.pushbutton/icon.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Clashes.panel/MEP Wall Opening.pushbutton/script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/B_Dare95.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/B_Dare95.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/col3.stack/Add Issue.pushbutton/issue_logger.cfg" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/col3.stack/Add Issue.pushbutton/issue_logger.cfg" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/col3.stack/Clash Navigator.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Clashes.panel/Clash Navigator.pushbutton/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/col3.stack/Clash Navigator.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Clashes.panel/Clash Navigator.pushbutton/script.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Links.panel/Link Inspector.pushbutton/icon.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Links.panel/Link Inspector.pushbutton/script.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Resolvers.pulldown/Remove Duplicates.pushbutton/Duplicate Family Instances_script.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Resolvers.pulldown/Unjoin False Intersect.pushbutton/icon.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Resolvers.pulldown/Unjoin False Intersect.pushbutton/script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Automations.panel/col1.stack/Remove Duplicates.pushbutton/Duplicate Family Instances_script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Automations.panel/col1.stack/Remove Duplicates.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Resolvers.pulldown/Remove Duplicates.pushbutton/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/col3.stack/Add Issue.pushbutton/Add Issue View_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/col3.stack/Add Issue.pushbutton/Add Issue View_script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/col3.stack/Add Issue.pushbutton/issue_logger.cfg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Links.panel/col1.stack/Levels &amp; Grids Check.pushbutton/Lvls &amp; Grids_script.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Links.panel/col1.stack/Levels &amp; Grids Check.pushbutton/icon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Walls.panel/col1.stack/Wall Split.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Walls.panel/col1.stack/Wall Split.pushbutton/script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/Slightly Off Axis.pulldown/Off Axis Grids.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Slightly Off Axis.pulldown/Off Axis Grids.pushbutton/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/Slightly Off Axis.pulldown/Off Axis Grids.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Slightly Off Axis.pulldown/Off Axis Grids.pushbutton/script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/Slightly Off Axis.pulldown/Off Axis Lines.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Slightly Off Axis.pulldown/Off Axis Lines.pushbutton/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/Slightly Off Axis.pulldown/Off Axis Lines.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Slightly Off Axis.pulldown/Off Axis Lines.pushbutton/script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/Slightly Off Axis.pulldown/Off Axis Sketch.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Slightly Off Axis.pulldown/Off Axis Sketch.pushbutton/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/Slightly Off Axis.pulldown/Off Axis Sketch.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Slightly Off Axis.pulldown/Off Axis Sketch.pushbutton/script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/Slightly Off Axis.pulldown/Off Axis Walls.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Slightly Off Axis.pulldown/Off Axis Walls.pushbutton/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/Slightly Off Axis.pulldown/Off Axis Walls.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Slightly Off Axis.pulldown/Off Axis Walls.pushbutton/script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/Slightly Off Axis.pulldown/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Slightly Off Axis.pulldown/icon.png" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -34,6 +50,65 @@
   <component name="McpProjectServerCommands">
     <commands />
     <urls />
+  </component>
+  <component name="NextEditCompletionFeaturesState">
+    <decayedCancelled>
+      <entry key="MS100" value="1.0000000304285326" />
+      <entry key="MS500" value="1.031782379777618" />
+      <entry key="S2" value="1.5624960693584553" />
+      <entry key="S5" value="2.164950503853716" />
+      <entry key="S10" value="2.5174954084544297" />
+      <entry key="S30" value="2.8217615369405658" />
+      <entry key="S60" value="2.908487059340799" />
+      <entry key="M2" value="2.953627305924961" />
+      <entry key="M5" value="2.9813186520035413" />
+      <entry key="M10" value="2.9948636857792312" />
+      <entry key="M15" value="3.0199351357805755" />
+      <entry key="M30" value="3.158704782254704" />
+      <entry key="H1" value="3.400721675056719" />
+      <entry key="H2" value="3.6334783432990423" />
+      <entry key="H4" value="3.796013741702056" />
+      <entry key="D1" value="3.9627043105825464" />
+      <entry key="W1" value="3.994585171302282" />
+    </decayedCancelled>
+    <decayedSelected>
+      <entry key="MS100" value="0.0" />
+      <entry key="MS500" value="0.0" />
+      <entry key="S2" value="0.0" />
+      <entry key="S5" value="0.0" />
+      <entry key="S10" value="0.0" />
+      <entry key="S30" value="0.0" />
+      <entry key="S60" value="0.0" />
+      <entry key="M2" value="0.0" />
+      <entry key="M5" value="0.0" />
+      <entry key="M10" value="0.0" />
+      <entry key="M15" value="0.0" />
+      <entry key="M30" value="0.0" />
+      <entry key="H1" value="0.0" />
+      <entry key="H2" value="0.0" />
+      <entry key="H4" value="0.0" />
+      <entry key="D1" value="0.0" />
+      <entry key="W1" value="0.0" />
+    </decayedSelected>
+    <decayedShown>
+      <entry key="MS100" value="0.965936358727168" />
+      <entry key="MS500" value="1.0247429704913311" />
+      <entry key="S2" value="1.5601801670382254" />
+      <entry key="S5" value="2.163773208282577" />
+      <entry key="S10" value="2.516833373421236" />
+      <entry key="S30" value="2.821519748572128" />
+      <entry key="S60" value="2.9083631567689037" />
+      <entry key="M2" value="2.953564571721338" />
+      <entry key="M5" value="2.981293365006764" />
+      <entry key="M10" value="2.994850853912181" />
+      <entry key="M15" value="3.0199260329801723" />
+      <entry key="M30" value="3.158698555752088" />
+      <entry key="H1" value="3.400717079401609" />
+      <entry key="H2" value="3.633475330613209" />
+      <entry key="H4" value="3.79601198554742" />
+      <entry key="D1" value="3.9627039751729023" />
+      <entry key="W1" value="3.994585122219261" />
+    </decayedShown>
   </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 5
@@ -59,9 +134,13 @@
     "git-widget-placeholder": "main",
     "ignore.virus.scanning.warn.message": "true",
     "junie.onboarding.icon.badge.shown": "true",
-    "last_opened_file_path": "C:/Users/moham/Documents/GitHub/B_Dare95/B_Dare95.extension/B-Dare95.tab/Clashes.panel/MEP Wall Opening.pushbutton",
+    "last_opened_file_path": "C:/Users/moham/Documents/GitHub/B_Dare95/B_Dare95.extension/B-Dare95.tab/Links.panel/Link Inspector.pushbutton",
+    "node.js.detected.package.eslint": "true",
     "node.js.detected.package.jshint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
     "node.js.selected.package.jshint": "",
+    "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
     "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable",
     "to.speed.mode.migration.done": "true"
@@ -69,17 +148,18 @@
 }]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\Users\moham\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Links.panel\Link Inspector.pushbutton" />
+      <recent name="C:\Users\moham\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Links.panel\col1.stack\DWG in Links.pushbutton" />
+      <recent name="C:\Users\moham\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Warnings.panel\col1.stack\Resolvers.pulldown" />
       <recent name="C:\Users\moham\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Clashes.panel\MEP Wall Opening.pushbutton" />
       <recent name="C:\Users\mohamed.bedair.SDCNT\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Shafts.panel\col1.stack\Shaft Text Note.splitpushbutton\Linked Shafts.pushbutton" />
-      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\B-Dare95.panel\col2.stack\Log File.pushbutton" />
-      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\B-Dare95.panel\col2.stack\Tally.urlbutton" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\moham\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Links.panel" />
+      <recent name="C:\Users\moham\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Warnings.panel\col1.stack\Resolvers.pulldown" />
+      <recent name="C:\Users\moham\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Warnings.panel\col1.stack" />
+      <recent name="C:\Users\moham\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Warnings.panel\col1.stack\Resolvers.pulldown\Unjoin False Intersect.pushbutton" />
       <recent name="C:\Users\moham\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Clashes.panel" />
-      <recent name="C:\Users\mohamed.bedair.SDCNT\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Shafts.panel\col1.stack\Shaft Text Note.splitpushbutton" />
-      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Inspection.panel\MEP Filters.pushbutton" />
-      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Walls.panel\col1.stack" />
-      <recent name="C:\Users\mohamed.bedair\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Walls.panel" />
     </key>
   </component>
   <component name="SharedIndexes">
@@ -98,6 +178,8 @@
       <option name="presentableId" value="Default" />
       <updated>1720601004243</updated>
       <workItem from="1788292839686" duration="157000" />
+      <workItem from="1788370516771" duration="1453000" />
+      <workItem from="1788372419897" duration="4631000" />
     </task>
     <servers />
   </component>

@@ -1,0 +1,1152 @@
+# -*- coding: utf-8 -*-
+"""Link Inspector.
+
+Read-only health report for every Revit link in the active document:
+
+  * DWG links / imports living inside the link
+  * Warning count stored in the link, grouped by warning type
+  * Levels and Grids sitting on the wrong workset
+  * Unused families and types, per category
+
+No transaction is opened. Nothing is modified.
+"""
+
+__title__ = "Link\nInspector"
+__author__ = "Mohamed Bedair"
+__doc__ = ("Inspects every linked Revit document for DWG imports/links, "
+           "warnings, Levels/Grids on the wrong workset, and unused "
+           "families/types per category.")
+
+import clr
+
+clr.AddReference("PresentationCore")
+clr.AddReference("PresentationFramework")
+clr.AddReference("WindowsBase")
+
+from System import EventHandler, DateTime
+from System.Collections.Generic import List
+from System.Windows import (Clipboard, FontWeights, RoutedEventHandler,
+                            TextWrapping, Visibility)
+from System.Windows.Controls import (SelectionChangedEventHandler, TextBlock,
+                                     TextChangedEventHandler, TreeViewItem)
+from System.Windows.Input import Cursors, Mouse
+from System.Windows.Markup import XamlReader
+from System.Windows.Media import Color, SolidColorBrush
+from System.Windows.Threading import Dispatcher, DispatcherFrame
+
+from Autodesk.Revit.DB import (BuiltInCategory, CADLinkType, CategoryType,
+                               Element, ElementId, FilteredElementCollector,
+                               ImportInstance, RevitLinkInstance)
+from Autodesk.Revit.UI import TaskDialog
+
+doc = __revit__.ActiveUIDocument.Document
+
+# Worksets that Levels and Grids are allowed to live on. Edit to match the
+# project's BIM Execution Plan.
+VALID_LG_WORKSETS = [
+    "shared levels and grids",
+    "shared views, levels, grids",
+]
+
+DASH = u"\u2014"        # em dash, shown when a check does not apply
+
+
+def make_brush(red, green, blue):
+    return SolidColorBrush(Color.FromRgb(red, green, blue))
+
+
+BRUSH_TEXT = make_brush(0xCD, 0xD6, 0xF4)
+BRUSH_SUB = make_brush(0xA6, 0xAD, 0xC8)
+BRUSH_ACCENT = make_brush(0xF0, 0xA5, 0x00)
+
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+def eid_value(eid):
+    """ElementId -> int. .Value on Revit 2025+, .IntegerValue on older."""
+    if eid is None:
+        return -1
+    try:
+        return eid.Value
+    except AttributeError:
+        return eid.IntegerValue
+
+
+def elem_name(el):
+    """Safe Element.Name read."""
+    if el is None:
+        return "<none>"
+    try:
+        name = el.Name
+    except Exception:
+        name = None
+    if not name:
+        try:
+            name = Element.Name.GetValue(el)
+        except Exception:
+            name = None
+    return name or "<unnamed>"
+
+
+def file_ext(name):
+    if "." not in name:
+        return ""
+    return name.rsplit(".", 1)[-1].strip().lower()
+
+
+def doc_title(rvt_doc, fallback):
+    try:
+        title = rvt_doc.Title
+    except Exception:
+        title = None
+    return title or fallback
+
+
+class Entry(object):
+    """One line in the detail pane."""
+
+    def __init__(self, text, sort_key=None):
+        self.Display = text
+        self.SortKey = sort_key if sort_key is not None else text
+
+
+# ---------------------------------------------------------------------------
+# inspection 1 - DWG links and imports
+# ---------------------------------------------------------------------------
+
+def scan_cad(target_doc):
+    """Return (dwg_links, dwg_imports, other_cad, [Entry, ...])."""
+    entries = []
+    dwg_links = 0
+    dwg_imports = 0
+    other_cad = 0
+    used_type_ids = set()
+
+    for inst in FilteredElementCollector(target_doc).OfClass(ImportInstance):
+        type_id = inst.GetTypeId()
+        used_type_ids.add(eid_value(type_id))
+        name = elem_name(target_doc.GetElement(type_id))
+
+        try:
+            is_link = bool(inst.IsLinked)
+        except Exception:
+            is_link = False
+
+        owner_id = inst.OwnerViewId
+        if owner_id is not None and owner_id != ElementId.InvalidElementId:
+            view = target_doc.GetElement(owner_id)
+            scope = (u"View: {0}".format(elem_name(view))
+                     if view is not None else "View specific")
+        else:
+            scope = "Model (all views)"
+
+        ext = file_ext(name)
+        if ext == "dwg":
+            if is_link:
+                dwg_links += 1
+                kind = "DWG Link"
+            else:
+                dwg_imports += 1
+                kind = "DWG Import"
+        else:
+            other_cad += 1
+            label = ext.upper() if ext else "CAD"
+            kind = u"{0} {1}".format(label, "Link" if is_link else "Import")
+
+        entries.append(Entry(u"{0}   [{1}]   {2}".format(name, kind, scope),
+                             (kind, name.lower())))
+
+    # CAD types with no placed instance - leftovers still in Manage Links
+    for cad_type in FilteredElementCollector(target_doc).OfClass(CADLinkType):
+        if eid_value(cad_type.Id) in used_type_ids:
+            continue
+        entries.append(Entry(
+            u"{0}   [Type only, no instance]".format(elem_name(cad_type)),
+            ("zz", elem_name(cad_type).lower())))
+
+    entries.sort(key=lambda e: e.SortKey)
+    return dwg_links, dwg_imports, other_cad, entries
+
+
+# ---------------------------------------------------------------------------
+# inspection 2 - warnings
+# ---------------------------------------------------------------------------
+
+def scan_warnings(target_doc):
+    """Return (total_warnings, [Entry, ...]) grouped by warning description."""
+    grouped = {}
+    total = 0
+
+    for failure in target_doc.GetWarnings():
+        total += 1
+        try:
+            text = failure.GetDescriptionText()
+        except Exception:
+            text = "<unreadable warning>"
+        text = (text or "<no description>").strip()
+        grouped[text] = grouped.get(text, 0) + 1
+
+    entries = []
+    for text in grouped:
+        count = grouped[text]
+        entries.append(Entry(u"{0} x   {1}".format(count, text),
+                             (-count, text.lower())))
+    entries.sort(key=lambda e: e.SortKey)
+    return total, entries
+
+
+# ---------------------------------------------------------------------------
+# inspection 3 - Levels and Grids worksets
+# ---------------------------------------------------------------------------
+
+def workset_name(target_doc, element):
+    """Workset name of an element, or None if it cannot be read."""
+    try:
+        table = target_doc.GetWorksetTable()
+        workset = table.GetWorkset(element.WorksetId)
+        return workset.Name if workset is not None else None
+    except Exception:
+        return None
+
+
+def scan_levels_grids(target_doc):
+    """Return (bad_levels, bad_grids, workshared, [Entry, ...]).
+
+    bad_levels / bad_grids are None when the document is not workshared, since
+    the check does not apply there.
+    """
+    if not target_doc.IsWorkshared:
+        return None, None, False, [
+            Entry("Model is not workshared - workset check does not apply.")]
+
+    entries = []
+    counts = {"Level": 0, "Grid": 0}
+
+    categories = [("Level", BuiltInCategory.OST_Levels),
+                  ("Grid", BuiltInCategory.OST_Grids)]
+
+    for label, bic in categories:
+        collector = (FilteredElementCollector(target_doc)
+                     .OfCategory(bic)
+                     .WhereElementIsNotElementType())
+        for element in collector:
+            ws_name = workset_name(target_doc, element)
+            if ws_name is None:
+                entries.append(Entry(
+                    u"{0}: {1}   [workset unreadable]".format(
+                        label, elem_name(element)),
+                    (label, "zz", elem_name(element).lower())))
+                continue
+            if ws_name.strip().lower() in VALID_LG_WORKSETS:
+                continue
+            counts[label] += 1
+            entries.append(Entry(
+                u"{0}: {1}   [on '{2}']".format(
+                    label, elem_name(element), ws_name),
+                (label, ws_name.lower(), elem_name(element).lower())))
+
+    entries.sort(key=lambda e: e.SortKey)
+    if not entries:
+        entries = [Entry("All Levels and Grids are on an accepted workset.")]
+
+    return counts["Level"], counts["Grid"], True, entries
+
+
+# ---------------------------------------------------------------------------
+# inspection 4 - unused families and types
+# ---------------------------------------------------------------------------
+
+class CategoryStat(object):
+    def __init__(self, name):
+        self.Name = name
+        self.FamilyCount = 0
+        self.TypeCount = 0
+        self.UnusedFamilies = []      # [(family name, type count), ...]
+        self.UnusedTypes = []         # ["family : type", ...] in used families
+
+    @property
+    def UsedFamilyCount(self):
+        return self.FamilyCount - len(self.UnusedFamilies)
+
+    def summary_line(self):
+        return (u"{0} families, {1} unused  |  {2} types, {3} unused under "
+                u"the {4} remaining families").format(
+                    self.FamilyCount, len(self.UnusedFamilies),
+                    self.TypeCount, len(self.UnusedTypes),
+                    self.UsedFamilyCount)
+
+    def has_findings(self):
+        return bool(self.UnusedFamilies) or bool(self.UnusedTypes)
+
+
+class UnusedResult(object):
+    def __init__(self):
+        self.Categories = []
+        self.TotalFamilies = 0
+        self.TotalTypes = 0
+        self.TotalUnusedFamilies = 0
+        self.TotalUnusedTypes = 0
+
+
+def type_family_name(element_type):
+    """Family name of an ElementType, for loadable and system families."""
+    try:
+        name = element_type.FamilyName
+    except Exception:
+        name = None
+    return name or "<no family>"
+
+
+def scan_unused(target_doc):
+    """Find families and types with no placed instances, grouped by category.
+
+    A family is 'unused' when none of its types has a single instance in the
+    document. A type is reported separately when its family IS used but that
+    specific type is not placed anywhere.
+    """
+    used_type_ids = set()
+    for element in FilteredElementCollector(target_doc).WhereElementIsNotElementType():
+        type_id = element.GetTypeId()
+        if type_id is not None and type_id != ElementId.InvalidElementId:
+            used_type_ids.add(eid_value(type_id))
+
+    # category name -> family name -> [(type name, is_used), ...]
+    tree = {}
+    for element_type in FilteredElementCollector(target_doc).WhereElementIsElementType():
+        category = element_type.Category
+        if category is None:
+            continue
+        if category.CategoryType not in (CategoryType.Model,
+                                         CategoryType.Annotation):
+            continue
+
+        cat_name = category.Name
+        fam_name = type_family_name(element_type)
+        is_used = eid_value(element_type.Id) in used_type_ids
+
+        families = tree.setdefault(cat_name, {})
+        families.setdefault(fam_name, []).append(
+            (elem_name(element_type), is_used))
+
+    result = UnusedResult()
+    for cat_name in sorted(tree.keys(), key=lambda n: n.lower()):
+        families = tree[cat_name]
+        stat = CategoryStat(cat_name)
+        stat.FamilyCount = len(families)
+
+        for fam_name in sorted(families.keys(), key=lambda n: n.lower()):
+            types = families[fam_name]
+            stat.TypeCount += len(types)
+            used_types = [t for t in types if t[1]]
+
+            if not used_types:
+                stat.UnusedFamilies.append((fam_name, len(types)))
+                continue
+
+            for type_name, is_used in sorted(types, key=lambda t: t[0].lower()):
+                if not is_used:
+                    stat.UnusedTypes.append(
+                        u"{0} : {1}".format(fam_name, type_name))
+
+        result.Categories.append(stat)
+        result.TotalFamilies += stat.FamilyCount
+        result.TotalTypes += stat.TypeCount
+        result.TotalUnusedFamilies += len(stat.UnusedFamilies)
+        result.TotalUnusedTypes += len(stat.UnusedTypes)
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# row model
+# ---------------------------------------------------------------------------
+
+class LinkRow(object):
+    def __init__(self, name):
+        self.Name = name
+        self.RawName = name
+        self.Status = "Loaded"
+        self.Scanned = False
+        self.LinkDoc = None
+
+        self.DwgLinks = 0
+        self.DwgImports = 0
+        self.OtherCad = 0
+        self.Warnings = 0
+        self.BadLevels = None
+        self.BadGrids = None
+        self.Workshared = False
+        self.Unused = None            # UnusedResult, filled on demand
+
+        self.CadEntries = []
+        self.WarningEntries = []
+        self.WorksetEntries = []
+
+        self.ColDwgLinks = DASH
+        self.ColDwgImports = DASH
+        self.ColWarnings = DASH
+        self.ColLevels = DASH
+        self.ColGrids = DASH
+        self.ColUnused = DASH
+
+    def inspect(self, target_doc):
+        self.Scanned = True
+        self.LinkDoc = target_doc
+
+        (self.DwgLinks, self.DwgImports, self.OtherCad,
+         self.CadEntries) = scan_cad(target_doc)
+        self.Warnings, self.WarningEntries = scan_warnings(target_doc)
+        (self.BadLevels, self.BadGrids, self.Workshared,
+         self.WorksetEntries) = scan_levels_grids(target_doc)
+
+        self.ColDwgLinks = str(self.DwgLinks)
+        self.ColDwgImports = str(self.DwgImports)
+        self.ColWarnings = str(self.Warnings)
+        self.ColUnused = "?"
+        if self.Workshared:
+            self.ColLevels = str(self.BadLevels)
+            self.ColGrids = str(self.BadGrids)
+        else:
+            self.ColLevels = "n/a"
+            self.ColGrids = "n/a"
+
+    def inspect_unused(self):
+        """Run the unused-item scan once and cache it."""
+        if self.Unused is not None or not self.Scanned or self.LinkDoc is None:
+            return
+        self.Unused = scan_unused(self.LinkDoc)
+        self.ColUnused = "{0} / {1}".format(self.Unused.TotalUnusedFamilies,
+                                            self.Unused.TotalUnusedTypes)
+
+
+# ---------------------------------------------------------------------------
+# collection
+# ---------------------------------------------------------------------------
+
+def build_rows():
+    rows = []
+
+    host_row = LinkRow(doc_title(doc, "Host model"))
+    host_row.Status = "Host model"
+    host_row.inspect(doc)
+    rows.append(host_row)
+
+    seen_paths = set()
+    host_path = (doc.PathName or "").strip().lower()
+    if host_path:
+        seen_paths.add(host_path)
+
+    seen_type_ids = set()
+    collector = FilteredElementCollector(doc).OfClass(RevitLinkInstance)
+    instances = list(collector)
+    instances.sort(
+        key=lambda i: elem_name(doc.GetElement(i.GetTypeId())).lower())
+
+    for link_inst in instances:
+        type_id = eid_value(link_inst.GetTypeId())
+        if type_id in seen_type_ids:
+            continue                      # several instances of the same link
+        seen_type_ids.add(type_id)
+
+        link_type = doc.GetElement(link_inst.GetTypeId())
+        row = LinkRow(elem_name(link_type))
+
+        try:
+            status_text = str(link_type.GetLinkedFileStatus())
+        except Exception:
+            status_text = ""
+
+        try:
+            link_doc = link_inst.GetLinkDocument()
+        except Exception:
+            link_doc = None
+
+        if link_doc is None:
+            row.Status = status_text or "Not loaded"
+            rows.append(row)
+            continue
+
+        key = (link_doc.PathName or row.RawName).strip().lower()
+        if key in seen_paths:
+            continue                      # same file linked twice
+        seen_paths.add(key)
+
+        row.Status = status_text or "Loaded"
+        row.inspect(link_doc)
+        rows.append(row)
+
+    return rows
+
+
+# ---------------------------------------------------------------------------
+# text report
+# ---------------------------------------------------------------------------
+
+def build_report_text(rows):
+    lines = []
+    lines.append("LINK INSPECTOR REPORT")
+    lines.append("Host model : {0}".format(doc_title(doc, "Unsaved")))
+    lines.append("Generated  : {0}".format(
+        DateTime.Now.ToString("yyyy-MM-dd HH:mm")))
+    lines.append("Accepted Level/Grid worksets : {0}".format(
+        ", ".join(VALID_LG_WORKSETS)))
+    lines.append("")
+
+    fmt = "{0:<42}{1:<17}{2:>10}{3:>12}{4:>10}{5:>12}{6:>11}{7:>16}"
+    header = fmt.format("DOCUMENT", "STATUS", "DWG LINKS", "DWG IMPORTS",
+                        "WARNINGS", "BAD LEVELS", "BAD GRIDS",
+                        "UNUSED FAM/TYPE")
+    lines.append(header)
+    lines.append("-" * len(header))
+
+    totals = [0, 0, 0, 0, 0, 0, 0]
+    for row in rows:
+        lines.append(fmt.format(
+            row.RawName[:41], row.Status[:16], row.ColDwgLinks,
+            row.ColDwgImports, row.ColWarnings, row.ColLevels, row.ColGrids,
+            row.ColUnused))
+        if row.Scanned:
+            totals[0] += row.DwgLinks
+            totals[1] += row.DwgImports
+            totals[2] += row.Warnings
+            if row.Workshared:
+                totals[3] += row.BadLevels
+                totals[4] += row.BadGrids
+            if row.Unused is not None:
+                totals[5] += row.Unused.TotalUnusedFamilies
+                totals[6] += row.Unused.TotalUnusedTypes
+
+    lines.append("-" * len(header))
+    lines.append(fmt.format(
+        "TOTAL", "", str(totals[0]), str(totals[1]), str(totals[2]),
+        str(totals[3]), str(totals[4]),
+        "{0} / {1}".format(totals[5], totals[6])))
+    lines.append("")
+    lines.append("")
+
+    for row in rows:
+        lines.append("=" * len(header))
+        lines.append(u"{0}  ({1})".format(row.RawName, row.Status))
+        lines.append("=" * len(header))
+        if not row.Scanned:
+            lines.append("    Document could not be opened - nothing scanned.")
+            lines.append("")
+            continue
+
+        sections = [("DWG / CAD", row.CadEntries),
+                    ("WARNINGS", row.WarningEntries),
+                    ("LEVELS AND GRIDS", row.WorksetEntries)]
+        for label, entries in sections:
+            lines.append("  {0}".format(label))
+            if not entries:
+                lines.append("    (nothing found)")
+            else:
+                for entry in entries:
+                    lines.append(u"    {0}".format(entry.Display))
+            lines.append("")
+
+        lines.append("  UNUSED FAMILIES AND TYPES")
+        if row.Unused is None:
+            lines.append("    (not scanned - open the Unused Items tab or "
+                         "press Scan All Unused)")
+            lines.append("")
+            continue
+
+        clean = 0
+        for stat in row.Unused.Categories:
+            if not stat.has_findings():
+                clean += 1
+                continue
+            lines.append(u"    Category: {0}".format(stat.Name))
+            lines.append(u"      {0}".format(stat.summary_line()))
+            if stat.UnusedFamilies:
+                lines.append("      Unused families:")
+                for fam_name, type_count in stat.UnusedFamilies:
+                    lines.append(u"        {0}  ({1} type(s))".format(
+                        fam_name, type_count))
+            if stat.UnusedTypes:
+                lines.append("      Unused types under used families:")
+                for text in stat.UnusedTypes:
+                    lines.append(u"        {0}".format(text))
+            lines.append("")
+        lines.append("    {0} further categor(ies) had nothing unused.".format(
+            clean))
+        lines.append("")
+
+    return u"\r\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# UI
+# ---------------------------------------------------------------------------
+
+XAML = u"""
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Link Inspector"
+        Height="720" Width="1300"
+        WindowStartupLocation="CenterScreen"
+        Background="#1E1E2E">
+
+  <Window.Resources>
+    <Style TargetType="TextBlock">
+      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="FontFamily" Value="Segoe UI"/>
+    </Style>
+
+    <Style x:Key="AccentButton" TargetType="Button">
+      <Setter Property="Foreground" Value="#1E1E2E"/>
+      <Setter Property="Background" Value="#F0A500"/>
+      <Setter Property="FontFamily" Value="Segoe UI"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Padding" Value="16,7"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border Background="{TemplateBinding Background}" CornerRadius="6">
+              <ContentPresenter HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Margin="{TemplateBinding Padding}"/>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style x:Key="GhostButton" TargetType="Button">
+      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="Background" Value="#45475A"/>
+      <Setter Property="FontFamily" Value="Segoe UI"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Padding" Value="16,7"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border Background="{TemplateBinding Background}" CornerRadius="6">
+              <ContentPresenter HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Margin="{TemplateBinding Padding}"/>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style x:Key="TabToggle" TargetType="ToggleButton">
+      <Setter Property="Foreground" Value="#A6ADC8"/>
+      <Setter Property="Background" Value="#313244"/>
+      <Setter Property="FontFamily" Value="Segoe UI"/>
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Padding" Value="10,5"/>
+      <Setter Property="Margin" Value="0,0,6,0"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ToggleButton">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                    CornerRadius="6">
+              <ContentPresenter HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Margin="{TemplateBinding Padding}"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#F0A500"/>
+                <Setter Property="Foreground" Value="#1E1E2E"/>
+              </Trigger>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#45475A"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="GridViewColumnHeader">
+      <Setter Property="Background" Value="#313244"/>
+      <Setter Property="Foreground" Value="#A6ADC8"/>
+      <Setter Property="FontFamily" Value="Segoe UI"/>
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Height" Value="28"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="HorizontalContentAlignment" Value="Left"/>
+      <Setter Property="Padding" Value="8,0"/>
+    </Style>
+
+    <Style TargetType="ListViewItem">
+      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="FontFamily" Value="Segoe UI"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Height" Value="26"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ListViewItem">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                    CornerRadius="4" Padding="4,0">
+              <GridViewRowPresenter VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#313244"/>
+              </Trigger>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#45475A"/>
+                <Setter Property="Foreground" Value="#F0A500"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="TreeViewItem">
+      <Setter Property="FontFamily" Value="Segoe UI"/>
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="Margin" Value="0,1,0,1"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TreeViewItem">
+            <StackPanel>
+              <Border x:Name="Bd" Background="Transparent"
+                      CornerRadius="4" Padding="2,1">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="18"/>
+                    <ColumnDefinition Width="*"/>
+                  </Grid.ColumnDefinitions>
+                  <ToggleButton x:Name="Expander" Grid.Column="0"
+                                Focusable="False" ClickMode="Press"
+                                IsChecked="{Binding IsExpanded,
+                                  RelativeSource={RelativeSource TemplatedParent}}">
+                    <ToggleButton.Template>
+                      <ControlTemplate TargetType="ToggleButton">
+                        <Border Background="Transparent"
+                                Width="16" Height="16">
+                          <TextBlock x:Name="Sign" Text="+"
+                                     Foreground="#F0A500" FontSize="12"
+                                     FontWeight="Bold"
+                                     HorizontalAlignment="Center"
+                                     VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                          <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Sign" Property="Text"
+                                    Value="-"/>
+                          </Trigger>
+                        </ControlTemplate.Triggers>
+                      </ControlTemplate>
+                    </ToggleButton.Template>
+                  </ToggleButton>
+                  <ContentPresenter Grid.Column="1" ContentSource="Header"
+                                    VerticalAlignment="Center"/>
+                </Grid>
+              </Border>
+              <ItemsPresenter x:Name="ItemsHost" Margin="16,0,0,0"/>
+            </StackPanel>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsExpanded" Value="False">
+                <Setter TargetName="ItemsHost" Property="Visibility"
+                        Value="Collapsed"/>
+              </Trigger>
+              <Trigger Property="HasItems" Value="False">
+                <Setter TargetName="Expander" Property="Visibility"
+                        Value="Hidden"/>
+              </Trigger>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#3B3B52"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </Window.Resources>
+
+  <Grid Margin="16">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <StackPanel Grid.Row="0" Margin="0,0,0,10">
+      <TextBlock Text="Link Inspector" FontSize="19" FontWeight="Bold"/>
+      <TextBlock x:Name="SummaryText" Margin="0,4,0,0"
+                 FontSize="12" Foreground="#A6ADC8"/>
+    </StackPanel>
+
+    <Border Grid.Row="1" Background="#2A2A3C" CornerRadius="6"
+            Padding="10,6" Margin="0,0,0,10">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto"/>
+          <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <TextBlock Grid.Column="0" Text="Search" VerticalAlignment="Center"
+                   Foreground="#A6ADC8" FontSize="12" Margin="0,0,10,0"/>
+        <TextBox x:Name="SearchBox" Grid.Column="1"
+                 Background="#313244" Foreground="#CDD6F4"
+                 CaretBrush="#F0A500" BorderThickness="0"
+                 FontFamily="Segoe UI" FontSize="12" Padding="6,4"/>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="2">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="1.55*"/>
+        <ColumnDefinition Width="12"/>
+        <ColumnDefinition Width="1*"/>
+      </Grid.ColumnDefinitions>
+
+      <Border Grid.Column="0" Background="#2A2A3C" CornerRadius="8" Padding="8">
+        <ListView x:Name="LinkList" Background="Transparent"
+                  BorderThickness="0" Foreground="#CDD6F4"
+                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+          <ListView.View>
+            <GridView>
+              <GridViewColumn Header="Document" Width="212"
+                              DisplayMemberBinding="{Binding Name}"/>
+              <GridViewColumn Header="Status" Width="92"
+                              DisplayMemberBinding="{Binding Status}"/>
+              <GridViewColumn Header="DWG Links" Width="72"
+                              DisplayMemberBinding="{Binding ColDwgLinks}"/>
+              <GridViewColumn Header="DWG Imports" Width="84"
+                              DisplayMemberBinding="{Binding ColDwgImports}"/>
+              <GridViewColumn Header="Warnings" Width="68"
+                              DisplayMemberBinding="{Binding ColWarnings}"/>
+              <GridViewColumn Header="Bad Levels" Width="72"
+                              DisplayMemberBinding="{Binding ColLevels}"/>
+              <GridViewColumn Header="Bad Grids" Width="68"
+                              DisplayMemberBinding="{Binding ColGrids}"/>
+              <GridViewColumn Header="Unused Fam / Type" Width="112"
+                              DisplayMemberBinding="{Binding ColUnused}"/>
+            </GridView>
+          </ListView.View>
+        </ListView>
+      </Border>
+
+      <Border Grid.Column="2" Background="#2A2A3C" CornerRadius="8" Padding="10">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+          </Grid.RowDefinitions>
+
+          <WrapPanel Grid.Row="0" Margin="0,0,0,8">
+            <ToggleButton x:Name="TabCad" Content="DWG / CAD"
+                          Style="{StaticResource TabToggle}" IsChecked="True"/>
+            <ToggleButton x:Name="TabWarn" Content="Warnings"
+                          Style="{StaticResource TabToggle}"/>
+            <ToggleButton x:Name="TabWorkset" Content="Levels + Grids"
+                          Style="{StaticResource TabToggle}"/>
+            <ToggleButton x:Name="TabUnused" Content="Unused Items"
+                          Style="{StaticResource TabToggle}"/>
+          </WrapPanel>
+
+          <TextBlock x:Name="DetailHeader" Grid.Row="1"
+                     Text="Select a document" FontSize="12"
+                     FontWeight="SemiBold" Foreground="#A6ADC8"
+                     Margin="0,0,0,8" TextWrapping="Wrap"/>
+
+          <ListBox x:Name="DetailList" Grid.Row="2" Background="#313244"
+                   Foreground="#CDD6F4" BorderThickness="0"
+                   FontFamily="Segoe UI" FontSize="11"
+                   DisplayMemberPath="Display"
+                   ScrollViewer.HorizontalScrollBarVisibility="Auto"/>
+
+          <TreeView x:Name="CategoryTree" Grid.Row="2" Background="#313244"
+                    BorderThickness="0" Padding="4"
+                    Visibility="Collapsed"
+                    ScrollViewer.HorizontalScrollBarVisibility="Auto"/>
+        </Grid>
+      </Border>
+    </Grid>
+
+    <StackPanel Grid.Row="3" Orientation="Horizontal"
+                HorizontalAlignment="Right" Margin="0,12,0,0">
+      <Button x:Name="ScanAllButton" Content="Scan All Unused"
+              Style="{StaticResource GhostButton}" Margin="0,0,8,0"/>
+      <Button x:Name="CopyButton" Content="Copy Report"
+              Style="{StaticResource AccentButton}" Margin="0,0,8,0"/>
+      <Button x:Name="CloseButton" Content="Close"
+              Style="{StaticResource GhostButton}"/>
+    </StackPanel>
+  </Grid>
+</Window>
+"""
+
+
+def make_node(text, text_brush, bold=False, expanded=False):
+    label = TextBlock()
+    label.Text = text
+    label.Foreground = text_brush
+    label.TextWrapping = TextWrapping.Wrap
+    if bold:
+        label.FontWeight = FontWeights.SemiBold
+    node = TreeViewItem()
+    node.Header = label
+    node.IsExpanded = expanded
+    return node
+
+
+def populate_tree(tree, result):
+    """Fill the TreeView with one collapsible node per category."""
+    tree.Items.Clear()
+
+    clean = 0
+    for stat in result.Categories:
+        if not stat.has_findings():
+            clean += 1
+            continue
+
+        node = make_node(u"Category: {0}".format(stat.Name),
+                         BRUSH_ACCENT, True)
+        node.Items.Add(make_node(stat.summary_line(), BRUSH_SUB))
+
+        if stat.UnusedFamilies:
+            branch = make_node(u"Unused families ({0})".format(
+                len(stat.UnusedFamilies)), BRUSH_TEXT)
+            for fam_name, type_count in stat.UnusedFamilies:
+                branch.Items.Add(make_node(
+                    u"{0}  ({1} type(s))".format(fam_name, type_count),
+                    BRUSH_SUB))
+            node.Items.Add(branch)
+
+        if stat.UnusedTypes:
+            branch = make_node(u"Unused types under used families ({0})".format(
+                len(stat.UnusedTypes)), BRUSH_TEXT)
+            for text in stat.UnusedTypes:
+                branch.Items.Add(make_node(text, BRUSH_SUB))
+            node.Items.Add(branch)
+
+        tree.Items.Add(node)
+
+    tree.Items.Add(make_node(
+        u"{0} other categor(ies) had nothing unused.".format(clean),
+        BRUSH_SUB))
+
+
+def show_window(rows):
+    window = XamlReader.Parse(XAML)
+
+    summary_text = window.FindName("SummaryText")
+    search_box = window.FindName("SearchBox")
+    link_list = window.FindName("LinkList")
+    tab_cad = window.FindName("TabCad")
+    tab_warn = window.FindName("TabWarn")
+    tab_workset = window.FindName("TabWorkset")
+    tab_unused = window.FindName("TabUnused")
+    detail_header = window.FindName("DetailHeader")
+    detail_list = window.FindName("DetailList")
+    category_tree = window.FindName("CategoryTree")
+    scan_all_button = window.FindName("ScanAllButton")
+    copy_button = window.FindName("CopyButton")
+    close_button = window.FindName("CloseButton")
+
+    scanned = [r for r in rows if r.Scanned]
+    workshared = [r for r in scanned if r.Workshared]
+    unreadable = len(rows) - len(scanned)
+
+    summary = ("{0} documents  |  {1} DWG links  |  {2} DWG imports  |  "
+               "{3} warnings  |  {4} levels + {5} grids on a wrong workset"
+               ).format(len(scanned),
+                        sum([r.DwgLinks for r in scanned]),
+                        sum([r.DwgImports for r in scanned]),
+                        sum([r.Warnings for r in scanned]),
+                        sum([r.BadLevels for r in workshared]),
+                        sum([r.BadGrids for r in workshared]))
+    if unreadable:
+        summary += "  |  {0} not readable".format(unreadable)
+    summary_text.Text = summary
+
+    mode = ["cad"]
+
+    def set_source(items):
+        link_list.ItemsSource = List[object](items)
+
+    def apply_filter():
+        text = (search_box.Text or "").strip().lower()
+        if not text:
+            set_source(rows)
+        else:
+            set_source([r for r in rows if text in r.RawName.lower()])
+
+    def show_list():
+        category_tree.Visibility = Visibility.Collapsed
+        detail_list.Visibility = Visibility.Visible
+
+    def show_tree():
+        detail_list.Visibility = Visibility.Collapsed
+        category_tree.Visibility = Visibility.Visible
+
+    def refresh_detail():
+        row = link_list.SelectedItem
+        if row is None:
+            show_list()
+            detail_header.Text = "Select a document"
+            detail_list.ItemsSource = None
+            return
+        if not row.Scanned:
+            show_list()
+            detail_header.Text = u"{0} {1} {2}".format(
+                row.RawName, DASH, row.Status)
+            detail_list.ItemsSource = None
+            return
+
+        if mode[0] == "unused":
+            if row.Unused is None:
+                Mouse.OverrideCursor = Cursors.Wait
+                try:
+                    row.inspect_unused()
+                finally:
+                    Mouse.OverrideCursor = None
+                try:
+                    link_list.Items.Refresh()
+                    link_list.SelectedItem = row
+                except Exception:
+                    pass
+            result = row.Unused
+            detail_header.Text = (
+                u"{0} {1} {2} unused famil(ies), {3} unused type(s) under "
+                u"used families  (of {4} families / {5} types)").format(
+                    row.RawName, DASH, result.TotalUnusedFamilies,
+                    result.TotalUnusedTypes, result.TotalFamilies,
+                    result.TotalTypes)
+            populate_tree(category_tree, result)
+            show_tree()
+            return
+
+        show_list()
+
+        if mode[0] == "cad":
+            entries = row.CadEntries
+            label = u"{0} DWG link(s), {1} import(s), {2} other CAD".format(
+                row.DwgLinks, row.DwgImports, row.OtherCad)
+        elif mode[0] == "warn":
+            entries = row.WarningEntries
+            label = u"{0} warning(s)".format(row.Warnings)
+        else:
+            entries = row.WorksetEntries
+            if row.Workshared:
+                label = u"{0} level(s), {1} grid(s) on a wrong workset".format(
+                    row.BadLevels, row.BadGrids)
+            else:
+                label = "Not workshared"
+
+        detail_header.Text = u"{0} {1} {2}".format(row.RawName, DASH, label)
+        detail_list.ItemsSource = List[object](entries) if entries else None
+
+    def set_mode(key):
+        mode[0] = key
+        tab_cad.IsChecked = (key == "cad")
+        tab_warn.IsChecked = (key == "warn")
+        tab_workset.IsChecked = (key == "workset")
+        tab_unused.IsChecked = (key == "unused")
+        refresh_detail()
+
+    def on_search(sender, args):
+        apply_filter()
+
+    def on_select(sender, args):
+        refresh_detail()
+
+    def on_tab_cad(sender, args):
+        set_mode("cad")
+
+    def on_tab_warn(sender, args):
+        set_mode("warn")
+
+    def on_tab_workset(sender, args):
+        set_mode("workset")
+
+    def on_tab_unused(sender, args):
+        set_mode("unused")
+
+    def on_scan_all(sender, args):
+        current = link_list.SelectedItem
+        Mouse.OverrideCursor = Cursors.Wait
+        try:
+            for row in rows:
+                row.inspect_unused()
+        finally:
+            Mouse.OverrideCursor = None
+        try:
+            link_list.Items.Refresh()
+            if current is not None:
+                link_list.SelectedItem = current
+        except Exception:
+            pass
+        scan_all_button.Content = "Unused Scanned"
+        refresh_detail()
+
+    def on_copy(sender, args):
+        text = build_report_text(rows)
+        try:
+            Clipboard.SetText(text)
+        except Exception:
+            try:
+                Clipboard.SetDataObject(text, True)
+            except Exception:
+                TaskDialog.Show("Link Inspector",
+                                "Could not access the clipboard.")
+                return
+        copy_button.Content = "Copied"
+
+    def on_close_click(sender, args):
+        window.Close()
+
+    frame = DispatcherFrame()
+
+    def on_closed(sender, args):
+        frame.Continue = False
+
+    search_box.TextChanged += TextChangedEventHandler(on_search)
+    link_list.SelectionChanged += SelectionChangedEventHandler(on_select)
+    tab_cad.Click += RoutedEventHandler(on_tab_cad)
+    tab_warn.Click += RoutedEventHandler(on_tab_warn)
+    tab_workset.Click += RoutedEventHandler(on_tab_workset)
+    tab_unused.Click += RoutedEventHandler(on_tab_unused)
+    scan_all_button.Click += RoutedEventHandler(on_scan_all)
+    copy_button.Click += RoutedEventHandler(on_copy)
+    close_button.Click += RoutedEventHandler(on_close_click)
+    window.Closed += EventHandler(on_closed)
+
+    set_source(rows)
+
+    window.Show()
+    Dispatcher.PushFrame(frame)
+
+
+# ---------------------------------------------------------------------------
+# main
+# ---------------------------------------------------------------------------
+
+def main():
+    rows = build_rows()
+    if len(rows) <= 1:
+        host = rows[0]
+        TaskDialog.Show(
+            "Link Inspector",
+            "No Revit links were found in this model.\n\n"
+            "Host model:\n"
+            "  DWG links   : {0}\n"
+            "  DWG imports : {1}\n"
+            "  Warnings    : {2}\n"
+            "  Bad levels  : {3}\n"
+            "  Bad grids   : {4}".format(
+                host.DwgLinks, host.DwgImports, host.Warnings,
+                host.ColLevels, host.ColGrids))
+        return
+    show_window(rows)
+
+
+main()
