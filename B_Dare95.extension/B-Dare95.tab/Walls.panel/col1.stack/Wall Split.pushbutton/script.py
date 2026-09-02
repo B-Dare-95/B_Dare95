@@ -21,12 +21,14 @@ clr.AddReference('System')
 
 from Autodesk.Revit.DB import (
     FilteredElementCollector, BuiltInCategory, BuiltInParameter,
-    Wall, WallKind, RevitLinkInstance, Transform,
-    Line, XYZ, LocationCurve, FamilyInstance,
+    Wall, WallKind, WallUtils, RevitLinkInstance, Transform,
+    Line, XYZ, LocationCurve, LocationPoint, FamilyInstance, Opening,
+    ElementId, ElementTransformUtils,
     Transaction, TransactionGroup
 )
-from Autodesk.Revit.DB.Structure import StructuralType
 from Autodesk.Revit.UI.Selection import ISelectionFilter
+
+from System.Collections.Generic import List
 
 from pyrevit import revit, forms, script
 
@@ -193,151 +195,215 @@ def u_in_segment(u, s, e):
 
 
 # ---------------------------------------------------------------------------
-# 3. Parameter copying helpers
+# 3. Insert (door / window / opening) helpers
+#
+#    Inserts are never re-created. They ride along with the wall copy. These
+#    helpers only decide WHICH copy each insert belongs to, so the copies that
+#    do not own it can have it removed before they are shortened.
 # ---------------------------------------------------------------------------
-WALL_COPY_PARAMS = [
-    BuiltInParameter.WALL_BASE_CONSTRAINT,
-    BuiltInParameter.WALL_BASE_OFFSET,
-    BuiltInParameter.WALL_HEIGHT_TYPE,        # top constraint
-    BuiltInParameter.WALL_TOP_OFFSET,
-    BuiltInParameter.WALL_USER_HEIGHT_PARAM,  # unconnected height
-    BuiltInParameter.WALL_KEY_REF_PARAM,      # location line
-    BuiltInParameter.WALL_STRUCTURAL_USAGE_PARAM,
-]
-
-HOSTED_COPY_PARAMS = [
-    BuiltInParameter.INSTANCE_SILL_HEIGHT_PARAM,
-    BuiltInParameter.INSTANCE_HEAD_HEIGHT_PARAM,
-    BuiltInParameter.ALL_MODEL_MARK,
-    BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS,
-]
+FIT_TOL = 0.01   # ft - slack allowed when checking an insert fits a segment
 
 
-def copy_params(src, dst, param_list):
-    for bip in param_list:
-        try:
-            sp = src.get_Parameter(bip)
-            dp = dst.get_Parameter(bip)
-            if sp is None or dp is None or dp.IsReadOnly:
-                continue
-            storage = sp.StorageType.ToString()
-            if storage == 'Double':
-                dp.Set(sp.AsDouble())
-            elif storage == 'Integer':
-                dp.Set(sp.AsInteger())
-            elif storage == 'ElementId':
-                dp.Set(sp.AsElementId())
-            elif storage == 'String':
-                v = sp.AsString()
-                if v is not None:
-                    dp.Set(v)
-        except Exception:
-            continue
+def _bip(name):
+    return getattr(BuiltInParameter, name, None)
 
 
-# ---------------------------------------------------------------------------
-# 4. Hosted element helpers (doors / windows - FamilyInstance only)
-# ---------------------------------------------------------------------------
-def get_hosted_family_instances(doc, wall):
-    hosted = []
+INSERT_WIDTH_PARAMS = [b for b in (
+    _bip('DOOR_WIDTH'),
+    _bip('WINDOW_WIDTH'),
+    _bip('FAMILY_WIDTH_PARAM'),
+    _bip('GENERIC_WIDTH'),
+) if b is not None]
+
+
+def get_wall_inserts(doc, wall):
+    """Every door / window / opening actually hosted BY this wall."""
+    inserts = []
     for eid in wall.GetDependentElements(None):
         el = doc.GetElement(eid)
-        if isinstance(el, FamilyInstance):
+        if el is None:
+            continue
+        if not isinstance(el, (FamilyInstance, Opening)):
+            continue
+        try:
             host = el.Host
-            if host is not None and host.Id == wall.Id:
-                hosted.append(el)
-    return hosted
+        except Exception:
+            continue
+        if host is not None and host.Id == wall.Id:
+            inserts.append(el)
+    return inserts
 
 
-def recreate_hosted_instance(doc, old_instance, new_host_wall):
-    symbol = old_instance.Symbol
-    if not symbol.IsActive:
-        symbol.Activate()
-        doc.Regenerate()
+def insert_u(el, p0, direction):
+    """Position of an insert along the wall's location curve, or None."""
+    loc = el.Location
+    if isinstance(loc, LocationPoint):
+        return (loc.Point - p0).DotProduct(direction)
+    bbox = el.get_BoundingBox(None)
+    if bbox is None:
+        return None
+    center = (bbox.Min + bbox.Max).Multiply(0.5)
+    return (center - p0).DotProduct(direction)
 
-    point = old_instance.Location.Point
 
-    new_instance = doc.Create.NewFamilyInstance(
-        point, symbol, new_host_wall, StructuralType.NonStructural)
-    doc.Regenerate()
+def insert_width(el):
+    """Width of an insert along the wall, or None if it can't be read."""
+    sources = [el]
+    symbol = getattr(el, 'Symbol', None)
+    if symbol is not None:
+        sources.append(symbol)
+    for src in sources:
+        for bip in INSERT_WIDTH_PARAMS:
+            try:
+                p = src.get_Parameter(bip)
+            except Exception:
+                continue
+            if p is None or not p.HasValue:
+                continue
+            if p.StorageType.ToString() != 'Double':
+                continue
+            v = p.AsDouble()
+            if v > 0:
+                return v
+    return None
 
-    copy_params(old_instance, new_instance, HOSTED_COPY_PARAMS)
 
-    try:
-        if old_instance.FacingFlipped != new_instance.FacingFlipped:
-            new_instance.flipFacing()
-    except Exception:
-        pass
-    try:
-        if old_instance.HandFlipped != new_instance.HandFlipped:
-            new_instance.flipHand()
-    except Exception:
-        pass
+def owning_segment_index(u, width, segments):
+    """Index of the segment that keeps this insert, or None if no segment can.
 
-    return new_instance
+    An insert is owned by the segment its insertion point falls in, but only
+    if the whole insert fits inside that segment. An insert straddling a
+    column face cannot be cut out of the shortened wall - Revit would raise
+    'Can't cut instance out of Wall' - so it is dropped and reported instead.
+    """
+    for i, (s, e) in enumerate(segments):
+        if not u_in_segment(u, s, e):
+            continue
+        if width:
+            half = width / 2.0
+            if (u - half) < (s - FIT_TOL) or (u + half) > (e + FIT_TOL):
+                return None
+        return i
+    return None
 
 
 # ---------------------------------------------------------------------------
-# 5. Rebuild a wall as the surviving segments (gaps between column faces)
+# 4. Rebuild a wall as the surviving segments (gaps between column faces)
+#
+#    Strategy: DO NOT create empty walls and re-place the inserts. Instead
+#    copy the original wall once per surviving segment. A copied wall carries
+#    every hosted element with it, at its exact original position, with all
+#    instance data intact. Each copy then explicitly deletes the inserts it
+#    does not own, and only afterwards is shortened to its segment.
 # ---------------------------------------------------------------------------
+END_TOL = 1e-6
+
+
 def split_wall(doc, wall, segments):
     curve = wall.Location.Curve
     p0 = curve.GetEndPoint(0)
     p1 = curve.GetEndPoint(1)
+    length = curve.Length
     direction = (p1 - p0).Normalize()
 
-    wall_type_id = wall.WallType.Id
-    level_id = wall.LevelId
-    was_flipped = wall.Flipped
+    # Remember whether the original wall allowed joins at its real ends, so
+    # the outermost segments can be restored to the same state.
+    try:
+        orig_join_start = WallUtils.IsWallJoinAllowedAtEnd(wall, 0)
+        orig_join_end = WallUtils.IsWallJoinAllowedAtEnd(wall, 1)
+    except Exception:
+        orig_join_start = True
+        orig_join_end = True
 
-    height_param = wall.get_Parameter(BuiltInParameter.WALL_USER_HEIGHT_PARAM)
-    height = height_param.AsDouble() if height_param and height_param.HasValue else 10.0
-
-    offset_param = wall.get_Parameter(BuiltInParameter.WALL_BASE_OFFSET)
-    base_offset = offset_param.AsDouble() if offset_param and offset_param.HasValue else 0.0
-
-    struct_param = wall.get_Parameter(BuiltInParameter.WALL_STRUCTURAL_USAGE_PARAM)
-    is_structural = bool(struct_param and struct_param.HasValue and struct_param.AsInteger() != 0)
-
-    hosted = get_hosted_family_instances(doc, wall)
-    hosted_u = []
-    for inst in hosted:
-        pt = inst.Location.Point
-        u = (pt - p0).DotProduct(direction)
-        hosted_u.append((inst, u))
-
+    # Decide up front which segment owns each insert. Anything no segment can
+    # keep (sits inside a column footprint, or straddles a column face) is
+    # reported so it can be re-placed by hand.
     unrecoverable = []
-    for inst, u in hosted_u:
-        if not any(u_in_segment(u, s, e) for (s, e) in segments):
-            unrecoverable.append(inst.Id)
+    for el in get_wall_inserts(doc, wall):
+        u = insert_u(el, p0, direction)
+        if u is None:
+            continue
+        if owning_segment_index(u, insert_width(el), segments) is None:
+            unrecoverable.append(el.Id)
+
+    source_ids = List[ElementId]()
+    source_ids.Add(wall.Id)
 
     new_walls = []
-    for (s, e) in segments:
+    for seg_index, (s, e) in enumerate(segments):
+        copied_ids = ElementTransformUtils.CopyElements(doc, source_ids, XYZ.Zero)
+        doc.Regenerate()
+
+        new_wall = None
+        for cid in copied_ids:
+            candidate = doc.GetElement(cid)
+            if isinstance(candidate, Wall):
+                new_wall = candidate
+                break
+        if new_wall is None:
+            raise Exception('Copy of wall {} produced no wall element'
+                            .format(eid_str(wall.Id)))
+
+        # The copy carries EVERY insert from the original, so before it is
+        # shortened it must give up the ones this segment does not own.
+        # Leaving them attached is what makes Revit raise "Instance(s) of ...
+        # not cutting anything" - an error, not a suppressible warning - once
+        # the wall no longer passes through them.
+        to_delete = List[ElementId]()
+        for el in get_wall_inserts(doc, new_wall):
+            u = insert_u(el, p0, direction)
+            if u is None:
+                continue
+            if owning_segment_index(u, insert_width(el), segments) != seg_index:
+                to_delete.Add(el.Id)
+        if to_delete.Count > 0:
+            doc.Delete(to_delete)
+            doc.Regenerate()
+
+        # A copy dropped on top of the original auto-joins to the same
+        # neighbouring walls the original touches. Joined ends resist being
+        # moved, and the curve assignment below would silently revert.
+        # Break the joins first, restore them after the original is gone.
+        WallUtils.DisallowWallJoinAtEnd(new_wall, 0)
+        WallUtils.DisallowWallJoinAtEnd(new_wall, 1)
+
         seg_start = p0 + direction.Multiply(s)
         seg_end = p0 + direction.Multiply(e)
-        seg_curve = Line.CreateBound(seg_start, seg_end)
 
-        new_wall = Wall.Create(doc, seg_curve, wall_type_id, level_id,
-                                height, base_offset, was_flipped, is_structural)
+        # Bind Location to a local first - assigning through the property
+        # chain directly does not reliably stick in IronPython.
+        loc = new_wall.Location
+        loc.Curve = Line.CreateBound(seg_start, seg_end)
         doc.Regenerate()
-        copy_params(wall, new_wall, WALL_COPY_PARAMS)
 
-        for inst, u in hosted_u:
-            if u_in_segment(u, s, e):
-                recreate_hosted_instance(doc, inst, new_wall)
+        new_walls.append((new_wall,
+                          abs(s) < END_TOL,
+                          abs(e - length) < END_TOL))
 
-        new_walls.append(new_wall)
-
-    # Deleting the original wall also removes its now-superseded hosted
-    # instances (they're dependent elements of the wall being deleted).
+    # Original wall (and anything still hosted inside a column gap) removed.
     doc.Delete(wall.Id)
     doc.Regenerate()
 
-    return new_walls, unrecoverable
+    # Restore joining. Interior ends (the new ends at column faces) are always
+    # re-enabled so they miter correctly against whatever is adjacent; the
+    # outer ends inherit the original wall's setting.
+    result_walls = []
+    for new_wall, at_orig_start, at_orig_end in new_walls:
+        try:
+            if (not at_orig_start) or orig_join_start:
+                WallUtils.AllowWallJoinAtEnd(new_wall, 0)
+            if (not at_orig_end) or orig_join_end:
+                WallUtils.AllowWallJoinAtEnd(new_wall, 1)
+        except Exception:
+            pass
+        result_walls.append(new_wall)
+    doc.Regenerate()
+
+    return result_walls, unrecoverable
 
 
 # ---------------------------------------------------------------------------
-# 6. Rectangle selection (walls only)
+# 5. Rectangle selection (walls only)
 # ---------------------------------------------------------------------------
 class WallOnlyFilter(ISelectionFilter):
     def AllowElement(self, elem):
@@ -438,7 +504,8 @@ def process_selected_walls(all_columns):
             output.print_md('  - Wall {}: {}'.format(eid_str(wid), msg))
     if all_unrecoverable:
         output.print_md('- **Hosted elements that could NOT be preserved** '
-                         '(inside a column footprint) - please re-place manually:')
+                         '(inside a column footprint, or straddling a column '
+                         'face) - please re-place manually:')
         for eid in all_unrecoverable:
             output.print_md('  - Element {}'.format(eid_str(eid)))
     if skipped:
