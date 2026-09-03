@@ -5,28 +5,15 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="09d0a4df-0748-4405-a48e-7586ee4f5c90" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Links.panel/Link Inspector.pushbutton/icon.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Links.panel/Link Inspector.pushbutton/script.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Resolvers.pulldown/Remove Duplicates.pushbutton/Duplicate Family Instances_script.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Resolvers.pulldown/Unjoin False Intersect.pushbutton/icon.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Resolvers.pulldown/Unjoin False Intersect.pushbutton/script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/B_Dare95.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/B_Dare95.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Automations.panel/col1.stack/Remove Duplicates.pushbutton/Duplicate Family Instances_script.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Automations.panel/col1.stack/Remove Duplicates.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Resolvers.pulldown/Remove Duplicates.pushbutton/icon.png" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/col3.stack/Add Issue.pushbutton/Add Issue View_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/col3.stack/Add Issue.pushbutton/Add Issue View_script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Inspection.panel/col3.stack/Add Issue.pushbutton/issue_logger.cfg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Links.panel/col1.stack/Levels &amp; Grids Check.pushbutton/Lvls &amp; Grids_script.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Links.panel/col1.stack/Levels &amp; Grids Check.pushbutton/icon.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Walls.panel/col1.stack/Wall Split.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Walls.panel/col1.stack/Wall Split.pushbutton/script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/Slightly Off Axis.pulldown/Off Axis Grids.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Slightly Off Axis.pulldown/Off Axis Grids.pushbutton/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/Slightly Off Axis.pulldown/Off Axis Grids.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Slightly Off Axis.pulldown/Off Axis Grids.pushbutton/script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/Slightly Off Axis.pulldown/Off Axis Lines.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Slightly Off Axis.pulldown/Off Axis Lines.pushbutton/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/Slightly Off Axis.pulldown/Off Axis Lines.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Slightly Off Axis.pulldown/Off Axis Lines.pushbutton/script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/Slightly Off Axis.pulldown/Off Axis Sketch.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Slightly Off Axis.pulldown/Off Axis Sketch.pushbutton/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/Slightly Off Axis.pulldown/Off Axis Sketch.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Slightly Off Axis.pulldown/Off Axis Sketch.pushbutton/script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/Slightly Off Axis.pulldown/Off Axis Walls.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Slightly Off Axis.pulldown/Off Axis Walls.pushbutton/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/Slightly Off Axis.pulldown/Off Axis Walls.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Slightly Off Axis.pulldown/Off Axis Walls.pushbutton/script.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/Slightly Off Axis.pulldown/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Warnings.panel/col1.stack/Slightly Off Axis.pulldown/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Links.panel/Link Inspector.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Links.panel/Link Inspector.pushbutton/script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/QoL.panel/col2.stack/Quick Reports.pulldown/Items on Levels.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/QoL.panel/col2.stack/Quick Reports.pulldown/Items on Levels.pushbutton/script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Walls.panel/col1.stack/Wall Peeler.pushbutton/Wall Splitter_script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Model Elements.panel/Walls.pulldown/Wall Peeler.pushbutton/Wall Splitter_script.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Walls.panel/col1.stack/Wall Peeler.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Model Elements.panel/Walls.pulldown/Wall Peeler.pushbutton/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Walls.panel/col1.stack/Wall Split.pushbutton/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Model Elements.panel/Walls.pulldown/Wall Split.pushbutton/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Walls.panel/col1.stack/Wall Split.pushbutton/script.py" beforeDir="false" afterPath="$PROJECT_DIR$/B_Dare95.extension/B-Dare95.tab/Model Elements.panel/Walls.pulldown/Wall Split.pushbutton/script.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -121,31 +108,31 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "RunOnceActivity.MCP Project settings loaded": "true",
-    "RunOnceActivity.OpenProjectViewOnStart": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
-    "codeWithMe.voiceChat.enabledByDefault": "false",
-    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
-    "git-widget-placeholder": "main",
-    "ignore.virus.scanning.warn.message": "true",
-    "junie.onboarding.icon.badge.shown": "true",
-    "last_opened_file_path": "C:/Users/moham/Documents/GitHub/B_Dare95/B_Dare95.extension/B-Dare95.tab/Links.panel/Link Inspector.pushbutton",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.jshint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.jshint": "",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable",
-    "to.speed.mode.migration.done": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
+    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
+    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/mohamed.bedair.SDCNT/Documents/GitHub/B_Dare95&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.jshint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.jshint&quot;: &quot;&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;,
+    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="C:\Users\moham\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Links.panel\Link Inspector.pushbutton" />
@@ -155,11 +142,11 @@
       <recent name="C:\Users\mohamed.bedair.SDCNT\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Shafts.panel\col1.stack\Shaft Text Note.splitpushbutton\Linked Shafts.pushbutton" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\mohamed.bedair.SDCNT\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Model Elements.panel\Walls.pulldown" />
       <recent name="C:\Users\moham\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Links.panel" />
       <recent name="C:\Users\moham\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Warnings.panel\col1.stack\Resolvers.pulldown" />
       <recent name="C:\Users\moham\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Warnings.panel\col1.stack" />
       <recent name="C:\Users\moham\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Warnings.panel\col1.stack\Resolvers.pulldown\Unjoin False Intersect.pushbutton" />
-      <recent name="C:\Users\moham\Documents\GitHub\B_Dare95\B_Dare95.extension\B-Dare95.tab\Clashes.panel" />
     </key>
   </component>
   <component name="SharedIndexes">

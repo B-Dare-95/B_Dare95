@@ -13,23 +13,6 @@ Replaces:
   waiting      → DispatcherTimer on the UI thread (never a worker thread —
                  see the "Take Screenshot" section for why)
   Dispatcher.PushFrame → modeless Show()  (see show_modeless() for why)
-
-WHERE THE CONFIG LIVES
-----------------------
-issue_logger.cfg is stored per-machine under
-%LOCALAPPDATA%\\B_Dare95\\IssueLogger, NOT next to this script. It used to sit
-in the extension folder, so anything that syncs B_Dare95.extension between
-machines (Git, OneDrive, a copied folder) carried the file list across with it
--- and those are absolute paths that mean nothing on the other PC. A config
-found in the old location is migrated once, on first run, and then deleted.
-
-NOTE ON __persistentengine__
-----------------------------
-This window is modeless: the pyRevit command returns immediately and Revit gets
-its message loop straight back. For that to work the IronPython engine has to
-outlive the script run, otherwise every Python event handler bound to the
-window dies the moment the command ends. The side effect is that edits to this
-file need a pyRevit reload (pyRevit ▸ Reload) before they take effect.
 """
 __persistentengine__ = True
 

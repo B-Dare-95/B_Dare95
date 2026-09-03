@@ -8,6 +8,7 @@ Read-only health report for every Revit link in the active document:
   * Levels and Grids sitting on the wrong workset
   * Unused families and types, per category
 
+The report exports as a self-contained interactive HTML page.
 No transaction is opened. Nothing is modified.
 """
 
@@ -19,14 +20,17 @@ __doc__ = ("Inspects every linked Revit document for DWG imports/links, "
 
 import clr
 
+clr.AddReference("System")
 clr.AddReference("PresentationCore")
 clr.AddReference("PresentationFramework")
 clr.AddReference("WindowsBase")
 
 from System import EventHandler, DateTime
 from System.Collections.Generic import List
-from System.Windows import (Clipboard, FontWeights, RoutedEventHandler,
-                            TextWrapping, Visibility)
+from System.IO import File, Path
+from System.Text import Encoding
+from System.Windows import (FontWeights, RoutedEventHandler, TextWrapping,
+                            Visibility)
 from System.Windows.Controls import (SelectionChangedEventHandler, TextBlock,
                                      TextChangedEventHandler, TreeViewItem)
 from System.Windows.Input import Cursors, Mouse
@@ -38,6 +42,11 @@ from Autodesk.Revit.DB import (BuiltInCategory, CADLinkType, CategoryType,
                                Element, ElementId, FilteredElementCollector,
                                ImportInstance, RevitLinkInstance)
 from Autodesk.Revit.UI import TaskDialog
+
+try:
+    from System.Diagnostics import Process
+except ImportError:      # System.dll not referenced in this host
+    Process = None
 
 doc = __revit__.ActiveUIDocument.Document
 
@@ -107,9 +116,10 @@ def doc_title(rvt_doc, fallback):
 class Entry(object):
     """One line in the detail pane."""
 
-    def __init__(self, text, sort_key=None):
+    def __init__(self, text, sort_key=None, fields=None):
         self.Display = text
         self.SortKey = sort_key if sort_key is not None else text
+        self.Fields = fields          # tuple of cells for the HTML report
 
 
 # ---------------------------------------------------------------------------
@@ -156,15 +166,18 @@ def scan_cad(target_doc):
             kind = u"{0} {1}".format(label, "Link" if is_link else "Import")
 
         entries.append(Entry(u"{0}   [{1}]   {2}".format(name, kind, scope),
-                             (kind, name.lower())))
+                             (kind, name.lower()),
+                             (name, kind, scope)))
 
     # CAD types with no placed instance - leftovers still in Manage Links
     for cad_type in FilteredElementCollector(target_doc).OfClass(CADLinkType):
         if eid_value(cad_type.Id) in used_type_ids:
             continue
+        type_only_name = elem_name(cad_type)
         entries.append(Entry(
-            u"{0}   [Type only, no instance]".format(elem_name(cad_type)),
-            ("zz", elem_name(cad_type).lower())))
+            u"{0}   [Type only, no instance]".format(type_only_name),
+            ("zz", type_only_name.lower()),
+            (type_only_name, "Type only, no instance", DASH)))
 
     entries.sort(key=lambda e: e.SortKey)
     return dwg_links, dwg_imports, other_cad, entries
@@ -192,7 +205,8 @@ def scan_warnings(target_doc):
     for text in grouped:
         count = grouped[text]
         entries.append(Entry(u"{0} x   {1}".format(count, text),
-                             (-count, text.lower())))
+                             (-count, text.lower()),
+                             (u"{0}".format(count), text)))
     entries.sort(key=lambda e: e.SortKey)
     return total, entries
 
@@ -237,7 +251,8 @@ def scan_levels_grids(target_doc):
                 entries.append(Entry(
                     u"{0}: {1}   [workset unreadable]".format(
                         label, elem_name(element)),
-                    (label, "zz", elem_name(element).lower())))
+                    (label, "zz", elem_name(element).lower()),
+                    (label, elem_name(element), "unreadable")))
                 continue
             if ws_name.strip().lower() in VALID_LG_WORKSETS:
                 continue
@@ -245,7 +260,8 @@ def scan_levels_grids(target_doc):
             entries.append(Entry(
                 u"{0}: {1}   [on '{2}']".format(
                     label, elem_name(element), ws_name),
-                (label, ws_name.lower(), elem_name(element).lower())))
+                (label, ws_name.lower(), elem_name(element).lower()),
+                (label, elem_name(element), ws_name)))
 
     entries.sort(key=lambda e: e.SortKey)
     if not entries:
@@ -481,101 +497,407 @@ def build_rows():
 
 
 # ---------------------------------------------------------------------------
-# text report
+# HTML report
 # ---------------------------------------------------------------------------
 
-def build_report_text(rows):
-    lines = []
-    lines.append("LINK INSPECTOR REPORT")
-    lines.append("Host model : {0}".format(doc_title(doc, "Unsaved")))
-    lines.append("Generated  : {0}".format(
-        DateTime.Now.ToString("yyyy-MM-dd HH:mm")))
-    lines.append("Accepted Level/Grid worksets : {0}".format(
-        ", ".join(VALID_LG_WORKSETS)))
-    lines.append("")
+def esc(value):
+    """Escape a value for HTML output."""
+    text = u"{0}".format(value)
+    text = text.replace(u"&", u"&amp;").replace(u"<", u"&lt;")
+    return text.replace(u">", u"&gt;").replace(u'"', u"&quot;")
 
-    fmt = "{0:<42}{1:<17}{2:>10}{3:>12}{4:>10}{5:>12}{6:>11}{7:>16}"
-    header = fmt.format("DOCUMENT", "STATUS", "DWG LINKS", "DWG IMPORTS",
-                        "WARNINGS", "BAD LEVELS", "BAD GRIDS",
-                        "UNUSED FAM/TYPE")
-    lines.append(header)
-    lines.append("-" * len(header))
 
-    totals = [0, 0, 0, 0, 0, 0, 0]
-    for row in rows:
-        lines.append(fmt.format(
-            row.RawName[:41], row.Status[:16], row.ColDwgLinks,
-            row.ColDwgImports, row.ColWarnings, row.ColLevels, row.ColGrids,
-            row.ColUnused))
-        if row.Scanned:
-            totals[0] += row.DwgLinks
-            totals[1] += row.DwgImports
-            totals[2] += row.Warnings
-            if row.Workshared:
-                totals[3] += row.BadLevels
-                totals[4] += row.BadGrids
-            if row.Unused is not None:
-                totals[5] += row.Unused.TotalUnusedFamilies
-                totals[6] += row.Unused.TotalUnusedTypes
+def badge(value):
+    """Coloured pill for a count cell."""
+    text = u"{0}".format(value)
+    if text in (DASH, "n/a", "?", "not scanned"):
+        css = "muted"
+    elif text.replace(" ", "").replace("/", "").strip("0") == "":
+        css = "zero"
+    else:
+        css = "some"
+    return u'<span class="badge {0}">{1}</span>'.format(css, esc(text))
 
-    lines.append("-" * len(header))
-    lines.append(fmt.format(
-        "TOTAL", "", str(totals[0]), str(totals[1]), str(totals[2]),
-        str(totals[3]), str(totals[4]),
-        "{0} / {1}".format(totals[5], totals[6])))
-    lines.append("")
-    lines.append("")
 
-    for row in rows:
-        lines.append("=" * len(header))
-        lines.append(u"{0}  ({1})".format(row.RawName, row.Status))
-        lines.append("=" * len(header))
-        if not row.Scanned:
-            lines.append("    Document could not be opened - nothing scanned.")
-            lines.append("")
+def table(headers, rows_data, empty_note="Nothing found."):
+    """Small static HTML table."""
+    if not rows_data:
+        return u'<p class="note">{0}</p>'.format(esc(empty_note))
+    out = [u'<table class="inner"><thead><tr>']
+    for head in headers:
+        out.append(u"<th>{0}</th>".format(esc(head)))
+    out.append(u"</tr></thead><tbody>")
+    for cells in rows_data:
+        out.append(u"<tr>")
+        for cell in cells:
+            out.append(u"<td>{0}</td>".format(esc(cell)))
+        out.append(u"</tr>")
+    out.append(u"</tbody></table>")
+    return u"".join(out)
+
+
+REPORT_CSS = u"""
+:root{
+  --bg:#1e1e2e; --card:#2a2a3c; --surface:#313244; --muted:#45475a;
+  --text:#cdd6f4; --sub:#a6adc8; --accent:#f0a500;
+  --ok:#a6e3a1; --bad:#f38ba8;
+}
+*{box-sizing:border-box;}
+body{margin:0;padding:28px 32px;background:var(--bg);color:var(--text);
+     font-family:"Segoe UI",Tahoma,sans-serif;font-size:14px;}
+h1{margin:0 0 4px;font-size:26px;}
+h2{margin:0 0 14px;font-size:17px;color:var(--accent);}
+.meta{color:var(--sub);font-size:12px;margin-bottom:20px;line-height:1.7;}
+.cards{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:22px;}
+.card{background:var(--card);border-radius:10px;padding:12px 18px;min-width:132px;}
+.card .num{font-size:22px;font-weight:600;}
+.card .lbl{font-size:11px;color:var(--sub);text-transform:uppercase;
+           letter-spacing:.4px;margin-top:2px;}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px;}
+input[type=text]{background:var(--surface);border:none;border-radius:6px;
+  padding:8px 12px;color:var(--text);font-size:13px;min-width:280px;
+  font-family:inherit;}
+input[type=text]:focus{outline:1px solid var(--accent);}
+button{background:var(--muted);border:none;border-radius:6px;padding:8px 14px;
+  color:var(--text);font-size:12px;font-family:inherit;cursor:pointer;}
+button:hover{background:var(--accent);color:var(--bg);}
+table{border-collapse:collapse;width:100%;}
+#overview{background:var(--card);border-radius:10px;overflow:hidden;
+          margin-bottom:26px;}
+#overview th{background:var(--surface);color:var(--sub);font-size:11px;
+  text-transform:uppercase;letter-spacing:.4px;text-align:left;padding:11px 12px;
+  cursor:pointer;user-select:none;white-space:nowrap;}
+#overview th:hover{color:var(--accent);}
+#overview td{padding:9px 12px;border-top:1px solid var(--surface);font-size:13px;}
+#overview tbody tr:hover{background:var(--surface);}
+#overview td.doc{cursor:pointer;color:var(--text);}
+#overview td.doc:hover{color:var(--accent);text-decoration:underline;}
+.badge{display:inline-block;min-width:28px;text-align:center;padding:2px 8px;
+  border-radius:20px;font-size:12px;font-weight:600;}
+.badge.zero{background:rgba(166,227,161,.16);color:var(--ok);}
+.badge.some{background:rgba(240,165,0,.18);color:var(--accent);}
+.badge.muted{background:var(--surface);color:var(--sub);font-weight:400;}
+details{background:var(--card);border-radius:10px;margin-bottom:10px;
+        padding:2px 14px;}
+details.doc{padding:6px 16px;}
+details.sub{background:var(--surface);margin:8px 0;}
+details.cat{background:rgba(49,50,68,.6);}
+summary{cursor:pointer;padding:10px 2px;font-weight:600;list-style:none;}
+summary::-webkit-details-marker{display:none;}
+summary:before{content:"+";color:var(--accent);font-weight:700;
+               display:inline-block;width:16px;}
+details[open]>summary:before{content:"\\2013";}
+details.doc>summary{font-size:16px;}
+summary .pills{float:right;font-weight:400;}
+summary .pills span{margin-left:6px;}
+.note{color:var(--sub);font-size:12px;margin:6px 0 12px;}
+table.inner{margin:4px 0 14px;background:var(--bg);border-radius:8px;
+            overflow:hidden;}
+table.inner th{background:var(--muted);color:var(--sub);font-size:11px;
+  text-transform:uppercase;letter-spacing:.4px;text-align:left;padding:8px 12px;}
+table.inner td{padding:7px 12px;border-top:1px solid var(--surface);
+               font-size:12.5px;vertical-align:top;}
+table.inner tbody tr:hover{background:var(--surface);}
+.footer{color:var(--sub);font-size:11px;margin-top:28px;line-height:1.8;
+        border-top:1px solid var(--surface);padding-top:14px;}
+@media print{
+  body{background:#fff;color:#000;padding:0;}
+  .toolbar,#overview th{cursor:auto;}
+  .card,details,#overview{background:#f4f4f4;color:#000;}
+  .badge{border:1px solid #999;color:#000;background:#fff;}
+}
+"""
+
+
+REPORT_JS = u"""
+function nodes(sel){return Array.prototype.slice.call(document.querySelectorAll(sel));}
+
+function filterDocs(){
+  var term = document.getElementById('docFilter').value.toLowerCase();
+  nodes('#overview tbody tr').forEach(function(row){
+    row.style.display = row.getAttribute('data-name').indexOf(term) > -1 ? '' : 'none';
+  });
+  nodes('details.doc').forEach(function(box){
+    box.style.display = box.getAttribute('data-name').indexOf(term) > -1 ? '' : 'none';
+  });
+}
+
+function sortTable(idx, numeric){
+  var body = document.querySelector('#overview tbody');
+  var rows = Array.prototype.slice.call(body.rows);
+  var same = body.getAttribute('data-col') === String(idx);
+  var dir = (same && body.getAttribute('data-dir') === 'asc') ? 'desc' : 'asc';
+  rows.sort(function(a, b){
+    var x = a.cells[idx].getAttribute('data-sort');
+    var y = b.cells[idx].getAttribute('data-sort');
+    if(x === null){ x = a.cells[idx].textContent.trim(); }
+    if(y === null){ y = b.cells[idx].textContent.trim(); }
+    if(numeric){
+      x = parseFloat(x); y = parseFloat(y);
+      if(isNaN(x)){ x = -1; } if(isNaN(y)){ y = -1; }
+      return dir === 'asc' ? x - y : y - x;
+    }
+    return dir === 'asc' ? x.localeCompare(y) : y.localeCompare(x);
+  });
+  rows.forEach(function(row){ body.appendChild(row); });
+  body.setAttribute('data-dir', dir);
+  body.setAttribute('data-col', String(idx));
+}
+
+function toggleAll(open){
+  nodes('details').forEach(function(box){ box.open = open; });
+}
+
+function goDoc(id){
+  var box = document.getElementById(id);
+  if(!box){ return; }
+  box.open = true;
+  box.scrollIntoView({behavior:'smooth', block:'start'});
+}
+"""
+
+
+def html_doc_section(index, row):
+    """One collapsible document block."""
+    out = []
+    anchor = "doc-{0}".format(index)
+    pills = u'<span class="pills">{0}{1}{2}{3}</span>'.format(
+        badge(row.ColDwgLinks), badge(row.ColWarnings),
+        badge(row.ColGrids),
+        badge(row.ColUnused if row.Unused is not None else "not scanned"))
+
+    out.append(u'<details class="doc" id="{0}" data-name="{1}">'.format(
+        anchor, esc(row.RawName.lower())))
+    out.append(u"<summary>{0} <span class=\"note\">({1})</span>{2}</summary>".format(
+        esc(row.RawName), esc(row.Status), pills))
+
+    if not row.Scanned:
+        out.append(u'<p class="note">This document could not be opened, so '
+                   u'nothing was inspected.</p></details>')
+        return u"".join(out)
+
+    # DWG / CAD
+    cad_rows = [e.Fields for e in row.CadEntries if e.Fields]
+    out.append(u'<details class="sub"><summary>DWG / CAD '
+               u'({0} link(s), {1} import(s), {2} other CAD)</summary>'.format(
+                   row.DwgLinks, row.DwgImports, row.OtherCad))
+    out.append(table(["File", "Kind", "Scope"], cad_rows,
+                     "No CAD files in this document."))
+    out.append(u"</details>")
+
+    # Warnings
+    warn_rows = [e.Fields for e in row.WarningEntries if e.Fields]
+    out.append(u'<details class="sub"><summary>Warnings ({0})'
+               u'</summary>'.format(row.Warnings))
+    out.append(table(["Count", "Warning"], warn_rows,
+                     "No warnings stored in this document."))
+    out.append(u"</details>")
+
+    # Levels and Grids
+    lg_rows = [e.Fields for e in row.WorksetEntries if e.Fields]
+    if row.Workshared:
+        lg_label = u"Levels + Grids ({0} level(s), {1} grid(s) on a wrong " \
+                   u"workset)".format(row.BadLevels, row.BadGrids)
+    else:
+        lg_label = u"Levels + Grids (model is not workshared)"
+    out.append(u'<details class="sub"><summary>{0}</summary>'.format(
+        esc(lg_label)))
+    if lg_rows:
+        out.append(table(["Element", "Name", "Current workset"], lg_rows))
+    else:
+        for entry in row.WorksetEntries:
+            out.append(u'<p class="note">{0}</p>'.format(esc(entry.Display)))
+    out.append(u"</details>")
+
+    # Unused items
+    if row.Unused is None:
+        out.append(u'<details class="sub"><summary>Unused Items (not scanned)'
+                   u'</summary><p class="note">Open the Unused Items tab for '
+                   u'this document, or press Scan All Unused, then export '
+                   u'again.</p></details>')
+        out.append(u"</details>")
+        return u"".join(out)
+
+    result = row.Unused
+    out.append(u'<details class="sub"><summary>Unused Items '
+               u'({0} famil(ies), {1} type(s) under used families)'
+               u'</summary>'.format(result.TotalUnusedFamilies,
+                                    result.TotalUnusedTypes))
+    clean = 0
+    for stat in result.Categories:
+        if not stat.has_findings():
+            clean += 1
             continue
+        out.append(u'<details class="cat"><summary>Category: {0}</summary>'
+                   .format(esc(stat.Name)))
+        out.append(u'<p class="note">{0}</p>'.format(esc(stat.summary_line())))
+        if stat.UnusedFamilies:
+            out.append(table(
+                ["Unused family", "Types"],
+                [(name, u"{0}".format(count))
+                 for name, count in stat.UnusedFamilies]))
+        if stat.UnusedTypes:
+            out.append(table(
+                ["Unused type under a used family"],
+                [(text,) for text in stat.UnusedTypes]))
+        out.append(u"</details>")
+    out.append(u'<p class="note">{0} further categor(ies) had nothing '
+               u'unused.</p>'.format(clean))
+    out.append(u"</details>")
 
-        sections = [("DWG / CAD", row.CadEntries),
-                    ("WARNINGS", row.WarningEntries),
-                    ("LEVELS AND GRIDS", row.WorksetEntries)]
-        for label, entries in sections:
-            lines.append("  {0}".format(label))
-            if not entries:
-                lines.append("    (nothing found)")
-            else:
-                for entry in entries:
-                    lines.append(u"    {0}".format(entry.Display))
-            lines.append("")
+    out.append(u"</details>")
+    return u"".join(out)
 
-        lines.append("  UNUSED FAMILIES AND TYPES")
-        if row.Unused is None:
-            lines.append("    (not scanned - open the Unused Items tab or "
-                         "press Scan All Unused)")
-            lines.append("")
-            continue
 
-        clean = 0
-        for stat in row.Unused.Categories:
-            if not stat.has_findings():
-                clean += 1
-                continue
-            lines.append(u"    Category: {0}".format(stat.Name))
-            lines.append(u"      {0}".format(stat.summary_line()))
-            if stat.UnusedFamilies:
-                lines.append("      Unused families:")
-                for fam_name, type_count in stat.UnusedFamilies:
-                    lines.append(u"        {0}  ({1} type(s))".format(
-                        fam_name, type_count))
-            if stat.UnusedTypes:
-                lines.append("      Unused types under used families:")
-                for text in stat.UnusedTypes:
-                    lines.append(u"        {0}".format(text))
-            lines.append("")
-        lines.append("    {0} further categor(ies) had nothing unused.".format(
-            clean))
-        lines.append("")
+def build_report_html(rows):
+    scanned = [r for r in rows if r.Scanned]
+    workshared = [r for r in scanned if r.Workshared]
+    unused_done = [r for r in scanned if r.Unused is not None]
 
-    return u"\r\n".join(lines)
+    totals = {
+        "docs": len(scanned),
+        "dwg_links": sum([r.DwgLinks for r in scanned]),
+        "dwg_imports": sum([r.DwgImports for r in scanned]),
+        "warnings": sum([r.Warnings for r in scanned]),
+        "levels": sum([r.BadLevels for r in workshared]),
+        "grids": sum([r.BadGrids for r in workshared]),
+        "un_fams": sum([r.Unused.TotalUnusedFamilies for r in unused_done]),
+        "un_types": sum([r.Unused.TotalUnusedTypes for r in unused_done]),
+    }
+
+    out = []
+    out.append(u"<!DOCTYPE html><html lang=\"en\"><head>")
+    out.append(u"<meta charset=\"utf-8\">")
+    out.append(u"<title>Link Inspector - {0}</title>".format(
+        esc(doc_title(doc, "Model"))))
+    out.append(u"<style>")
+    out.append(REPORT_CSS)
+    out.append(u"</style></head><body>")
+
+    out.append(u"<h1>Link Inspector Report</h1>")
+    out.append(u'<div class="meta">Host model: <b>{0}</b><br>'
+               u'Generated: {1}<br>'
+               u'Accepted Level/Grid worksets: {2}</div>'.format(
+                   esc(doc_title(doc, "Unsaved")),
+                   esc(DateTime.Now.ToString("yyyy-MM-dd HH:mm")),
+                   esc(", ".join(VALID_LG_WORKSETS))))
+
+    cards = [("Documents", totals["docs"]),
+             ("DWG links", totals["dwg_links"]),
+             ("DWG imports", totals["dwg_imports"]),
+             ("Warnings", totals["warnings"]),
+             ("Levels off workset", totals["levels"]),
+             ("Grids off workset", totals["grids"]),
+             ("Unused families", totals["un_fams"]),
+             ("Unused types", totals["un_types"])]
+    out.append(u'<div class="cards">')
+    for label, value in cards:
+        out.append(u'<div class="card"><div class="num">{0}</div>'
+                   u'<div class="lbl">{1}</div></div>'.format(
+                       value, esc(label)))
+    out.append(u"</div>")
+
+    out.append(u'<div class="toolbar">')
+    out.append(u'<input type="text" id="docFilter" placeholder="Filter '
+               u'documents..." oninput="filterDocs()">')
+    out.append(u'<button onclick="toggleAll(true)">Expand all</button>')
+    out.append(u'<button onclick="toggleAll(false)">Collapse all</button>')
+    out.append(u'<button onclick="window.print()">Print</button>')
+    out.append(u"</div>")
+
+    # overview table
+    out.append(u'<table id="overview"><thead><tr>')
+    headers = [("Document", False), ("Status", False), ("DWG links", True),
+               ("DWG imports", True), ("Warnings", True), ("Bad levels", True),
+               ("Bad grids", True), ("Unused fam / type", True)]
+    for idx, pair in enumerate(headers):
+        label, numeric = pair
+        out.append(u'<th onclick="sortTable({0},{1})">{2}</th>'.format(
+            idx, "true" if numeric else "false", esc(label)))
+    out.append(u'</tr></thead><tbody data-col="-1" data-dir="asc">')
+
+    for index, row in enumerate(rows):
+        if row.Unused is not None:
+            unused_text = row.ColUnused
+            unused_sort = (row.Unused.TotalUnusedFamilies +
+                           row.Unused.TotalUnusedTypes)
+        else:
+            unused_text = "not scanned"
+            unused_sort = -1
+
+        def sort_val(text):
+            try:
+                return int(text)
+            except (ValueError, TypeError):
+                return -1
+
+        out.append(u'<tr data-name="{0}">'.format(esc(row.RawName.lower())))
+        out.append(u'<td class="doc" onclick="goDoc(\'doc-{0}\')">{1}</td>'
+                   .format(index, esc(row.RawName)))
+        out.append(u"<td>{0}</td>".format(esc(row.Status)))
+        for text in (row.ColDwgLinks, row.ColDwgImports, row.ColWarnings,
+                     row.ColLevels, row.ColGrids):
+            out.append(u'<td data-sort="{0}">{1}</td>'.format(
+                sort_val(text), badge(text)))
+        out.append(u'<td data-sort="{0}">{1}</td>'.format(
+            unused_sort, badge(unused_text)))
+        out.append(u"</tr>")
+    out.append(u"</tbody></table>")
+
+    out.append(u"<h2>Per document</h2>")
+    for index, row in enumerate(rows):
+        out.append(html_doc_section(index, row))
+
+    out.append(u'<div class="footer">'
+               u'Unused items are found by counting placed instances per type. '
+               u'Types referenced only by other types - curtain panels and '
+               u'mullions inside a curtain wall type, profiles, nested '
+               u'sub-families - are reported as unused even though Revit '
+               u'cannot purge them. Treat the result as triage, not a purge '
+               u'list.<br>Warning counts come from the link file as it was '
+               u'loaded; reload the link after someone cleans warnings in it.'
+               u'</div>')
+
+    out.append(u"<script>")
+    out.append(REPORT_JS)
+    out.append(u"</script></body></html>")
+    return u"".join(out)
+
+
+def safe_file_name(text):
+    keep = "-_. "
+    return u"".join([c if (c.isalnum() or c in keep) else "_" for c in text])
+
+
+def export_html(rows):
+    """Write the report next to the temp folder and open it. Returns path."""
+    html = build_report_html(rows)
+    file_name = u"LinkInspector_{0}_{1}.html".format(
+        safe_file_name(doc_title(doc, "Model")),
+        DateTime.Now.ToString("yyyyMMdd_HHmmss"))
+    path = Path.Combine(Path.GetTempPath(), file_name)
+    File.WriteAllText(path, html, Encoding.UTF8)
+    open_file(path)
+    return path
+
+
+def open_file(path):
+    """Open a file with the shell, trying every route available."""
+    if Process is not None:
+        try:
+            Process.Start(path)
+            return
+        except Exception:
+            pass
+    try:
+        import os
+        os.startfile(path)
+        return
+    except Exception:
+        pass
+    TaskDialog.Show("Link Inspector",
+                    "The report was saved but could not be opened "
+                    "automatically:\n\n{0}".format(path))
 
 
 # ---------------------------------------------------------------------------
@@ -875,7 +1197,7 @@ XAML = u"""
                 HorizontalAlignment="Right" Margin="0,12,0,0">
       <Button x:Name="ScanAllButton" Content="Scan All Unused"
               Style="{StaticResource GhostButton}" Margin="0,0,8,0"/>
-      <Button x:Name="CopyButton" Content="Copy Report"
+      <Button x:Name="ExportButton" Content="Export HTML Report"
               Style="{StaticResource AccentButton}" Margin="0,0,8,0"/>
       <Button x:Name="CloseButton" Content="Close"
               Style="{StaticResource GhostButton}"/>
@@ -949,7 +1271,7 @@ def show_window(rows):
     detail_list = window.FindName("DetailList")
     category_tree = window.FindName("CategoryTree")
     scan_all_button = window.FindName("ScanAllButton")
-    copy_button = window.FindName("CopyButton")
+    export_button = window.FindName("ExportButton")
     close_button = window.FindName("CloseButton")
 
     scanned = [r for r in rows if r.Scanned]
@@ -1088,18 +1410,17 @@ def show_window(rows):
         scan_all_button.Content = "Unused Scanned"
         refresh_detail()
 
-    def on_copy(sender, args):
-        text = build_report_text(rows)
+    def on_export(sender, args):
+        Mouse.OverrideCursor = Cursors.Wait
         try:
-            Clipboard.SetText(text)
-        except Exception:
-            try:
-                Clipboard.SetDataObject(text, True)
-            except Exception:
-                TaskDialog.Show("Link Inspector",
-                                "Could not access the clipboard.")
-                return
-        copy_button.Content = "Copied"
+            export_html(rows)
+        except Exception as err:
+            TaskDialog.Show("Link Inspector",
+                            "Could not write the HTML report:\n\n{0}".format(err))
+            return
+        finally:
+            Mouse.OverrideCursor = None
+        export_button.Content = "Report Opened"
 
     def on_close_click(sender, args):
         window.Close()
@@ -1116,7 +1437,7 @@ def show_window(rows):
     tab_workset.Click += RoutedEventHandler(on_tab_workset)
     tab_unused.Click += RoutedEventHandler(on_tab_unused)
     scan_all_button.Click += RoutedEventHandler(on_scan_all)
-    copy_button.Click += RoutedEventHandler(on_copy)
+    export_button.Click += RoutedEventHandler(on_export)
     close_button.Click += RoutedEventHandler(on_close_click)
     window.Closed += EventHandler(on_closed)
 

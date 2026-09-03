@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Elements per Level
-Lists, per level, how many model elements sit on it and their category breakdown.
+Expandable, per-level breakdown of model elements, with click-to-select links.
 
 Rules:
   * Only real model elements are counted (CategoryType.Model). This automatically
@@ -8,6 +8,9 @@ Rules:
   * Sub-elements / parts are excluded via EXCLUDED_CATS below -- this covers
     Curtain Panels & Mullions (belong to Curtain Walls) plus stair/railing parts.
   * Element types are excluded (WhereElementIsNotElementType).
+  * Each level is a collapsible block; every level and every category row carries a
+    link that selects those elements in Revit. Very long id lists are split into
+    numbered chunks so the revit:// link stays valid.
 Read-only: no transaction required.
 """
 
@@ -20,8 +23,11 @@ from pyrevit import revit, script
 
 doc = revit.doc
 output = script.get_output()
+output.set_width(1100)
 
 UNASSIGNED = -1
+MAX_LINK_IDS = 750          # ids per select link; longer lists are split in chunks
+OPEN_BY_DEFAULT = False     # True = every level starts expanded
 
 
 # ---- helpers ---------------------------------------------------------------
@@ -51,6 +57,13 @@ def get_bic(cat):
             return System.Enum.ToObject(BuiltInCategory, eid_val(cat.Id))
         except Exception:
             return None
+
+
+def esc(txt):
+    """Minimal HTML escaping for category / level names."""
+    return (txt.replace('&', '&amp;')
+               .replace('<', '&lt;')
+               .replace('>', '&gt;'))
 
 
 # Categories to skip: sub-elements / parts of a parent element. Edit freely.
@@ -122,9 +135,9 @@ for l in levels:
 
 
 # ---- count -----------------------------------------------------------------
-counts = {}      # level_int -> {cat_name: n}
+buckets = {}     # level_int -> {cat_name: [ElementId, ...]}
 totals = {}      # level_int -> n
-cat_grand = {}   # cat_name  -> n
+cat_grand = {}   # cat_name  -> [ElementId, ...]
 
 for elem in FilteredElementCollector(doc).WhereElementIsNotElementType():
     cat = elem.Category
@@ -141,58 +154,156 @@ for elem in FilteredElementCollector(doc).WhereElementIsNotElementType():
 
     lint = get_level_int(elem)
     name = cat.Name
-    counts.setdefault(lint, {})
-    counts[lint][name] = counts[lint].get(name, 0) + 1
+    buckets.setdefault(lint, {})
+    buckets[lint].setdefault(name, []).append(elem.Id)
     totals[lint] = totals.get(lint, 0) + 1
-    cat_grand[name] = cat_grand.get(name, 0) + 1
+    cat_grand.setdefault(name, []).append(elem.Id)
+
+
+# ---- html building ---------------------------------------------------------
+BLOCK_ID = [0]      # mutable counter (no nonlocal in IronPython 2.7)
+
+ARROW_R = '&#9654;'     # collapsed
+ARROW_D = '&#9660;'     # expanded
+
+TOGGLE_JS = (
+    "var b=document.getElementById('%s');"
+    "var a=document.getElementById('%s');"
+    "if(b.style.display=='none'){b.style.display='block';a.innerHTML='" + ARROW_D + "';}"
+    "else{b.style.display='none';a.innerHTML='" + ARROW_R + "';}"
+)
+
+ALL_JS = (
+    "var b=document.getElementsByClassName('epl-body');"
+    "for(var i=0;i<b.length;i++){b[i].style.display='%s';}"
+    "var a=document.getElementsByClassName('epl-arrow');"
+    "for(var i=0;i<a.length;i++){a[i].innerHTML='%s';}"
+)
+
+
+def sel_links(ids, label='select'):
+    """linkify link(s) for a list of ElementIds, chunked to keep the URL valid."""
+    if not ids:
+        return ''
+    if len(ids) <= MAX_LINK_IDS:
+        return output.linkify(ids, title=label)
+    parts = []
+    i = 0
+    while i < len(ids):
+        chunk = ids[i:i + MAX_LINK_IDS]
+        parts.append(output.linkify(
+            chunk, title='{} {}-{}'.format(label, i + 1, i + len(chunk))))
+        i += MAX_LINK_IDS
+    return '&nbsp;'.join(parts)
+
+
+def cat_rows(cat_dict):
+    """Table rows: category name, count, select link. Sorted by count desc."""
+    rows = []
+    for cname in sorted(cat_dict, key=lambda c: (-len(cat_dict[c]), c)):
+        ids = cat_dict[cname]
+        rows.append(
+            '<tr>'
+            '<td style="padding:3px 10px 3px 24px;">{}</td>'
+            '<td style="padding:3px 10px;text-align:right;font-weight:bold;">{:,}</td>'
+            '<td style="padding:3px 10px;">{}</td>'
+            '</tr>'.format(esc(cname), len(ids), sel_links(ids))
+        )
+    return ''.join(rows)
+
+
+def block(header_txt, all_ids, cat_dict, note=None):
+    """One collapsible level block."""
+    BLOCK_ID[0] += 1
+    bid = 'epl-b{}'.format(BLOCK_ID[0])
+    aid = 'epl-a{}'.format(BLOCK_ID[0])
+
+    arrow = ARROW_D if OPEN_BY_DEFAULT else ARROW_R
+    disp = 'block' if OPEN_BY_DEFAULT else 'none'
+
+    head = (
+        '<div onclick="{js}" style="cursor:pointer;padding:7px 10px;'
+        'background:#2A2A3C;color:#CDD6F4;border-radius:5px 5px 0 0;'
+        'font-size:14px;font-weight:bold;">'
+        '<span class="epl-arrow" id="{aid}" style="color:#F0A500;">{arrow}</span>'
+        '&nbsp;{head}</div>'
+    ).format(js=TOGGLE_JS % (bid, aid), aid=aid, arrow=arrow, head=header_txt)
+
+    body_bits = ['<div class="epl-body" id="{}" style="display:{};padding:6px 4px;">'
+                 .format(bid, disp)]
+    if note:
+        body_bits.append('<div style="padding:4px 10px;color:#888;">{}</div>'.format(note))
+    if all_ids:
+        body_bits.append(
+            '<div style="padding:4px 10px 8px 10px;">Select every element on this '
+            'level:&nbsp;{}</div>'.format(sel_links(all_ids, 'select all')))
+    if cat_dict:
+        body_bits.append(
+            '<table style="width:100%;border-collapse:collapse;">{}</table>'
+            .format(cat_rows(cat_dict)))
+    body_bits.append('</div>')
+
+    return ('<div style="border:1px solid #45475A;border-radius:6px;margin:6px 0;'
+            'overflow:hidden;">{}{}</div>'.format(head, ''.join(body_bits)))
 
 
 # ---- report ----------------------------------------------------------------
 output.print_md('# Elements per Level')
 
+output.print_html(
+    '<div style="margin:6px 0;">'
+    '<a href="#" onclick="{expand};return false;" style="margin-right:14px;">'
+    'Expand all</a>'
+    '<a href="#" onclick="{collapse};return false;">Collapse all</a>'
+    '</div>'.format(expand=ALL_JS % ('block', ARROW_D),
+                    collapse=ALL_JS % ('none', ARROW_R))
+)
+
 ordered = [eid_val(l.Id) for l in levels]
-for k in counts:                     # any stray level ids not in the model list
+for k in buckets:                    # any stray level ids not in the model list
     if k != UNASSIGNED and k not in ordered:
         ordered.append(k)
 
-grand_total = 0
 for lint in ordered:
     lvl = level_map.get(lint)
     lname = lvl.Name if lvl else 'Level id {}'.format(lint)
-    mm = (lvl.Elevation * 304.8) if lvl else 0.0
     tot = totals.get(lint, 0)
-    grand_total += tot
+    cats = buckets.get(lint, {})
 
-    output.print_md('---')
+    all_ids = []
+    for cname in cats:
+        all_ids.extend(cats[cname])
+
     if lvl:
-        output.print_md('## {}  (elev {:.0f} mm)  —  {} elements'.format(lname, mm, tot))
+        mm = lvl.Elevation * 304.8
+        header = ('{}&nbsp; <span style="font-weight:normal;color:#A6ADC8;">'
+                  '(elev {:.0f} mm)</span>&nbsp; &mdash;&nbsp; '
+                  '<span style="color:#F0A500;">{:,} elements</span>'
+                  .format(esc(lname), mm, tot))
     else:
-        output.print_md('## {}  —  {} elements'.format(lname, tot))
+        header = ('{}&nbsp; &mdash;&nbsp; <span style="color:#F0A500;">'
+                  '{:,} elements</span>'.format(esc(lname), tot))
 
-    if tot == 0:
-        output.print_md('_(no elements)_')
-        continue
-    cats = counts[lint]
-    for cname in sorted(cats, key=lambda c: (-cats[c], c)):
-        output.print_md('- **{}**: {}'.format(cname, cats[cname]))
+    output.print_html(block(header, all_ids, cats,
+                            note=None if tot else '<i>(no elements)</i>'))
 
 # elements with no resolvable level
 if UNASSIGNED in totals:
-    tot = totals[UNASSIGNED]
-    grand_total += 0  # already added above only for real levels; add here explicitly
-    output.print_md('---')
-    output.print_md('## No Level / Unassigned  —  {} elements'.format(tot))
-    cats = counts[UNASSIGNED]
-    for cname in sorted(cats, key=lambda c: (-cats[c], c)):
-        output.print_md('- **{}**: {}'.format(cname, cats[cname]))
+    cats = buckets[UNASSIGNED]
+    all_ids = []
+    for cname in cats:
+        all_ids.extend(cats[cname])
+    header = ('No Level / Unassigned&nbsp; &mdash;&nbsp; '
+              '<span style="color:#F0A500;">{:,} elements</span>'
+              .format(totals[UNASSIGNED]))
+    output.print_html(block(header, all_ids, cats))
 
 # totals across the whole model
 total_all = sum(totals.values())
-output.print_md('---')
-output.print_md('# Totals by Category (all levels)')
-for cname in sorted(cat_grand, key=lambda c: (-cat_grand[c], c)):
-    output.print_md('- **{}**: {}'.format(cname, cat_grand[cname]))
+grand_header = ('Totals by Category (all levels)&nbsp; &mdash;&nbsp; '
+                '<span style="color:#F0A500;">{:,} elements</span>'.format(total_all))
+output.print_html(block(grand_header, None, cat_grand))
 
 output.print_md('---')
-output.print_md('**Grand total counted: {} elements across {} levels.**'
+output.print_md('**Grand total counted: {:,} elements across {} levels.**'
                 .format(total_all, len(levels)))
