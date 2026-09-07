@@ -1,0 +1,1110 @@
+# -*- coding: utf-8 -*-
+"""View Manager
+
+Modeless browser / editor for every view in the project.
+
+  * Filter by View Type, by "on sheet / not on sheet", and by name (live search).
+  * Edit View Name, Title on Sheet, Detail Number directly in the grid; nothing
+    touches the model until you press Apply.
+  * "Open View" / "Open Sheet" jump to the selected row's view, or to the sheet it
+    is placed on.
+  * Extra columns: append a spec dict to default_columns() with kind "param" and the
+    parameter name as "header".
+
+Modeless: every Revit API call is queued through an IExternalEventHandler, and the
+window / handler / event are parked in pyrevit env vars so a second button press
+just re-focuses the open window.
+"""
+
+__title__ = "View\nManager"
+__author__ = "Mohamed Bedair"
+__persistentengine__ = True
+
+import clr
+
+clr.AddReference("System")
+clr.AddReference("System.Data")
+clr.AddReference("PresentationCore")
+clr.AddReference("PresentationFramework")
+clr.AddReference("WindowsBase")
+
+from System import String, EventHandler, Int32, Int64
+from System.Data import DataTable, DataRowChangeEventHandler
+from System.Windows import Window, RoutedEventHandler, Visibility
+from System.Windows.Markup import XamlReader
+from System.Windows.Controls import (DataGridTextColumn,
+                                     DataGridEditingUnit,
+                                     SelectionChangedEventHandler,
+                                     TextChangedEventHandler)
+from System.Windows.Data import Binding, BindingMode
+
+from Autodesk.Revit.DB import (FilteredElementCollector,
+                               View, ViewSheet, ViewType, Viewport,
+                               ScheduleSheetInstance,
+                               BuiltInParameter, StorageType, SpecTypeId,
+                               Transaction, ElementId)
+from Autodesk.Revit.UI import IExternalEventHandler, ExternalEvent
+
+from pyrevit import forms, script
+from pyrevit.coreutils import envvars
+
+
+STR_TYPE = clr.GetClrType(String)
+
+ENV_WINDOW = "BDARE_VIEWMGR_WINDOW"
+ENV_HANDLER = "BDARE_VIEWMGR_HANDLER"
+ENV_EVENT = "BDARE_VIEWMGR_EVENT"
+
+ALL_TYPES = "All view types"
+
+SKIP_VIEW_TYPES = (ViewType.Internal,
+                   ViewType.ProjectBrowser,
+                   ViewType.SystemBrowser,
+                   ViewType.Undefined,
+                   ViewType.DrawingSheet)
+
+
+# ---------------------------------------------------------------------------
+# small helpers
+# ---------------------------------------------------------------------------
+
+def id_val(eid):
+    """ElementId -> int, Revit 2024-2027 safe."""
+    try:
+        return eid.Value
+    except AttributeError:
+        return eid.IntegerValue
+
+
+# Revit 2025+ swapped ElementId(int) for ElementId(Int64), which leaves a bare
+# python int matching none of ElementId(Int64) / ElementId(BuiltInParameter) /
+# ElementId(BuiltInCategory) exactly -- IronPython then raises "Multiple targets
+# could match". Probe once and always hand the constructor an explicit CLR type.
+try:
+    ElementId(Int64(0))
+    _EID_TAKES_INT64 = True
+except Exception:
+    _EID_TAKES_INT64 = False
+
+
+def to_eid(value):
+    """Build an ElementId from an int without tripping overload ambiguity."""
+    if _EID_TAKES_INT64:
+        return ElementId(Int64(value))
+    return ElementId(Int32(value))
+
+
+def is_yesno(param):
+    try:
+        return param.Definition.GetDataType() == SpecTypeId.Boolean.YesNo
+    except Exception:
+        return False
+
+
+def esc_sql(text):
+    """Escape a value for a DataView.RowFilter LIKE / equality expression."""
+    text = text.replace(u"'", u"''")
+    text = text.replace(u"[", u"[[]")
+    text = text.replace(u"%", u"[%]")
+    text = text.replace(u"*", u"[*]")
+    return text
+
+
+def param_to_str(param):
+    if param is None:
+        return u""
+    st = param.StorageType
+    if st == StorageType.String:
+        return param.AsString() or u""
+    if st == StorageType.Integer:
+        if is_yesno(param):
+            return u"Yes" if param.AsInteger() == 1 else u"No"
+        return u"{0}".format(param.AsInteger())
+    if st == StorageType.Double:
+        return param.AsValueString() or u""
+    if st == StorageType.ElementId:
+        return param.AsValueString() or u""
+    return u""
+
+
+def str_to_param(param, value):
+    st = param.StorageType
+    if st == StorageType.String:
+        param.Set(value)
+    elif st == StorageType.Integer:
+        if is_yesno(param):
+            param.Set(1 if value.strip().lower() in ("1", "yes", "true", "y") else 0)
+        else:
+            param.Set(int(float(value.strip())))
+    elif st == StorageType.Double:
+        if not param.SetValueString(value.strip()):
+            raise Exception("value could not be parsed for this unit type")
+    else:
+        raise Exception("parameter storage type is not writable from text")
+
+
+def find_param(view, display_name):
+    param = view.LookupParameter(display_name)
+    if param is not None:
+        return param
+    for p in view.Parameters:
+        if p.Definition is not None and p.Definition.Name == display_name:
+            return p
+    return None
+
+
+# ---------------------------------------------------------------------------
+# column definitions -- add to DEFAULT_COLS to ship more fixed columns
+# ---------------------------------------------------------------------------
+
+def default_columns():
+    return [
+        {"key": "Id", "header": "Id", "kind": "id",
+         "ro": True, "min": 60.0, "max": 90.0},
+        {"key": "ViewName", "header": "View Name", "kind": "name",
+         "ro": False, "min": 210.0, "max": 460.0},
+        {"key": "ViewType", "header": "View Type", "kind": "type",
+         "ro": True, "min": 110.0, "max": 170.0},
+        {"key": "Level", "header": "Level", "kind": "level",
+         "ro": True, "min": 110.0, "max": 220.0},
+        {"key": "TitleOnSheet", "header": "Title on Sheet", "kind": "bip",
+         "bip": BuiltInParameter.VIEW_DESCRIPTION,
+         "ro": False, "min": 170.0, "max": 340.0},
+        {"key": "DetailNumber", "header": "Detail No.", "kind": "bip",
+         "bip": BuiltInParameter.VIEWPORT_DETAIL_NUMBER,
+         "ro": False, "min": 80.0, "max": 120.0},
+        {"key": "SheetName", "header": "Sheet", "kind": "sheet",
+         "ro": True, "min": 190.0, "max": 340.0},
+    ]
+
+
+def read_cell(view, col, sheet_labels):
+    kind = col["kind"]
+    if kind == "id":
+        return u"{0}".format(id_val(view.Id))
+    if kind == "name":
+        try:
+            return view.Name
+        except Exception:
+            return u""
+    if kind == "type":
+        return u"{0}".format(view.ViewType)
+    if kind == "level":
+        try:
+            lvl = view.GenLevel
+            if lvl is not None:
+                return lvl.Name
+        except Exception:
+            pass
+        param = view.get_Parameter(BuiltInParameter.PLAN_VIEW_LEVEL)
+        if param is not None:
+            return param.AsString() or u""
+        return u""
+    if kind == "sheet":
+        entries = sheet_labels.get(id_val(view.Id))
+        if not entries:
+            return u""
+        return u", ".join([label for _sid, label in entries])
+    if kind == "bip":
+        return param_to_str(view.get_Parameter(col["bip"]))
+    if kind == "param":
+        return param_to_str(find_param(view, col["header"]))
+    return u""
+
+
+def write_cell(view, col, value, on_sheet):
+    kind = col["kind"]
+    if kind == "name":
+        if not value.strip():
+            raise Exception("view name cannot be empty")
+        if view.Name != value:
+            view.Name = value
+        return
+    if kind == "bip":
+        param = view.get_Parameter(col["bip"])
+        if param is None:
+            raise Exception("parameter not available on this view")
+        if param.IsReadOnly:
+            if col["bip"] == BuiltInParameter.VIEWPORT_DETAIL_NUMBER and not on_sheet:
+                raise Exception("detail number needs the view to be placed on a sheet")
+            raise Exception("parameter is read-only for this view")
+        str_to_param(param, value)
+        return
+    if kind == "param":
+        param = find_param(view, col["header"])
+        if param is None:
+            raise Exception("parameter not found on this view")
+        if param.IsReadOnly:
+            raise Exception("parameter is read-only")
+        str_to_param(param, value)
+        return
+    raise Exception("column is not editable")
+
+
+# ---------------------------------------------------------------------------
+# model reading
+# ---------------------------------------------------------------------------
+
+def build_sheet_map(doc):
+    """view id -> [(sheet id, 'A101 - GROUND FLOOR PLAN'), ...]."""
+    result = {}
+    for vp in FilteredElementCollector(doc).OfClass(Viewport):
+        sheet = doc.GetElement(vp.SheetId)
+        if sheet is None:
+            continue
+        label = u"{0} - {1}".format(sheet.SheetNumber, sheet.Name)
+        result.setdefault(id_val(vp.ViewId), []).append((id_val(sheet.Id), label))
+
+    for ssi in FilteredElementCollector(doc).OfClass(ScheduleSheetInstance):
+        try:
+            if ssi.IsTitleblockRevisionSchedule:
+                continue
+        except Exception:
+            pass
+        sheet = doc.GetElement(ssi.OwnerViewId)
+        if not isinstance(sheet, ViewSheet):
+            continue
+        label = u"{0} - {1}".format(sheet.SheetNumber, sheet.Name)
+        result.setdefault(id_val(ssi.ScheduleId), []).append((id_val(sheet.Id), label))
+    return result
+
+
+def collect_views(doc):
+    views = []
+    for v in FilteredElementCollector(doc).OfClass(View):
+        try:
+            if v.IsTemplate:
+                continue
+            if isinstance(v, ViewSheet):
+                continue
+            if v.ViewType in SKIP_VIEW_TYPES:
+                continue
+        except Exception:
+            continue
+        views.append(v)
+    return views
+
+
+# ---------------------------------------------------------------------------
+# external event handler -- queue based, one Raise per action
+# ---------------------------------------------------------------------------
+
+class ViewManagerHandler(IExternalEventHandler):
+    def __init__(self):
+        self.queue = []
+
+    def Execute(self, uiapp):
+        while self.queue:
+            action = self.queue.pop(0)
+            try:
+                action(uiapp)
+            except Exception as ex:
+                try:
+                    forms.alert(u"View Manager action failed:\n{0}".format(ex),
+                                title="View Manager")
+                except Exception:
+                    pass
+
+    def GetName(self):
+        return "B_Dare95 View Manager Handler"
+
+
+# ---------------------------------------------------------------------------
+# XAML
+# ---------------------------------------------------------------------------
+
+XAML = u"""
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="View Manager" Height="740" Width="1230"
+        MinHeight="500" MinWidth="900"
+        WindowStartupLocation="CenterScreen"
+        Background="#1E1E2E" FontFamily="Segoe UI" FontSize="12">
+
+  <Window.Resources>
+    <SolidColorBrush x:Key="BgBrush" Color="#1E1E2E"/>
+    <SolidColorBrush x:Key="CardBrush" Color="#2A2A3C"/>
+    <SolidColorBrush x:Key="SurfaceBrush" Color="#313244"/>
+    <SolidColorBrush x:Key="MutedBrush" Color="#45475A"/>
+    <SolidColorBrush x:Key="TextBrush" Color="#CDD6F4"/>
+    <SolidColorBrush x:Key="SubtextBrush" Color="#A6ADC8"/>
+    <SolidColorBrush x:Key="AccentBrush" Color="#F0A500"/>
+    <SolidColorBrush x:Key="ErrorBrush" Color="#F38BA8"/>
+
+    <Style x:Key="FlatButton" TargetType="Button">
+      <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+      <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+      <Setter Property="Padding" Value="14,6"/>
+      <Setter Property="Margin" Value="0,0,8,0"/>
+      <Setter Property="MinWidth" Value="90"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Bd" CornerRadius="6"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{StaticResource MutedBrush}"
+                    BorderThickness="1"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="Bd" Property="Opacity" Value="0.45"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource FlatButton}">
+      <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+      <Setter Property="Foreground" Value="#1E1E2E"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+
+    <Style x:Key="PillToggle" TargetType="ToggleButton">
+      <Setter Property="Foreground" Value="{StaticResource SubtextBrush}"/>
+      <Setter Property="Padding" Value="14,5"/>
+      <Setter Property="Margin" Value="0,0,6,0"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ToggleButton">
+            <Border x:Name="Bd" CornerRadius="6"
+                    Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource MutedBrush}"
+                    BorderThickness="1"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter x:Name="Cp" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+              </Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentBrush}"/>
+                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                <Setter TargetName="Cp" Property="TextBlock.Foreground" Value="#1E1E2E"/>
+                <Setter TargetName="Cp" Property="TextBlock.FontWeight" Value="SemiBold"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style x:Key="DarkCombo" TargetType="ComboBox">
+      <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+      <Setter Property="Height" Value="28"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ComboBox">
+            <Grid>
+              <ToggleButton x:Name="Toggle" Focusable="False" ClickMode="Press"
+                            IsChecked="{Binding IsDropDownOpen, Mode=TwoWay,
+                                        RelativeSource={RelativeSource TemplatedParent}}">
+                <ToggleButton.Template>
+                  <ControlTemplate TargetType="ToggleButton">
+                    <Border x:Name="TBd" CornerRadius="6"
+                            Background="{StaticResource SurfaceBrush}"
+                            BorderBrush="{StaticResource MutedBrush}"
+                            BorderThickness="1">
+                      <Path HorizontalAlignment="Right" VerticalAlignment="Center"
+                            Margin="0,0,9,0"
+                            Fill="{StaticResource SubtextBrush}"
+                            Data="M 0 0 L 9 0 L 4.5 5 Z"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                      <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="TBd" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                      </Trigger>
+                    </ControlTemplate.Triggers>
+                  </ControlTemplate>
+                </ToggleButton.Template>
+              </ToggleButton>
+              <ContentPresenter IsHitTestVisible="False" Margin="10,0,26,0"
+                                VerticalAlignment="Center"
+                                Content="{TemplateBinding SelectionBoxItem}"
+                                ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"/>
+              <Popup x:Name="Popup" Placement="Bottom" AllowsTransparency="True"
+                     Focusable="False" PopupAnimation="Slide"
+                     IsOpen="{TemplateBinding IsDropDownOpen}">
+                <Border MinWidth="{TemplateBinding ActualWidth}" MaxHeight="320"
+                        Background="{StaticResource CardBrush}"
+                        BorderBrush="{StaticResource MutedBrush}"
+                        BorderThickness="1" CornerRadius="6">
+                  <ScrollViewer>
+                    <StackPanel IsItemsHost="True"/>
+                  </ScrollViewer>
+                </Border>
+              </Popup>
+            </Grid>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="ComboBoxItem">
+      <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+      <Setter Property="Padding" Value="10,5"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ComboBoxItem">
+            <Border x:Name="IBd" Background="Transparent" Padding="{TemplateBinding Padding}">
+              <ContentPresenter x:Name="ICp"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="IBd" Property="Background" Value="{StaticResource MutedBrush}"/>
+              </Trigger>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="ICp" Property="TextBlock.Foreground" Value="{StaticResource AccentBrush}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="DataGridColumnHeader">
+      <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+      <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Padding" Value="8,7"/>
+      <Setter Property="BorderBrush" Value="{StaticResource MutedBrush}"/>
+      <Setter Property="BorderThickness" Value="0,0,1,1"/>
+      <Setter Property="HorizontalContentAlignment" Value="Left"/>
+    </Style>
+
+    <Style TargetType="DataGridCell">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="8,4"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="DataGridCell">
+            <Border Background="{TemplateBinding Background}"
+                    BorderThickness="0"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter VerticalAlignment="Center"/>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+      <Style.Triggers>
+        <Trigger Property="IsSelected" Value="True">
+          <Setter Property="Background" Value="{StaticResource MutedBrush}"/>
+          <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+
+    <Style x:Key="ReadOnlyCell" TargetType="DataGridCell"
+           BasedOn="{StaticResource {x:Type DataGridCell}}">
+      <Setter Property="Foreground" Value="{StaticResource SubtextBrush}"/>
+    </Style>
+  </Window.Resources>
+
+  <Grid Margin="14">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <!-- header -->
+    <StackPanel Grid.Row="0" Margin="0,0,0,12">
+      <TextBlock Text="VIEW MANAGER" Foreground="#F0A500"
+                 FontSize="17" FontWeight="Bold"/>
+      <TextBlock x:Name="StatusText" Text="" Foreground="#A6ADC8" Margin="0,3,0,0"/>
+    </StackPanel>
+
+    <!-- filters -->
+    <Border Grid.Row="1" Background="#2A2A3C" CornerRadius="8"
+            Padding="12" Margin="0,0,0,10">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto"/>
+          <ColumnDefinition Width="Auto"/>
+          <ColumnDefinition Width="Auto"/>
+          <ColumnDefinition Width="Auto"/>
+          <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <TextBlock Grid.Column="0" Text="View type" Foreground="#A6ADC8"
+                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+        <ComboBox Grid.Column="1" x:Name="TypeCombo" Width="200"
+                  Style="{StaticResource DarkCombo}" Margin="0,0,18,0"/>
+
+        <TextBlock Grid.Column="2" Text="Sheet" Foreground="#A6ADC8"
+                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+        <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="0,0,18,0">
+          <ToggleButton x:Name="TglAll" Content="All" IsChecked="True"
+                        Style="{StaticResource PillToggle}"/>
+          <ToggleButton x:Name="TglOn" Content="On sheet"
+                        Style="{StaticResource PillToggle}"/>
+          <ToggleButton x:Name="TglOff" Content="Not on sheet"
+                        Style="{StaticResource PillToggle}"/>
+        </StackPanel>
+
+        <Grid Grid.Column="4" MinWidth="200">
+          <Border CornerRadius="6" Background="#313244"
+                  BorderBrush="#45475A" BorderThickness="1"/>
+          <TextBox x:Name="SearchBox" Background="Transparent" Foreground="#CDD6F4"
+                   CaretBrush="#F0A500" BorderThickness="0"
+                   VerticalContentAlignment="Center" Padding="10,0" Height="28"/>
+          <TextBlock x:Name="SearchHint" Text="Search view name..." Foreground="#6C7086"
+                     IsHitTestVisible="False" VerticalAlignment="Center" Margin="12,0,0,0"/>
+        </Grid>
+      </Grid>
+    </Border>
+
+    <!-- grid -->
+    <Border Grid.Row="2" Background="#2A2A3C" CornerRadius="8" Padding="1">
+      <DataGrid x:Name="Grid"
+                AutoGenerateColumns="False"
+                CanUserAddRows="False"
+                CanUserDeleteRows="False"
+                CanUserResizeRows="False"
+                CanUserSortColumns="True"
+                SelectionMode="Extended"
+                SelectionUnit="FullRow"
+                HeadersVisibility="Column"
+                RowHeaderWidth="0"
+                ColumnWidth="Auto"
+                RowHeight="26"
+                Background="Transparent"
+                RowBackground="#2A2A3C"
+                AlternatingRowBackground="#26263A"
+                Foreground="#CDD6F4"
+                BorderThickness="0"
+                GridLinesVisibility="Horizontal"
+                HorizontalGridLinesBrush="#45475A"
+                EnableRowVirtualization="True">
+        <DataGrid.Resources>
+          <Style TargetType="TextBox">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="CaretBrush" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="6,0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+          </Style>
+        </DataGrid.Resources>
+      </DataGrid>
+    </Border>
+
+    <!-- footer -->
+    <Grid Grid.Row="3" Margin="0,12,0,0">
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+        <Button x:Name="BtnOpenView" Content="Open View" MinWidth="100"
+                Style="{StaticResource FlatButton}"/>
+        <Button x:Name="BtnOpenSheet" Content="Open Sheet" MinWidth="100"
+                Style="{StaticResource FlatButton}"/>
+        <Button x:Name="BtnRefresh" Content="Reload" MinWidth="90"
+                Style="{StaticResource FlatButton}"/>
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+        <Button x:Name="BtnApply" Content="Apply" MinWidth="110"
+                Style="{StaticResource AccentButton}"/>
+        <Button x:Name="BtnClose" Content="Close" MinWidth="90" Margin="0"
+                Style="{StaticResource FlatButton}"/>
+      </StackPanel>
+    </Grid>
+
+    <TextBlock Grid.Row="4" x:Name="ResultText" Text=""
+               Foreground="#A6ADC8" TextTrimming="CharacterEllipsis"
+               TextWrapping="NoWrap" Margin="2,10,2,0"/>
+  </Grid>
+</Window>
+"""
+
+
+# ---------------------------------------------------------------------------
+# re-focus an already open window instead of opening a second one
+# ---------------------------------------------------------------------------
+
+_existing = envvars.get_pyrevit_env_var(ENV_WINDOW)
+if _existing is not None:
+    try:
+        if _existing.IsLoaded:
+            _existing.Activate()
+            _existing.Focus()
+            script.exit()
+    except Exception:
+        envvars.set_pyrevit_env_var(ENV_WINDOW, None)
+
+
+handler = envvars.get_pyrevit_env_var(ENV_HANDLER)
+ext_event = envvars.get_pyrevit_env_var(ENV_EVENT)
+if handler is None or ext_event is None:
+    handler = ViewManagerHandler()
+    ext_event = ExternalEvent.Create(handler)
+    envvars.set_pyrevit_env_var(ENV_HANDLER, handler)
+    envvars.set_pyrevit_env_var(ENV_EVENT, ext_event)
+
+
+def queue_action(action):
+    """Push a Revit API call onto the handler queue and raise the event."""
+    handler.queue.append(action)
+    ext_event.Raise()
+
+
+# ---------------------------------------------------------------------------
+# window + state
+# ---------------------------------------------------------------------------
+
+window = XamlReader.Parse(XAML)
+
+status_text = window.FindName("StatusText")
+type_combo = window.FindName("TypeCombo")
+tgl_all = window.FindName("TglAll")
+tgl_on = window.FindName("TglOn")
+tgl_off = window.FindName("TglOff")
+search_box = window.FindName("SearchBox")
+search_hint = window.FindName("SearchHint")
+grid = window.FindName("Grid")
+btn_open_view = window.FindName("BtnOpenView")
+btn_open_sheet = window.FindName("BtnOpenSheet")
+btn_refresh = window.FindName("BtnRefresh")
+btn_apply = window.FindName("BtnApply")
+btn_close = window.FindName("BtnClose")
+result_text = window.FindName("ResultText")
+
+ro_cell_style = window.FindResource("ReadOnlyCell")
+brush_ok = window.FindResource("AccentBrush")
+brush_info = window.FindResource("SubtextBrush")
+brush_error = window.FindResource("ErrorBrush")
+
+state = {
+    "cols": default_columns(),
+    "table": None,
+    "view": None,        # DataView actually bound to the grid
+    "orig": {},          # {element id: {column key: original string}}
+    "on_sheet": {},      # {element id: True/False}
+    "sheet_ids": {},     # {element id: [(sheet id, label), ...]}
+    "sheet_mode": "all",
+    "loading": [False],  # mutable container, no nonlocal in IronPython 2.7
+    "doc_title": None,
+}
+
+
+def cell_str(value):
+    if value is None:
+        return u""
+    return value
+
+
+def set_result(message, kind="info"):
+    """Write feedback to the line at the bottom of the window."""
+    result_text.Text = message or u""
+    if kind == "ok":
+        result_text.Foreground = brush_ok
+    elif kind == "error":
+        result_text.Foreground = brush_error
+    else:
+        result_text.Foreground = brush_info
+
+
+# ---------------------------------------------------------------------------
+# grid columns / table
+# ---------------------------------------------------------------------------
+
+def rebuild_grid_columns():
+    grid.Columns.Clear()
+    for col in state["cols"]:
+        gc = DataGridTextColumn()
+        gc.Header = col["header"]
+        binding = Binding(col["key"])
+        binding.Mode = BindingMode.TwoWay
+        gc.Binding = binding
+        gc.IsReadOnly = col["ro"]
+        gc.MinWidth = col["min"]
+        gc.MaxWidth = col["max"]
+        if col["ro"]:
+            gc.CellStyle = ro_cell_style
+        grid.Columns.Add(gc)
+
+
+def build_table(doc):
+    """Read the model and rebuild the backing DataTable from state['cols']."""
+    sheet_labels = build_sheet_map(doc)
+    views = collect_views(doc)
+
+    table = DataTable("Views")
+    for col in state["cols"]:
+        dc = table.Columns.Add(col["key"], STR_TYPE)
+        dc.AllowDBNull = False
+        dc.DefaultValue = u""
+        dc.ReadOnly = False
+    dc = table.Columns.Add("OnSheet", STR_TYPE)
+    dc.AllowDBNull = False
+    dc.DefaultValue = u"No"
+
+    originals = {}
+    on_sheet = {}
+    sheet_ids = {}
+    types = set()
+
+    for v in views:
+        vid = id_val(v.Id)
+        row = table.NewRow()
+        row_orig = {}
+        for col in state["cols"]:
+            value = read_cell(v, col, sheet_labels)
+            row[col["key"]] = value
+            row_orig[col["key"]] = value
+        placements = sheet_labels.get(vid) or []
+        placed = bool(placements)
+        row["OnSheet"] = u"Yes" if placed else u"No"
+        table.Rows.Add(row)
+        originals[vid] = row_orig
+        on_sheet[vid] = placed
+        sheet_ids[vid] = placements
+        types.add(u"{0}".format(v.ViewType))
+
+    state["table"] = table
+    state["view"] = table.DefaultView
+    state["orig"] = originals
+    state["on_sheet"] = on_sheet
+    state["sheet_ids"] = sheet_ids
+    state["doc_title"] = doc.Title
+
+    table.RowChanged += DataRowChangeEventHandler(on_row_changed)
+    return sorted(types)
+
+
+def load_types(type_names):
+    previous = type_combo.SelectedItem
+    type_combo.Items.Clear()
+    type_combo.Items.Add(ALL_TYPES)
+    for name in type_names:
+        type_combo.Items.Add(name)
+    if previous is not None and type_combo.Items.Contains(previous):
+        type_combo.SelectedItem = previous
+    else:
+        type_combo.SelectedIndex = 0
+
+
+def reload_data(uiapp):
+    doc = uiapp.ActiveUIDocument.Document
+    state["loading"][0] = True
+    try:
+        type_names = build_table(doc)
+        load_types(type_names)
+        rebuild_grid_columns()
+        grid.ItemsSource = state["view"]
+    finally:
+        state["loading"][0] = False
+    apply_filters()
+
+
+# ---------------------------------------------------------------------------
+# filtering
+# ---------------------------------------------------------------------------
+
+def apply_filters():
+    if state["view"] is None:
+        return
+    parts = []
+
+    text = (search_box.Text or u"").strip()
+    if text:
+        parts.append(u"ViewName LIKE '%{0}%'".format(esc_sql(text)))
+
+    selected_type = type_combo.SelectedItem
+    if selected_type is not None and selected_type != ALL_TYPES:
+        parts.append(u"ViewType = '{0}'".format(esc_sql(selected_type)))
+
+    if state["sheet_mode"] == "on":
+        parts.append(u"OnSheet = 'Yes'")
+    elif state["sheet_mode"] == "off":
+        parts.append(u"OnSheet = 'No'")
+
+    state["view"].RowFilter = u" AND ".join(parts)
+    update_status()
+
+
+def update_status():
+    if state["table"] is None:
+        return
+    shown = state["view"].Count
+    total = state["table"].Rows.Count
+    pending = len(collect_edits())
+    status_text.Text = u"{0} of {1} views shown   |   {2} pending edit(s)   |   {3}".format(
+        shown, total, pending, state["doc_title"] or u"")
+
+
+# ---------------------------------------------------------------------------
+# pending edits
+# ---------------------------------------------------------------------------
+
+def collect_edits():
+    """[(element id, column dict, new value), ...] for everything the user changed."""
+    table = state["table"]
+    if table is None:
+        return []
+    edits = []
+    for row in table.Rows:
+        try:
+            vid = int(row["Id"])
+        except Exception:
+            continue
+        row_orig = state["orig"].get(vid, {})
+        for col in state["cols"]:
+            if col["ro"]:
+                continue
+            current = cell_str(row[col["key"]])
+            previous = row_orig.get(col["key"], u"")
+            if current != previous:
+                edits.append((vid, col, current))
+    return edits
+
+
+def on_row_changed(sender, args):
+    if state["loading"][0]:
+        return
+    set_result(u"", "info")
+    update_status()
+
+
+def commit_grid_edit():
+    """Push whatever cell is being edited into the DataTable before reading it."""
+    try:
+        grid.CommitEdit(DataGridEditingUnit.Cell, True)
+        grid.CommitEdit(DataGridEditingUnit.Row, True)
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Revit actions (all of these run inside the external event)
+# ---------------------------------------------------------------------------
+
+def action_reload(uiapp):
+    reload_data(uiapp)
+    set_result(u"Reloaded from the model.", "info")
+
+
+def action_apply(uiapp):
+    doc = uiapp.ActiveUIDocument.Document
+    if state["doc_title"] is not None and doc.Title != state["doc_title"]:
+        set_result(u"The active document changed - press Reload before applying.", "error")
+        return
+
+    edits = collect_edits()
+    if not edits:
+        set_result(u"Nothing to apply.", "info")
+        return
+
+    applied = [0]
+    failures = []
+
+    t = Transaction(doc, "View Manager - apply edits")
+    t.Start()
+    try:
+        for vid, col, value in edits:
+            view = None
+            lookup_error = None
+            try:
+                view = doc.GetElement(to_eid(vid))
+            except Exception as ex:
+                lookup_error = ex
+            if view is None:
+                if lookup_error is not None:
+                    failures.append(u"[{0}] {1}: {2}".format(vid, col["header"], lookup_error))
+                else:
+                    failures.append(u"[{0}] {1}: view no longer exists".format(vid, col["header"]))
+                continue
+            try:
+                write_cell(view, col, value, state["on_sheet"].get(vid, False))
+                applied[0] += 1
+            except Exception as ex:
+                name = u""
+                try:
+                    name = view.Name
+                except Exception:
+                    pass
+                failures.append(u"{0} -> {1}: {2}".format(name or vid, col["header"], ex))
+        t.Commit()
+    except Exception as ex:
+        t.RollBack()
+        set_result(u"Transaction failed, nothing was changed: {0}".format(ex), "error")
+        return
+
+    reload_data(uiapp)
+
+    if failures:
+        out = script.get_output()
+        out.print_md("## View Manager - {0} edit(s) applied, {1} skipped".format(
+            applied[0], len(failures)))
+        for line in failures:
+            out.print_md(u"- {0}".format(line))
+        set_result(u"{0} edit(s) applied, {1} skipped - details in the output window.".format(
+            applied[0], len(failures)), "error")
+    else:
+        set_result(u"{0} edit(s) applied.".format(applied[0]), "ok")
+
+
+def selected_view_id():
+    """Element id of the row the user has selected, or None."""
+    row_view = grid.SelectedItem
+    if row_view is None:
+        set_result(u"Select a row first.", "info")
+        return None
+    try:
+        return int(row_view.Row["Id"])
+    except Exception:
+        return None
+
+
+def action_open_view(uiapp):
+    uidoc = uiapp.ActiveUIDocument
+    vid = selected_view_id()
+    if vid is None:
+        return
+    view = uidoc.Document.GetElement(to_eid(vid))
+    if view is None:
+        return
+    try:
+        uidoc.RequestViewChange(view)
+        set_result(u"", "info")
+    except Exception as ex:
+        set_result(u"Could not open that view: {0}".format(ex), "error")
+
+
+def action_open_sheet(uiapp):
+    uidoc = uiapp.ActiveUIDocument
+    vid = selected_view_id()
+    if vid is None:
+        return
+
+    placements = state["sheet_ids"].get(vid) or []
+    if not placements:
+        set_result(u"That view is not placed on a sheet.", "info")
+        return
+
+    sheet_id = placements[0][0]
+    if len(placements) > 1:
+        options = {}
+        for sid, label in placements:
+            options[label] = sid
+        picked = forms.SelectFromList.show(sorted(options.keys()),
+                                           title="This view is on several sheets",
+                                           button_name="Open sheet",
+                                           multiselect=False)
+        if not picked:
+            return
+        sheet_id = options[picked]
+
+    sheet = uidoc.Document.GetElement(to_eid(sheet_id))
+    if sheet is None:
+        set_result(u"That sheet no longer exists - press Reload.", "error")
+        return
+    try:
+        uidoc.RequestViewChange(sheet)
+        set_result(u"", "info")
+    except Exception as ex:
+        set_result(u"Could not open that sheet: {0}".format(ex), "error")
+
+
+# ---------------------------------------------------------------------------
+# UI event handlers
+# ---------------------------------------------------------------------------
+
+def on_search_changed(sender, args):
+    search_hint.Visibility = Visibility.Collapsed if search_box.Text else Visibility.Visible
+    if not state["loading"][0]:
+        apply_filters()
+
+
+def on_type_changed(sender, args):
+    if not state["loading"][0]:
+        apply_filters()
+
+
+def set_sheet_mode(mode):
+    if state["loading"][0]:
+        return
+    state["loading"][0] = True
+    try:
+        tgl_all.IsChecked = (mode == "all")
+        tgl_on.IsChecked = (mode == "on")
+        tgl_off.IsChecked = (mode == "off")
+    finally:
+        state["loading"][0] = False
+    state["sheet_mode"] = mode
+    apply_filters()
+
+
+def on_tgl_all(sender, args):
+    set_sheet_mode("all")
+
+
+def on_tgl_on(sender, args):
+    set_sheet_mode("on")
+
+
+def on_tgl_off(sender, args):
+    set_sheet_mode("off")
+
+
+def on_apply_click(sender, args):
+    commit_grid_edit()
+    queue_action(action_apply)
+
+
+def on_refresh_click(sender, args):
+    commit_grid_edit()
+    if collect_edits():
+        if not forms.alert("You have unsaved edits. Reload and discard them?",
+                           title="View Manager", yes=True, no=True):
+            return
+    queue_action(action_reload)
+
+
+def on_open_view_click(sender, args):
+    queue_action(action_open_view)
+
+
+def on_open_sheet_click(sender, args):
+    queue_action(action_open_sheet)
+
+
+def on_close_click(sender, args):
+    window.Close()
+
+
+def on_window_closed(sender, args):
+    envvars.set_pyrevit_env_var(ENV_WINDOW, None)
+    envvars.set_pyrevit_env_var(ENV_HANDLER, None)
+    envvars.set_pyrevit_env_var(ENV_EVENT, None)
+
+
+search_box.TextChanged += TextChangedEventHandler(on_search_changed)
+type_combo.SelectionChanged += SelectionChangedEventHandler(on_type_changed)
+tgl_all.Checked += RoutedEventHandler(on_tgl_all)
+tgl_on.Checked += RoutedEventHandler(on_tgl_on)
+tgl_off.Checked += RoutedEventHandler(on_tgl_off)
+btn_apply.Click += RoutedEventHandler(on_apply_click)
+btn_refresh.Click += RoutedEventHandler(on_refresh_click)
+btn_open_view.Click += RoutedEventHandler(on_open_view_click)
+btn_open_sheet.Click += RoutedEventHandler(on_open_sheet_click)
+btn_close.Click += RoutedEventHandler(on_close_click)
+window.Closed += EventHandler(on_window_closed)
+
+
+# ---------------------------------------------------------------------------
+# first load + show (modeless: Show(), no PushFrame)
+# ---------------------------------------------------------------------------
+
+reload_data(__revit__)
+
+envvars.set_pyrevit_env_var(ENV_WINDOW, window)
+window.Show()

@@ -1,10 +1,9 @@
 layout:
   - Automations
   - QoL
-  - Rooms
-  - Walls
+  - Visuals
   - Links
   - Inspection
-  - Shafts
+  - Clashes
   - Warnings
-  - Model Elements
+  - Modify
