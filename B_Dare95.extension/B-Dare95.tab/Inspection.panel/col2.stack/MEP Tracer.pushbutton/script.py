@@ -1,46 +1,42 @@
 # -*- coding: utf-8 -*-
 """
-MEP Branch Tracer  (v6 — Revit 2024+ Compatible · Catppuccin UI)
+MEP Branch Tracer  (v7 — Selection-based highlighting)
 =================================================================
 Traces the complete connected branch of a selected MEP element residing
 in a Revit linked file, then:
   1. Applies a section box to the active 3D view isolating the branch.
-  2. Creates one Generic Model DirectShape bounding-box solid per traced
-     element with a cyan / 50 % transparent override in the active view.
-  3. Shows a Catppuccin-themed WPF overlay dialog with trace statistics.
-  4. On dismiss (ESC / button / close), deletes every DirectShape and exits.
+  2. Selects every traced element in the Revit UI — host elements and
+     linked elements together — via Selection.SetReferences().
+  3. Prints a short category summary (no element IDs).
 
-Fix (v6):  Category recognition no longer uses int() or IntegerValue.
-           ElementId-based set lookup + Category.BuiltInCategory (2023+)
-           covers every Revit version cleanly.
+Change (v7):  Generic Model DirectShape bounding boxes replaced with a real
+              Revit selection. Linked elements are converted to host-context
+              references with Reference.CreateLinkReference() and pushed
+              through Selection.SetReferences(), so the branch stays
+              highlighted natively — nothing is created, nothing to clean up,
+              and no transaction is needed for the highlight itself.
+              The overlay dialog and its Remove Highlights logic are gone
+              along with the geometry they existed to manage.
 
-Compatible with: pyRevit 4.x, IronPython 2.7, Revit 2020–2027+
+Compatible with: pyRevit 4.x, IronPython 2.7, Revit 2023–2027+
+                 (Selection.SetReferences was added in the Revit 2023 API)
 """
 
 import clr
 clr.AddReference('RevitAPI')
 clr.AddReference('RevitAPIUI')
 clr.AddReference('System')
-clr.AddReference('PresentationFramework')
-clr.AddReference('PresentationCore')
-clr.AddReference('WindowsBase')
 
 from Autodesk.Revit.DB import (
     FilteredElementCollector, RevitLinkInstance,
     BoundingBoxIntersectsFilter, BoundingBoxXYZ, Outline,
-    Transform, XYZ, ElementId, BuiltInCategory, BuiltInParameter,
-    Transaction, View3D,
-    DirectShape, CurveLoop, Line,
-    GeometryCreationUtilities,
-    OverrideGraphicSettings, Color,
-    FillPatternElement,
+    Transform, XYZ, ElementId, BuiltInCategory,
+    Transaction, View3D, Reference,
 )
 from Autodesk.Revit.UI import TaskDialog
 from Autodesk.Revit.UI.Selection import ObjectType
+import Autodesk.Revit.Exceptions as RvtEx
 from System.Collections.Generic import List
-from System.Windows.Markup import XamlReader
-from System.Windows.Threading import Dispatcher, DispatcherFrame
-import System.Windows as SW
 
 # ── pyRevit output ─────────────────────────────────────────────────────────────
 try:
@@ -59,15 +55,14 @@ except Exception:
         _log_lines.append("\t".join(h))
         for r in rows: _log_lines.append("\t".join(str(c) for c in r))
 
-doc   = __revit__.ActiveUIDocument.Document
-uidoc = __revit__.ActiveUIDocument
+doc      = __revit__.ActiveUIDocument.Document
+uidoc    = __revit__.ActiveUIDocument
+app      = __revit__.Application
+rvt_year = int(app.VersionNumber)
 
 # ── Tuneable constants ─────────────────────────────────────────────────────────
 MATCH_TOLERANCE     = 0.05   # feet (~15 mm)
 SECTION_BOX_PADDING = 1.0    # feet (~300 mm)
-HIGHLIGHT_PADDING   = 0.05   # feet (~15 mm)
-HIGHLIGHT_COLOR     = Color(0, 255, 255)   # cyan
-HIGHLIGHT_TRANSP    = 50                   # percent
 
 # ── MEP category registry ──────────────────────────────────────────────────────
 #
@@ -134,19 +129,6 @@ def cat_label(elem):
 
 # ── Misc helpers ───────────────────────────────────────────────────────────────
 
-def type_name(elem, elem_doc):
-    try:
-        t = elem_doc.GetElement(elem.GetTypeId())
-        if t:
-            p = t.get_Parameter(BuiltInParameter.ALL_MODEL_TYPE_NAME)
-            if p and p.AsString():
-                return p.AsString()
-            return t.Name
-    except Exception:
-        pass
-    return ""
-
-
 def elem_key(elem, elem_doc):
     return (elem_doc.PathName, elem.Id)
 
@@ -178,6 +160,7 @@ def get_link_data():
             'doc'      : ldoc,
             'transform': inst.GetTotalTransform(),
             'title'    : ldoc.Title,
+            'instance' : inst,          # needed for CreateLinkReference()
         }
     return links
 
@@ -332,362 +315,85 @@ def compute_world_bbox(host_elems, linked_elems, link_data):
     bbox.Max = XYZ(extents[3] + p, extents[4] + p, extents[5] + p)
     return bbox
 
-
-def _world_corners(elem, to_world):
-    """Return (world_min, world_max) XYZ pair, or None if no bounding box."""
-    bb = elem.get_BoundingBox(None)
-    if bb is None:
-        return None
-    lmin, lmax = bb.Min, bb.Max
-    corners = [
-        to_world.OfPoint(XYZ(cx, cy, cz))
-        for cx in (lmin.X, lmax.X)
-        for cy in (lmin.Y, lmax.Y)
-        for cz in (lmin.Z, lmax.Z)
-    ]
-    mn = XYZ(min(c.X for c in corners), min(c.Y for c in corners), min(c.Z for c in corners))
-    mx = XYZ(max(c.X for c in corners), max(c.Y for c in corners), max(c.Z for c in corners))
-    return mn, mx
-
 # ── Section box ────────────────────────────────────────────────────────────────
 
 def apply_section_box(bbox, view):
-    with Transaction(doc, "MEP Branch Tracer - Section Box") as t:
-        t.Start()
+    t = Transaction(doc, "MEP Branch Tracer - Section Box")
+    t.Start()
+    try:
         view.SetSectionBox(bbox)
         view.IsSectionBoxActive = True
         t.Commit()
+    except Exception:
+        t.RollBack()
+        raise
 
-# ── Solid fill pattern ─────────────────────────────────────────────────────────
+# ── Selection highlighting ─────────────────────────────────────────────────────
 
-def get_solid_fill_pattern_id():
-    for fpe in (FilteredElementCollector(doc)
-                .OfClass(FillPatternElement)
-                .ToElements()):
+def build_selection_references(host_elems, linked_elems, link_data):
+    """Host elements and linked elements as one host-context reference list.
+
+    Host elements go in as plain Reference(elem). Linked elements are rebuilt as
+    whole-element references and converted with CreateLinkReference(), which is
+    what makes them valid outside their own document.
+
+    Returns (List[Reference], skipped_count).
+    """
+    refs    = List[Reference]()
+    skipped = 0
+
+    for elem in host_elems:
         try:
-            fp = fpe.GetFillPattern()
-            if fp is not None and fp.IsSolidFill:
-                return fpe.Id
+            refs.Add(Reference(elem))
         except Exception:
-            pass
-    return ElementId.InvalidElementId
+            skipped += 1
 
-# ── Box solid builder ──────────────────────────────────────────────────────────
-
-def _make_box_solid(world_min, world_max):
-    p  = HIGHLIGHT_PADDING
-    mn = XYZ(world_min.X - p, world_min.Y - p, world_min.Z - p)
-    mx = XYZ(world_max.X + p, world_max.Y + p, world_max.Z + p)
-
-    MIN_DIM = 1e-4
-    if mx.X - mn.X < MIN_DIM:
-        h = MIN_DIM / 2.0; mn = XYZ(mn.X - h, mn.Y, mn.Z); mx = XYZ(mx.X + h, mx.Y, mx.Z)
-    if mx.Y - mn.Y < MIN_DIM:
-        h = MIN_DIM / 2.0; mn = XYZ(mn.X, mn.Y - h, mn.Z); mx = XYZ(mx.X, mx.Y + h, mx.Z)
-    if mx.Z - mn.Z < MIN_DIM:
-        h = MIN_DIM / 2.0; mn = XYZ(mn.X, mn.Y, mn.Z - h); mx = XYZ(mx.X, mx.Y, mx.Z + h)
-
-    p1 = XYZ(mn.X, mn.Y, mn.Z)
-    p2 = XYZ(mx.X, mn.Y, mn.Z)
-    p3 = XYZ(mx.X, mx.Y, mn.Z)
-    p4 = XYZ(mn.X, mx.Y, mn.Z)
-    loop = CurveLoop()
-    loop.Append(Line.CreateBound(p1, p2))
-    loop.Append(Line.CreateBound(p2, p3))
-    loop.Append(Line.CreateBound(p3, p4))
-    loop.Append(Line.CreateBound(p4, p1))
-    return GeometryCreationUtilities.CreateExtrusionGeometry(
-        List[CurveLoop]([loop]), XYZ(0, 0, 1), mx.Z - mn.Z
-    )
-
-# ── DirectShape creation / deletion ───────────────────────────────────────────
-
-def create_per_element_directshapes(host_elems, linked_elems, link_data, view):
-    solid_fill_id = get_solid_fill_pattern_id()
-    ogs = OverrideGraphicSettings()
-    ogs.SetSurfaceTransparency(HIGHLIGHT_TRANSP)
-    ogs.SetProjectionLineColor(HIGHLIGHT_COLOR)
-    ogs.SetCutLineColor(HIGHLIGHT_COLOR)
-    if solid_fill_id != ElementId.InvalidElementId:
-        ogs.SetSurfaceForegroundPatternId(solid_fill_id)
-        ogs.SetSurfaceForegroundPatternColor(HIGHLIGHT_COLOR)
-        ogs.SetSurfaceBackgroundPatternId(solid_fill_id)
-        ogs.SetSurfaceBackgroundPatternColor(HIGHLIGHT_COLOR)
-
-    work_items = [(e, Transform.Identity) for e in host_elems]
     for link_id, elems in linked_elems.items():
         ldata = link_data.get(link_id)
-        xform = ldata['transform'] if ldata else Transform.Identity
-        work_items.extend([(e, xform) for e in elems])
-
-    cat_id  = ElementId(BuiltInCategory.OST_GenericModel)
-    created = []
-
-    with Transaction(doc, "MEP Branch Tracer - Create Highlights") as t:
-        t.Start()
-        for elem, to_world in work_items:
+        inst  = ldata.get('instance') if ldata else None
+        if inst is None:
+            skipped += len(elems)
+            continue
+        for elem in elems:
             try:
-                corners = _world_corners(elem, to_world)
-                if corners is None:
-                    continue
-                solid = _make_box_solid(corners[0], corners[1])
-                ds    = DirectShape.CreateElement(doc, cat_id)
-                ds.SetShape([solid])
-                ds.Name = "MEP_BranchHighlight"
-                view.SetElementOverrides(ds.Id, ogs)
-                created.append(ds.Id)
-            except Exception as ex:
-                log("  *Skipped element {} — {}*".format(elem.Id, ex))
-        t.Commit()
+                refs.Add(Reference(elem).CreateLinkReference(inst))
+            except Exception:
+                skipped += 1
 
-    return created
+    return refs, skipped
 
+# ── Summary ────────────────────────────────────────────────────────────────────
 
-def delete_all_directshapes(ds_ids):
-    if not ds_ids:
-        return
-    with Transaction(doc, "MEP Branch Tracer - Remove Highlights") as t:
-        t.Start()
-        try:
-            doc.Delete(List[ElementId](ds_ids))
-            t.Commit()
-        except Exception:
-            t.RollBack()
+def log_summary(host_elems, linked_elems, terminals, selected_count, skipped):
+    """Category breakdown only — no element IDs.
 
-# ── Catppuccin Mocha WPF overlay ───────────────────────────────────────────────
-#
-#   Palette  bg=#161616  card=#262626  surface=#393939  muted=#525252
-#            text=#F4F4F4  subtext=#A8A8A8  accent=#F1C21B
-#
-
-_DIALOG_XAML = u"""
-<Window
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="MEP Branch Tracer"
-    Width="400"
-    SizeToContent="Height"
-    WindowStyle="None"
-    AllowsTransparency="True"
-    Background="Transparent"
-    ResizeMode="NoResize"
-    Topmost="True"
-    WindowStartupLocation="Manual">
-
-    <Border Background="#161616" CornerRadius="14"
-            BorderBrush="#525252" BorderThickness="1">
-        <StackPanel Margin="22,18,22,22">
-
-            <!-- ── Title / drag strip ── -->
-            <DockPanel x:Name="TitleBar" Margin="0,0,0,16" Cursor="SizeAll">
-                <Ellipse DockPanel.Dock="Left"
-                         Width="9" Height="9" Fill="#F1C21B"
-                         Margin="0,0,10,0" VerticalAlignment="Center"/>
-                <TextBlock Text="MEP Branch Tracer  —  Highlight Active"
-                           Foreground="#F4F4F4" FontFamily="Segoe UI"
-                           FontSize="13" FontWeight="SemiBold"
-                           VerticalAlignment="Center"/>
-            </DockPanel>
-
-            <!-- ── Stats card ── -->
-            <Border Background="#262626" CornerRadius="10"
-                    Padding="14,12,14,12" Margin="0,0,0,14">
-                <StackPanel x:Name="StatsPanel"/>
-            </Border>
-
-            <!-- ── Hint ── -->
-            <TextBlock Text="Press ESC or click below to remove all highlights."
-                       Foreground="#525252" FontFamily="Segoe UI" FontSize="10"
-                       HorizontalAlignment="Center" Margin="0,0,0,12"/>
-
-            <!-- ── Action button ── -->
-            <Button x:Name="CloseBtn" Height="38" Cursor="Hand"
-                    BorderThickness="0" Background="#F1C21B">
-                <Button.Template>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="BtnBorder"
-                                Background="{TemplateBinding Background}"
-                                CornerRadius="9">
-                            <TextBlock Text="Remove Highlights &amp; Exit"
-                                       Foreground="#161616"
-                                       FontFamily="Segoe UI" FontSize="11"
-                                       FontWeight="SemiBold"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="BtnBorder"
-                                        Property="Background" Value="#E09600"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="BtnBorder"
-                                        Property="Background" Value="#C87E00"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Button.Template>
-            </Button>
-
-        </StackPanel>
-    </Border>
-</Window>
-"""
-
-
-def _stat_row(label, value):
-    """Build one two-column stats row as a WPF Grid."""
-    grid = SW.Controls.Grid()
-    grid.Margin = SW.Thickness(0, 4, 0, 4)
-
-    col0 = SW.Controls.ColumnDefinition()
-    col1 = SW.Controls.ColumnDefinition()
-    col1.Width = SW.GridLength.Auto
-    grid.ColumnDefinitions.Add(col0)
-    grid.ColumnDefinitions.Add(col1)
-
-    def tb(text, col, color_hex, bold=False):
-        t = SW.Controls.TextBlock()
-        t.Text       = text
-        t.FontFamily = SW.Media.FontFamily("Segoe UI")
-        t.FontSize   = 11
-        t.Foreground = SW.Media.SolidColorBrush(
-            SW.Media.ColorConverter.ConvertFromString(color_hex)
-        )
-        if bold:
-            t.FontWeight = SW.FontWeights.SemiBold
-        if col == 1:
-            t.HorizontalAlignment = SW.HorizontalAlignment.Right
-        SW.Controls.Grid.SetColumn(t, col)
-        return t
-
-    grid.Children.Add(tb(label,      0, "#A8A8A8"))
-    grid.Children.Add(tb(str(value), 1, "#F4F4F4", bold=True))
-    return grid
-
-
-def show_highlight_dialog(stats):
+    Delete this function and its call in main() if you want the tool silent.
     """
-    Display the Catppuccin overlay and block until dismissed.
-    stats: list of (label, value) tuples.
-    """
-    win = XamlReader.Parse(_DIALOG_XAML)
+    total_linked = sum(len(v) for v in linked_elems.values())
 
-    # Position: top-right of primary work area
-    work  = SW.SystemParameters.WorkArea
-    win.Left = work.Right - 424
-    win.Top  = work.Top + 24
+    counts = {}
+    for e in host_elems:
+        label = cat_label(e)
+        counts[label] = counts.get(label, 0) + 1
+    for elems in linked_elems.values():
+        for e in elems:
+            label = cat_label(e)
+            counts[label] = counts.get(label, 0) + 1
 
-    # Populate stats rows
-    stats_panel = win.FindName("StatsPanel")
-    if stats_panel:
-        for label, value in stats:
-            stats_panel.Children.Add(_stat_row(label, str(value)))
-
-    # Wire up interactions
-    close_btn = win.FindName("CloseBtn")
-    if close_btn:
-        close_btn.Click += lambda s, e: win.Close()
-
-    title_bar = win.FindName("TitleBar")
-    if title_bar:
-        title_bar.MouseLeftButtonDown += lambda s, e: win.DragMove()
-
-    win.KeyDown += lambda s, e: (win.Close() if e.Key == SW.Input.Key.Escape else None)
-
-    # PushFrame blocks the script (preventing early cleanup) while still
-    # processing all Win32 messages freely — Revit's viewport stays interactive.
-    # ShowDialog() calls ComponentDispatcher.PushModal() which restricts all
-    # input to the dialog window; PushFrame() does not.
-    frame = DispatcherFrame()
-    win.Closed += lambda s, e: setattr(frame, 'Continue', False)
-    win.Show()
-    Dispatcher.PushFrame(frame)
-
-# ── Report ─────────────────────────────────────────────────────────────────────
-
-def build_report(start_elem, start_doc, host_elems, linked_elems,
-                 terminals, link_data, ds_count):
-    log_header("MEP Branch Trace Report")
-    log("**Starting element:** {} — ID `{}` — {} — *linked: {}*".format(
-        cat_label(start_elem), start_elem.Id,
-        type_name(start_elem, start_doc), start_doc.Title))
+    log_header("MEP Branch Trace")
+    log("Host model: **{}**  ·  Linked files: **{}** ({} elements)  "
+        "·  Open terminals: **{}**".format(
+            len(host_elems), len(linked_elems), total_linked, len(terminals)))
     log("")
 
-    total_linked = sum(len(v) for v in linked_elems.values())
-    log_header("Summary")
-    log(
-        "| Metric | Count |\n"
-        "|--------|-------|\n"
-        "| Host model elements | {} |\n"
-        "| Linked file elements | {} |\n"
-        "| Linked files crossed | {} |\n"
-        "| Terminal / dead-end connectors | {} |\n"
-        "| Cyan highlight boxes created | {} |".format(
-            len(host_elems), total_linked,
-            len(linked_elems), len(terminals), ds_count))
-    log("")
+    if counts:
+        rows = [[cl, str(counts[cl])] for cl in sorted(counts)]
+        log_table(["Category", "Count"], rows)
 
-    if host_elems:
-        log_header("Host Model Elements ({})".format(len(host_elems)))
-        cat_groups = {}
-        for e in host_elems:
-            cat_groups.setdefault(cat_label(e), []).append(e)
-        rows = []
-        for cl in sorted(cat_groups):
-            for e in cat_groups[cl]:
-                rows.append([cl, str(e.Id), type_name(e, doc)])
-        log_table(["Category", "Element ID", "Type"], rows)
-        log("")
-
-    if linked_elems:
-        log_header("Linked File Elements ({})".format(total_linked))
-        for lid, elems in linked_elems.items():
-            ldata = link_data.get(lid, {})
-            ldoc  = ldata.get('doc', doc)
-            log("**{}** — {} element(s)".format(ldata.get('title', str(lid)), len(elems)))
-            cat_groups = {}
-            for e in elems:
-                cat_groups.setdefault(cat_label(e), []).append(e)
-            rows = []
-            for cl in sorted(cat_groups):
-                for e in cat_groups[cl]:
-                    rows.append([cl, str(e.Id), type_name(e, ldoc)])
-            log_table(["Category", "Element ID", "Type"], rows)
-            log("")
-
-    if terminals:
-        log_header("Terminal Connectors ({})".format(len(terminals)))
-        rows = []
-        for elem, world_pt in terminals:
-            rows.append([
-                cat_label(elem), str(elem.Id),
-                "{:.3f}, {:.3f}, {:.3f}".format(world_pt.X, world_pt.Y, world_pt.Z),
-            ])
-        log_table(["Category", "Element ID", "Open Connector XYZ (ft, world)"], rows)
-        log("")
-
-    log("*Section box active.  {} cyan highlight boxes visible — dismiss overlay to remove.*".format(ds_count))
-
-# ── Interactive session ────────────────────────────────────────────────────────
-
-def run_interactive_session(host_elems, linked_elems, terminals, ds_ids):
-    total_linked = sum(len(v) for v in linked_elems.values())
-    total        = len(host_elems) + total_linked
-
-    stats = [
-        (u"Total elements traced",  total),
-        (u"  \u2023  Host model",   len(host_elems)),
-        (u"  \u2023  Linked files", u"{} file(s)  \u00b7  {} elements".format(
-             len(linked_elems), total_linked)),
-        (u"Open terminals",         len(terminals)),
-        (u"Cyan highlight boxes",   len(ds_ids)),
-    ]
-
-    show_highlight_dialog(stats)
-
-    delete_all_directshapes(ds_ids)
-    log("*All {} highlight boxes removed.  Script exited cleanly.*".format(len(ds_ids)))
+    log("**{} element(s) selected.**".format(selected_count))
+    if skipped:
+        log("*{} element(s) could not be turned into a selectable "
+            "reference.*".format(skipped))
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 
@@ -702,12 +408,21 @@ def main():
         )
         return
 
+    if rvt_year < 2023:
+        TaskDialog.Show(
+            "MEP Branch Tracer",
+            "Highlighting the branch by selection needs "
+            "Selection.SetReferences(), added in the Revit 2023 API.\n\n"
+            "This Revit is {0}.".format(rvt_year)
+        )
+        return
+
     try:
         ref = uidoc.Selection.PickObject(
             ObjectType.LinkedElement,
             "Pick a MEP element from a linked file to trace its branch"
         )
-    except Exception:
+    except RvtEx.OperationCanceledException:
         return
 
     link_instance = doc.GetElement(ref.ElementId)
@@ -733,15 +448,13 @@ def main():
         )
         return
 
-    log("**Tracing branch from:** {} — ID `{}` in *{}* ...".format(
-        cat_label(start_elem), start_elem.Id, link_doc.Title))
-
     link_data = get_link_data()
     if link_instance.Id not in link_data:
         link_data[link_instance.Id] = {
             'doc'      : link_doc,
             'transform': world_xform,
             'title'    : link_doc.Title,
+            'instance' : link_instance,
         }
 
     host_elems, linked_elems, terminals = trace_branch(
@@ -766,21 +479,16 @@ def main():
         return
     apply_section_box(bbox, active_view)
 
-    ds_ids = create_per_element_directshapes(
-        host_elems, linked_elems, link_data, active_view
-    )
-    log("**Created {} cyan highlight boxes.**".format(len(ds_ids)))
+    sel_refs, skipped = build_selection_references(host_elems, linked_elems, link_data)
 
-    if host_elems:
-        uidoc.Selection.SetElementIds(List[ElementId]([e.Id for e in host_elems]))
-
-    build_report(start_elem, link_doc, host_elems, linked_elems,
-                 terminals, link_data, len(ds_ids))
-
-    run_interactive_session(host_elems, linked_elems, terminals, ds_ids)
+    log_summary(host_elems, linked_elems, terminals, sel_refs.Count, skipped)
 
     if not HAS_OUTPUT:
         TaskDialog.Show("MEP Branch Tracer", "\n".join(_log_lines[-80:]))
+
+    # Selection goes last: a committed transaction can clear it.
+    if sel_refs.Count:
+        uidoc.Selection.SetReferences(sel_refs)
 
 
 if __name__ == '__main__':
