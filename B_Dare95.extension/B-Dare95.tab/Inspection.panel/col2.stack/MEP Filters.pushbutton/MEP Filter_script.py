@@ -48,20 +48,20 @@ active_view = doc.ActiveView
 output      = script.get_output()
 
 # ── UI Theme (Catppuccin Mocha) ───────────────────────────────────────────────
-DARK_BG    = Drawing.Color.FromArgb(30,  30,  46)   # #1E1E2E  base
-ROW_A      = Drawing.Color.FromArgb(49,  50,  68)   # #313244  surface
-ROW_B      = Drawing.Color.FromArgb(42,  42,  60)   # #2A2A3C  card
-HEADER_BG  = Drawing.Color.FromArgb(30,  30,  46)   # #1E1E2E  base
-SECTION_BG = Drawing.Color.FromArgb(69,  71,  90)   # #45475A  muted
+DARK_BG    = Drawing.Color.FromArgb(30,  30,  46)   # #161616  base
+ROW_A      = Drawing.Color.FromArgb(49,  50,  68)   # #393939  surface
+ROW_B      = Drawing.Color.FromArgb(42,  42,  60)   # #262626  card
+HEADER_BG  = Drawing.Color.FromArgb(30,  30,  46)   # #161616  base
+SECTION_BG = Drawing.Color.FromArgb(69,  71,  90)   # #525252  muted
 WARN_BG    = Drawing.Color.FromArgb(62,  48,  18)   # amber-tinted surface
-TEXT_FG    = Drawing.Color.FromArgb(205, 214, 244)  # #CDD6F4  text
-DIM_FG     = Drawing.Color.FromArgb(166, 173, 200)  # #A6ADC8  subtext
-ACCENT_FG  = Drawing.Color.FromArgb(240, 165,   0)  # #F0A500  accent
-WARN_FG    = Drawing.Color.FromArgb(249, 226, 175)  # #F9E2AF  yellow
-INPUT_BG   = Drawing.Color.FromArgb(49,  50,  68)   # #313244  surface
-BTN_BG     = Drawing.Color.FromArgb(69,  71,  90)   # #45475A  muted
-BTN_OK_BG  = Drawing.Color.FromArgb(240, 165,   0)  # #F0A500  accent
-BORDER_CLR = Drawing.Color.FromArgb(69,  71,  90)   # #45475A  muted
+TEXT_FG    = Drawing.Color.FromArgb(205, 214, 244)  # #F4F4F4  text
+DIM_FG     = Drawing.Color.FromArgb(166, 173, 200)  # #A8A8A8  subtext
+ACCENT_FG  = Drawing.Color.FromArgb(240, 165,   0)  # #F1C21B  accent
+WARN_FG    = Drawing.Color.FromArgb(249, 226, 175)  # #F1C21B  yellow
+INPUT_BG   = Drawing.Color.FromArgb(49,  50,  68)   # #393939  surface
+BTN_BG     = Drawing.Color.FromArgb(69,  71,  90)   # #525252  muted
+BTN_OK_BG  = Drawing.Color.FromArgb(240, 165,   0)  # #F1C21B  accent
+BORDER_CLR = Drawing.Color.FromArgb(69,  71,  90)   # #525252  muted
 
 FONT_NORM  = Drawing.Font("Segoe UI", 9)
 FONT_BOLD  = Drawing.Font("Segoe UI", 9, Drawing.FontStyle.Bold)
@@ -474,7 +474,7 @@ def show_filter_dialog(linked_classifications, fallback_used):
         del_btn.Size      = Drawing.Size(DEL_W - 2, ROW_H - 10)
         del_btn.Location  = Drawing.Point(swatch_x + SWATCH_W, (ROW_H - del_btn.Height) // 2)
         del_btn.BackColor = Drawing.Color.FromArgb(58,  30,  40)   # dark red-tinted surface
-        del_btn.ForeColor = Drawing.Color.FromArgb(243, 139, 168)  # #F38BA8 Catppuccin red
+        del_btn.ForeColor = Drawing.Color.FromArgb(243, 139, 168)  # #FF8389 Catppuccin red
         del_btn.FlatStyle = WinForms.FlatStyle.Flat
         del_btn.FlatAppearance.BorderColor = Drawing.Color.FromArgb(100, 60, 75)
         del_btn.Font      = FONT_BOLD
@@ -534,7 +534,7 @@ def show_filter_dialog(linked_classifications, fallback_used):
         hdr.Controls.Add(_lbl(
             "  " + sec["title"], 0, 0, TOTAL_W, HDR_H,
             font=FONT_BOLD,
-            fg=Drawing.Color.FromArgb(180, 190, 254),   # #B4BEFE lavender
+            fg=Drawing.Color.FromArgb(180, 190, 254),   # #A6C8FF lavender
             bg=Drawing.Color.Transparent
         ))
         form.Controls.Add(hdr)
@@ -579,8 +579,8 @@ def show_filter_dialog(linked_classifications, fallback_used):
         add_btn = WinForms.Button()
         add_btn.Text      = "+"
         add_btn.Size      = Drawing.Size(26, 22)
-        add_btn.BackColor = Drawing.Color.FromArgb(69,  71,  90)   # #45475A muted
-        add_btn.ForeColor = Drawing.Color.FromArgb(240, 165,   0)  # #F0A500 accent
+        add_btn.BackColor = Drawing.Color.FromArgb(69,  71,  90)   # #525252 muted
+        add_btn.ForeColor = Drawing.Color.FromArgb(240, 165,   0)  # #F1C21B accent
         add_btn.FlatStyle = WinForms.FlatStyle.Flat
         add_btn.FlatAppearance.BorderColor = Drawing.Color.FromArgb(240, 165, 0)
         add_btn.Font      = FONT_BOLD

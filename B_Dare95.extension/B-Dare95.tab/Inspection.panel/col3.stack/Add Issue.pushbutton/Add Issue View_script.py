@@ -953,7 +953,7 @@ _DEL_BTN_XML = (
     u'<Button'
     u' xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"'
     u' xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
-    u' Background="#3D1A22" Foreground="#F38BA8"'
+    u' Background="#3D1A22" Foreground="#FF8389"'
     u' BorderThickness="0" Padding="9,5" Cursor="Hand" FontSize="14">'
     u'<Button.Template><ControlTemplate TargetType="Button">'
     u'<Border x:Name="bd" Background="{TemplateBinding Background}"'
@@ -1222,8 +1222,8 @@ def _make_plus_tab(add_handler):
 _SHARED_STYLES = u"""
     <Window.Resources>
         <Style TargetType="Button">
-            <Setter Property="Background"      Value="#313244"/>
-            <Setter Property="Foreground"      Value="#CDD6F4"/>
+            <Setter Property="Background"      Value="#393939"/>
+            <Setter Property="Foreground"      Value="#F4F4F4"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Padding"         Value="14,9"/>
             <Setter Property="FontSize"        Value="13"/>
@@ -1254,17 +1254,17 @@ _SHARED_STYLES = u"""
             </Setter>
         </Style>
         <Style TargetType="TextBox">
-            <Setter Property="Background"      Value="#313244"/>
-            <Setter Property="Foreground"      Value="#CDD6F4"/>
-            <Setter Property="BorderBrush"     Value="#45475A"/>
+            <Setter Property="Background"      Value="#393939"/>
+            <Setter Property="Foreground"      Value="#F4F4F4"/>
+            <Setter Property="BorderBrush"     Value="#525252"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding"         Value="8,6"/>
             <Setter Property="FontSize"        Value="13"/>
-            <Setter Property="CaretBrush"      Value="#CDD6F4"/>
-            <Setter Property="SelectionBrush"  Value="#F0A500"/>
+            <Setter Property="CaretBrush"      Value="#F4F4F4"/>
+            <Setter Property="SelectionBrush"  Value="#F1C21B"/>
         </Style>
         <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#CDD6F4"/>
+            <Setter Property="Foreground" Value="#F4F4F4"/>
         </Style>
     </Window.Resources>
 """
@@ -1283,7 +1283,7 @@ LOGGER_XAML = u"""<Window
     Width="960" Height="540"
     MinWidth="720" MinHeight="440"
     WindowStartupLocation="CenterScreen"
-    Background="#1E1E2E"
+    Background="#161616"
     ResizeMode="CanResize">
     __STYLES__
 
@@ -1295,7 +1295,7 @@ LOGGER_XAML = u"""<Window
         </Grid.RowDefinitions>
 
         <!-- ── File tab bar (each tab = one .xlsx file, '+' adds a new one) ── -->
-        <Border Grid.Row="0" Margin="0,0,0,10" BorderBrush="#313244"
+        <Border Grid.Row="0" Margin="0,0,0,10" BorderBrush="#393939"
                 BorderThickness="0,0,0,1" Padding="0,0,0,6">
             <ScrollViewer HorizontalScrollBarVisibility="Auto"
                           VerticalScrollBarVisibility="Disabled">
@@ -1315,13 +1315,13 @@ LOGGER_XAML = u"""<Window
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
                     <TextBlock Text="Snipaste is not installed on this machine."
-                               Foreground="#FAB387" FontSize="12" FontWeight="Bold"/>
+                               Foreground="#FF832B" FontSize="12" FontWeight="Bold"/>
                     <TextBlock Text="Screenshot capture is disabled. Install Snipaste to enable it."
-                               Foreground="#FAB387" FontSize="11" Margin="0,3,0,0"/>
+                               Foreground="#FF832B" FontSize="11" Margin="0,3,0,0"/>
                 </StackPanel>
                 <Button Grid.Column="1" x:Name="GetSnipBtn"
                         Content="Get from Microsoft Store"
-                        Background="#F0A500" Foreground="#1E1E2E"
+                        Background="#F1C21B" Foreground="#161616"
                         FontWeight="Bold" FontSize="11"
                         Padding="12,6" Margin="14,0,0,0"/>
             </Grid>
@@ -1336,7 +1336,7 @@ LOGGER_XAML = u"""<Window
             </Grid.ColumnDefinitions>
 
             <!-- Vertical divider -->
-            <Rectangle Grid.Column="1" Fill="#313244" Width="1"
+            <Rectangle Grid.Column="1" Fill="#393939" Width="1"
                        VerticalAlignment="Stretch" HorizontalAlignment="Center"/>
 
             <!-- ═══ LEFT: input panel ═══ -->
@@ -1361,10 +1361,10 @@ LOGGER_XAML = u"""<Window
                                FontSize="19" FontWeight="Bold" VerticalAlignment="Center"/>
                     <StackPanel Grid.Column="1" Orientation="Horizontal"
                                 VerticalAlignment="Center">
-                        <Border x:Name="SnipPill" Background="#313244" CornerRadius="9"
+                        <Border x:Name="SnipPill" Background="#393939" CornerRadius="9"
                                 Padding="10,4" Margin="0,0,8,0">
                             <TextBlock x:Name="SnipPillText" Text="Snipaste: checking..."
-                                       Foreground="#A6ADC8" FontSize="11"/>
+                                       Foreground="#A8A8A8" FontSize="11"/>
                         </Border>
                         <Button x:Name="SaveAsBtn" Content="Save As&#x2026;"
                                 FontSize="11" Padding="10,5"/>
@@ -1372,20 +1372,20 @@ LOGGER_XAML = u"""<Window
                 </Grid>
 
                 <!-- Path chip -->
-                <Border Grid.Row="1" Background="#2A2A3C" CornerRadius="6"
+                <Border Grid.Row="1" Background="#262626" CornerRadius="6"
                         Padding="10,5" Margin="0,0,0,10">
                     <TextBlock x:Name="PathChip" Text="No file configured"
-                               Foreground="#A6ADC8" FontSize="11"
+                               Foreground="#A8A8A8" FontSize="11"
                                TextTrimming="CharacterEllipsis"/>
                 </Border>
 
                 <!-- Screenshots + editing indicator -->
-                <Border Grid.Row="2" Background="#2A2A3C" CornerRadius="6"
+                <Border Grid.Row="2" Background="#262626" CornerRadius="6"
                         Padding="10" Margin="0,0,0,10">
                     <StackPanel>
                         <TextBlock x:Name="ThumbCaption"
                                    Text="Take a screenshot to begin, or click a saved issue to re-edit it."
-                                   Foreground="#A6ADC8" FontSize="11" TextWrapping="Wrap"/>
+                                   Foreground="#A8A8A8" FontSize="11" TextWrapping="Wrap"/>
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,8">
                             <Button x:Name="SnipBtn" Content="Take Screenshot"
                                     FontSize="11" Padding="10,5"/>
@@ -1393,11 +1393,11 @@ LOGGER_XAML = u"""<Window
                                     FontSize="10" Padding="8,5" Margin="8,0,0,0"
                                     Visibility="Collapsed"/>
                         </StackPanel>
-                        <Border Background="#181825" CornerRadius="4" Padding="6" MinHeight="94">
+                        <Border Background="#0D0D0D" CornerRadius="4" Padding="6" MinHeight="94">
                             <Grid>
                                 <TextBlock x:Name="ThumbPlaceholder"
                                            Text="No screenshots yet &#8212; click &#8220;Take Screenshot&#8221; to add one (you can add several)."
-                                           Foreground="#6C7086" FontSize="11"
+                                           Foreground="#8D8D8D" FontSize="11"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"
                                            TextWrapping="Wrap" TextAlignment="Center"/>
                                 <ScrollViewer HorizontalScrollBarVisibility="Auto"
@@ -1422,11 +1422,11 @@ LOGGER_XAML = u"""<Window
                         Margin="0,0,0,10"/>
 
                 <!-- Status bar -->
-                <Border Grid.Row="5" Background="#2A2A3C" CornerRadius="6"
+                <Border Grid.Row="5" Background="#262626" CornerRadius="6"
                         Padding="10,6" Margin="0,0,0,12">
                     <TextBlock x:Name="StatusLabel"
                                Text="Ready &#x2014; take a screenshot, fill in the fields, then save."
-                               Foreground="#A6ADC8" FontSize="11" TextWrapping="Wrap"/>
+                               Foreground="#A8A8A8" FontSize="11" TextWrapping="Wrap"/>
                 </Border>
 
                 <!-- Action buttons -->
@@ -1438,7 +1438,7 @@ LOGGER_XAML = u"""<Window
                     </Grid.ColumnDefinitions>
                     <Button Grid.Column="0" x:Name="NewIssueBtn" Content="New Issue"/>
                     <Button Grid.Column="2" x:Name="SaveBtn" Content="Save Issue"
-                            Background="#F0A500" Foreground="#1E1E2E" FontWeight="Bold"/>
+                            Background="#F1C21B" Foreground="#161616" FontWeight="Bold"/>
                 </Grid>
             </Grid>
 

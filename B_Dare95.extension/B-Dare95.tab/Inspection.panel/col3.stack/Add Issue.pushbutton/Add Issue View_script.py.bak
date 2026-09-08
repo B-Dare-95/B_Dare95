@@ -1,0 +1,2134 @@
+# -*- coding: utf-8 -*-
+"""
+Issue Logger  ·  pyRevit / IronPython 2.7
+==========================================
+Normal click   → issue logger  (left: input  |  right: scrollable preview + delete)
+Shift+click    → configure save folder
+
+Replaces:
+  WinForms UI  → WPF  (XamlReader.Parse, Catppuccin Mocha)
+  COM / Excel  → zero-dependency xlsx  (ZipArchive + raw XML)
+  PIL          → WinForms Clipboard + GDI+  (fixes transparent-alpha bug)
+  subprocess   → System.Diagnostics.Process
+  waiting      → DispatcherTimer on the UI thread (never a worker thread —
+                 see the "Take Screenshot" section for why)
+  Dispatcher.PushFrame → modeless Show()  (see show_modeless() for why)
+"""
+__persistentengine__ = True
+
+import clr
+import os
+
+clr.AddReference('PresentationFramework')
+clr.AddReference('PresentationCore')
+clr.AddReference('WindowsBase')
+clr.AddReference('System.Windows.Forms')
+clr.AddReference('System.Drawing')
+clr.AddReference('System.Xml')
+clr.AddReference('System.IO.Compression')
+clr.AddReference('System')
+
+# ── WPF structural / layout types ───────────────────────────────────────────
+from System.Windows.Markup   import XamlReader
+from System.Windows          import (
+    Visibility, Thickness, HorizontalAlignment, VerticalAlignment,
+    CornerRadius, GridLength, GridUnitType, FontWeights, TextWrapping,
+    WindowState
+)
+from System.Windows.Interop  import WindowInteropHelper
+from System.Windows.Controls import (
+    Border, Grid as WpfGrid, ColumnDefinition, RowDefinition,
+    StackPanel, WrapPanel, TextBlock, Image as WpfImage, TextBox, Button
+)
+from System.Windows.Media         import SolidColorBrush, Color, Brushes, Stretch as MediaStretch
+from System.Windows.Media.Imaging import BitmapImage, BitmapCacheOption
+from System.Windows.Threading     import (
+    DispatcherFrame, Dispatcher, DispatcherTimer, DispatcherPriority
+)
+from System.Windows.Input         import Cursors
+
+# ── I/O ─────────────────────────────────────────────────────────────────────
+from System.IO            import File, FileStream, FileMode, MemoryStream, StreamReader
+from System.IO.Compression import ZipArchive, ZipArchiveMode
+
+# ── Clipboard (WinForms path avoids WPF transparent-alpha bug) ───────────────
+from System.Windows.Forms   import (
+    SaveFileDialog, DialogResult as WFDialogResult,
+    Clipboard as WFClipboard, NativeWindow as WFNativeWindow
+)
+from System.Drawing         import Bitmap, Graphics
+from System.Drawing.Imaging import ImageFormat, PixelFormat
+
+# ── Process / Misc ───────────────────────────────────────────────────────────
+from System.Diagnostics import Process, ProcessStartInfo
+from System             import Array, Byte, Action, DateTime, TimeSpan, IntPtr
+from System.Text        import Encoding
+import System.Xml as SysXml
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  CONSTANTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
+
+
+def _local_config_dir():
+    """Per-machine directory for this tool's settings.
+
+    LOCALAPPDATA on purpose, not APPDATA: APPDATA roams in domain
+    environments, which would put the config straight back to being shared
+    between machines -- the exact problem this avoids.
+    """
+    for base in (os.environ.get(u'LOCALAPPDATA', u''),
+                 os.environ.get(u'USERPROFILE',  u''),
+                 os.environ.get(u'TEMP',         u'')):
+        if not base:
+            continue
+        d = os.path.join(base, u'B_Dare95', u'IssueLogger')
+        try:
+            if not os.path.isdir(d):
+                os.makedirs(d)
+            return d
+        except Exception:
+            continue
+    return SCRIPT_DIR          # last resort: old behaviour beats no config
+
+
+CONFIG_DIR    = _local_config_dir()
+CONFIG_FILE   = os.path.join(CONFIG_DIR, u'issue_logger.cfg')
+
+# Where the config used to live, inside the (possibly synced) extension folder.
+LEGACY_CONFIG = os.path.join(SCRIPT_DIR, u'issue_logger.cfg')
+XLSX_FILENAME = u'Issue Logger.xlsx'
+_EMU_PX       = 9525          # 1 px @ 96 dpi → EMU
+
+# Catppuccin Mocha status brushes
+_BR_SUBTEXT = SolidColorBrush(Color.FromRgb(0xA6, 0xAD, 0xC8))
+_BR_SUCCESS = SolidColorBrush(Color.FromRgb(0xA6, 0xE3, 0xA1))
+_BR_WARN    = SolidColorBrush(Color.FromRgb(0xF3, 0x8B, 0xA8))
+
+# Card colours (used in programmatic card building)
+_C_SURFACE = Color.FromRgb(0x2A, 0x2A, 0x3C)
+_C_TEXT    = Color.FromRgb(0xCD, 0xD6, 0xF4)
+_C_SUB     = Color.FromRgb(0xA6, 0xAD, 0xC8)
+_C_DELBG   = Color.FromRgb(0x3D, 0x1A, 0x22)
+_C_DELFG   = Color.FromRgb(0xF3, 0x8B, 0xA8)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  SNIPASTE AUTO-DETECTION
+# ═══════════════════════════════════════════════════════════════════════════
+
+def find_snipaste():
+    env = os.environ
+    candidates = [
+        os.path.join(env.get(u'LOCALAPPDATA', u''),
+                     u'Microsoft', u'WindowsApps', u'Snipaste.exe'),
+        os.path.join(env.get(u'PROGRAMFILES',      u''), u'Snipaste', u'Snipaste.exe'),
+        os.path.join(env.get(u'PROGRAMFILES(X86)', u''), u'Snipaste', u'Snipaste.exe'),
+        os.path.join(env.get(u'PROGRAMW6432',      u''), u'Snipaste', u'Snipaste.exe'),
+        os.path.join(env.get(u'USERPROFILE',       u''),
+                     u'scoop', u'apps', u'snipaste', u'current', u'Snipaste.exe'),
+        os.path.join(env.get(u'LOCALAPPDATA', u''), u'Snipaste', u'Snipaste.exe'),
+    ]
+    for p in candidates:
+        if p and os.path.isfile(p):
+            return p
+    for d in env.get(u'PATH', u'').split(u';'):
+        p = os.path.join(d.strip(), u'Snipaste.exe')
+        if os.path.isfile(p):
+            return p
+    return None
+
+
+SNIPASTE_PATH = find_snipaste()
+
+# Process name (no extension) used to tell whether the snip overlay is on
+# screen — that is how a cancelled snip is detected instead of waiting out the
+# whole timeout with the tool window hidden.
+_SNIP_PROC_NAME = (
+    os.path.splitext(os.path.basename(SNIPASTE_PATH))[0]
+    if SNIPASTE_PATH else u'Snipaste')
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  CONFIG PERSISTENCE
+# ═══════════════════════════════════════════════════════════════════════════
+
+def xlsx_path_from(folder):
+    return os.path.join(folder, XLSX_FILENAME)
+
+
+def _read_config_file(path):
+    """
+    Parse a config file. Returns (paths, active) where paths is a list of
+    .xlsx file paths and active is the index of the last-used tab.
+
+    Config format (UTF-8, one item per line):
+        active=<index>
+        <path 1>
+        <path 2>
+        ...
+
+    Backward compatible with the old single-line format that stored just a
+    save *folder*: that folder is migrated to <folder>/Issue Logger.xlsx.
+    """
+    if not File.Exists(path):
+        return ([], 0)
+    txt = File.ReadAllText(path, Encoding.UTF8)
+    lines = [l.strip() for l in txt.replace(u'\r', u'').split(u'\n') if l.strip()]
+    if not lines:
+        return ([], 0)
+
+    active = 0
+    raw    = []
+    for l in lines:
+        if l.lower().startswith(u'active='):
+            try:
+                active = int(l.split(u'=', 1)[1])
+            except Exception:
+                active = 0
+        else:
+            raw.append(l)
+
+    paths = []
+    for p in raw:
+        if p.lower().endswith(u'.xlsx'):
+            paths.append(p)                       # already a file path
+        elif os.path.isdir(p):
+            paths.append(xlsx_path_from(p))        # migrate old folder-only config
+        else:
+            paths.append(p)                        # keep as-is (may be missing)
+
+    if active < 0 or active >= len(paths):
+        active = 0
+    return (paths, active)
+
+
+def _migrate_legacy_config():
+    """One-time move of issue_logger.cfg out of the extension folder.
+
+    Only paths that exist on *this* machine are carried over -- the rest
+    belonged to whichever PC last wrote the synced config. The old file is
+    then deleted so it cannot sync back and win again.
+    """
+    try:
+        if File.Exists(CONFIG_FILE) or not File.Exists(LEGACY_CONFIG):
+            return
+        if _same_path(CONFIG_FILE, LEGACY_CONFIG):
+            return                      # config dir fell back to SCRIPT_DIR
+    except Exception:
+        return
+
+    try:
+        paths, active = _read_config_file(LEGACY_CONFIG)
+        keep = [p for p in paths if File.Exists(p)]
+        if active < 0 or active >= len(keep):
+            active = 0
+        save_config(keep, active)
+    except Exception:
+        return                          # leave the old file alone on failure
+
+    try:
+        File.Delete(LEGACY_CONFIG)
+    except Exception:
+        pass                            # read-only / git-locked: harmless now
+
+
+def load_config():
+    """Returns (paths, active) from this machine's config."""
+    _migrate_legacy_config()
+    return _read_config_file(CONFIG_FILE)
+
+
+def save_config(paths, active):
+    lines = [u'active={0}'.format(active)]
+    lines.extend(paths)
+    try:
+        d = os.path.dirname(CONFIG_FILE)
+        if d and not os.path.isdir(d):
+            os.makedirs(d)
+    except Exception:
+        pass
+    File.WriteAllText(CONFIG_FILE, u'\n'.join(lines), Encoding.UTF8)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  CLIPBOARD  →  PNG bytes
+#  Uses GDI+ (WinForms) path to avoid WPF transparent-alpha bug.
+#  Draws onto a fresh 24-bpp RGB bitmap so A is always 255.
+# ═══════════════════════════════════════════════════════════════════════════
+
+def clipboard_to_png():
+    """Grab the clipboard image as PNG bytes, or None.
+
+    MUST be called from the WPF UI thread. System.Windows.Forms.Clipboard is an
+    OLE call and needs an STA thread with a running message pump; the UI thread
+    has one, a bare worker thread does not.
+    """
+    img = None
+    rgb = None
+    ms  = None
+    try:
+        if not WFClipboard.ContainsImage():
+            return None
+        img = WFClipboard.GetImage()
+        if img is None:
+            return None
+        rgb = Bitmap(img.Width, img.Height, PixelFormat.Format24bppRgb)
+        g   = Graphics.FromImage(rgb)
+        try:
+            g.DrawImage(img, 0, 0, img.Width, img.Height)
+        finally:
+            g.Dispose()
+        ms = MemoryStream()
+        rgb.Save(ms, ImageFormat.Png)
+        return ms.ToArray()
+    finally:
+        for obj in (rgb, img, ms):
+            try:
+                if obj is not None:
+                    obj.Dispose()
+            except Exception:
+                pass
+
+
+def png_fingerprint(data):
+    """Cheap identity check for a clipboard image (length + sampled byte sum).
+
+    Used when Clipboard.Clear() is refused: it lets the poller tell a genuinely
+    new snip apart from whatever was already sitting on the clipboard.
+    """
+    if data is None:
+        return None
+    try:
+        n = int(data.Length)
+    except Exception:
+        n = len(data)
+    if n <= 0:
+        return (0, 0)
+    step = n // 64 if n > 64 else 1
+    acc  = 0
+    i    = 0
+    while i < n:
+        acc += int(data[i])
+        i   += step
+    return (n, acc)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  XLSX ENGINE  (zero-dependency — no openpyxl, no Excel)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _esc(text):
+    return (unicode(text)
+            .replace(u'&', u'&amp;').replace(u'<', u'&lt;')
+            .replace(u'>', u'&gt;') .replace(u'"', u'&quot;')
+            .replace(u"'", u'&apos;'))
+
+
+def _col_letter(idx0):
+    """0-based column index -> spreadsheet column letter(s), e.g. 0->A, 26->AA."""
+    n = idx0 + 1
+    s = u''
+    while n > 0:
+        n, r = divmod(n - 1, 26)
+        s = chr(65 + r) + s
+    return s
+
+
+def _parse_col_index(cell_ref):
+    """'B7' -> 1 (0-based column index)."""
+    i = 0
+    while i < len(cell_ref) and cell_ref[i].isalpha():
+        i += 1
+    letters = cell_ref[:i]
+    n = 0
+    for ch in letters:
+        n = n * 26 + (ord(ch.upper()) - 64)
+    return n - 1
+
+
+def _build_xlsx(columns, issues):
+    """
+    Build xlsx from:
+      columns - [name, ...]                              dynamic field headers
+      issues  - [(ts, values, [png_bytes, ...]), ...]    values aligned to columns;
+                the third item is a list of PNG byte-arrays (0, 1, or many).
+    Returns Array[Byte].
+    """
+    out = MemoryStream()
+    za  = ZipArchive(out, ZipArchiveMode.Create, True)
+
+    def wt(name, xml_str):
+        e = za.CreateEntry(name)
+        s = e.Open()
+        b = Encoding.UTF8.GetBytes(xml_str)
+        s.Write(b, 0, b.Length)
+        s.Dispose()
+
+    def wb(name, data):
+        e = za.CreateEntry(name)
+        s = e.Open()
+        s.Write(data, 0, data.Length)
+        s.Dispose()
+
+    has_img = any(bool(pngs) for _, _, pngs in issues)
+
+    wt(u'[Content_Types].xml',
+       u'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+       u'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+       u'<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+       u'<Default Extension="xml"  ContentType="application/xml"/>'
+       u'<Default Extension="png"  ContentType="image/png"/>'
+       u'<Override PartName="/xl/workbook.xml"'
+       u' ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+       u'<Override PartName="/xl/worksheets/sheet1.xml"'
+       u' ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+       u'<Override PartName="/xl/styles.xml"'
+       u' ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+       + (u'<Override PartName="/xl/drawings/drawing1.xml"'
+          u' ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>'
+          if has_img else u'') +
+       u'</Types>')
+
+    wt(u'_rels/.rels',
+       u'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+       u'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+       u'<Relationship Id="rId1"'
+       u' Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"'
+       u' Target="xl/workbook.xml"/>'
+       u'</Relationships>')
+
+    wt(u'xl/workbook.xml',
+       u'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+       u'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+       u' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+       u'<sheets><sheet name="Issues" sheetId="1" r:id="rId1"/></sheets>'
+       u'</workbook>')
+
+    wt(u'xl/_rels/workbook.xml.rels',
+       u'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+       u'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+       u'<Relationship Id="rId1"'
+       u' Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"'
+       u' Target="worksheets/sheet1.xml"/>'
+       u'<Relationship Id="rId2"'
+       u' Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles"'
+       u' Target="styles.xml"/>'
+       u'</Relationships>')
+
+    wt(u'xl/styles.xml',
+       u'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+       u'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+       u'<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>'
+       u'<fills count="2">'
+       u'<fill><patternFill patternType="none"/></fill>'
+       u'<fill><patternFill patternType="gray125"/></fill>'
+       u'</fills>'
+       u'<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+       u'<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+       u'<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>'
+       u'</styleSheet>')
+
+    ROW_H        = 135
+    n_cols       = len(columns)
+    shot_col_idx = 1 + n_cols     # 0-based: 0=Timestamp, 1..n_cols=fields, this=Screenshot
+
+    header_cells = [u'<c r="A1" t="inlineStr"><is><t>Timestamp</t></is></c>']
+    for i, name in enumerate(columns):
+        col = _col_letter(1 + i)
+        header_cells.append(
+            u'<c r="{c}1" t="inlineStr"><is><t>{v}</t></is></c>'.format(c=col, v=_esc(name)))
+    header_cells.append(
+        u'<c r="{c}1" t="inlineStr"><is><t>Screenshots</t></is></c>'.format(
+            c=_col_letter(shot_col_idx)))
+    rows = [u'<row r="1">' + u''.join(header_cells) + u'</row>']
+
+    for i, (ts, values, _) in enumerate(issues):
+        rn    = i + 2
+        cells = [u'<c r="A{r}" t="inlineStr"><is><t>{ts}</t></is></c>'.format(r=rn, ts=_esc(ts))]
+        for ci in range(n_cols):
+            val = values[ci] if ci < len(values) else u''
+            cells.append(
+                u'<c r="{c}{r}" t="inlineStr"><is><t>{v}</t></is></c>'.format(
+                    c=_col_letter(1 + ci), r=rn, v=_esc(val)))
+        rows.append(
+            u'<row r="{r}" ht="{h}" customHeight="1">'.format(r=rn, h=ROW_H)
+            + u''.join(cells) + u'</row>')
+
+    cols_xml = [u'<col min="1" max="1" width="22" customWidth="1"/>']
+    for i in range(n_cols):
+        colnum = i + 2
+        cols_xml.append(
+            u'<col min="{n}" max="{n}" width="34" customWidth="1"/>'.format(n=colnum))
+    cols_xml.append(
+        u'<col min="{n}" max="{n}" width="45" customWidth="1"/>'.format(n=shot_col_idx + 1))
+
+    sheet_r = (u' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+               if has_img else u'')
+    wt(u'xl/worksheets/sheet1.xml',
+       u'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+       u'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+       + sheet_r + u'>'
+       u'<sheetFormatPr defaultRowHeight="15"/>'
+       u'<cols>' + u''.join(cols_xml) + u'</cols>'
+       u'<sheetData>' + u''.join(rows) + u'</sheetData>'
+       + (u'<drawing r:id="rId1"/>' if has_img else u'') +
+       u'</worksheet>')
+
+    if has_img:
+        wt(u'xl/worksheets/_rels/sheet1.xml.rels',
+           u'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+           u'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+           u'<Relationship Id="rId1"'
+           u' Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing"'
+           u' Target="../drawings/drawing1.xml"/>'
+           u'</Relationships>')
+
+        anchors  = []
+        img_rels = []
+        n        = 1
+        IMG_W    = 300      # px per screenshot
+        IMG_H    = 170
+        GAP      = 14       # px gap between screenshots in the same row
+        for i, (_, _, pngs) in enumerate(issues):
+            if not pngs:
+                continue
+            row0 = i + 1
+            for k, png in enumerate(pngs):
+                if png is None:
+                    continue
+                cx     = _EMU_PX * IMG_W
+                cy     = _EMU_PX * IMG_H
+                x_off  = _EMU_PX * (k * (IMG_W + GAP))   # slide each shot rightward
+                rid    = u'rId{0}'.format(n)
+                wb(u'xl/media/image{0}.png'.format(n), png)
+                img_rels.append(
+                    u'<Relationship Id="{rid}"'
+                    u' Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"'
+                    u' Target="../media/image{n}.png"/>'.format(rid=rid, n=n))
+                anchors.append(
+                    u'<xdr:oneCellAnchor>'
+                    u'<xdr:from><xdr:col>{sc}</xdr:col><xdr:colOff>{xo}</xdr:colOff>'
+                    u'<xdr:row>{r}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>'
+                    u'<xdr:ext cx="{cx}" cy="{cy}"/>'
+                    u'<xdr:pic><xdr:nvPicPr>'
+                    u'<xdr:cNvPr id="{n}" name="Picture {n}"/>'
+                    u'<xdr:cNvPicPr/></xdr:nvPicPr>'
+                    u'<xdr:blipFill><a:blip r:embed="{rid}"/>'
+                    u'<a:stretch><a:fillRect/></a:stretch></xdr:blipFill>'
+                    u'<xdr:spPr><a:xfrm><a:off x="0" y="0"/>'
+                    u'<a:ext cx="{cx}" cy="{cy}"/></a:xfrm>'
+                    u'<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'
+                    u'</xdr:spPr></xdr:pic><xdr:clientData/>'
+                    u'</xdr:oneCellAnchor>'.format(
+                        r=row0, cx=cx, cy=cy, n=n, rid=rid, sc=shot_col_idx, xo=x_off))
+                n += 1
+
+        wt(u'xl/drawings/drawing1.xml',
+           u'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+           u'<xdr:wsDr'
+           u' xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"'
+           u' xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
+           u' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+           + u''.join(anchors) + u'</xdr:wsDr>')
+        wt(u'xl/drawings/_rels/drawing1.xml.rels',
+           u'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+           u'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+           + u''.join(img_rels) + u'</Relationships>')
+
+    za.Dispose()
+    return out.ToArray()
+
+
+def _read_xlsx(path):
+    """
+    Read xlsx built by _build_xlsx.
+    Returns (columns, issues) where columns is [name, ...] and issues is
+    [(ts, values, [png, ...]), ...] with values aligned to columns. The third
+    item is a list of PNG byte-arrays (empty if the row had no screenshots).
+    Files written by older single-screenshot versions read back as a 1-item
+    (or empty) list, so they keep working.
+    """
+    columns = []
+    issues  = []
+    fs = za = None
+    try:
+        fs = FileStream(path, FileMode.Open)
+        za = ZipArchive(fs, ZipArchiveMode.Read)
+
+        se = za.GetEntry(u'xl/worksheets/sheet1.xml')
+        if se is None:
+            return columns, issues
+        sr = StreamReader(se.Open(), Encoding.UTF8)
+        sheet_xml = sr.ReadToEnd()
+        sr.Dispose()
+
+        sdoc = SysXml.XmlDocument()
+        sdoc.LoadXml(sheet_xml)
+        sns = SysXml.XmlNamespaceManager(sdoc.NameTable)
+        sns.AddNamespace(u'ss', u'http://schemas.openxmlformats.org/spreadsheetml/2006/main')
+
+        header   = {}
+        rows_raw = {}
+        for row_nd in sdoc.SelectNodes(u'//ss:row', sns):
+            rn = int(row_nd.GetAttribute(u'r') or u'0')
+            vals = {}
+            for c in row_nd.SelectNodes(u'ss:c', sns):
+                ref = c.GetAttribute(u'r')
+                if not ref:
+                    continue
+                tl   = c.SelectNodes(u'ss:is/ss:t', sns)
+                text = tl.Item(0).InnerText if tl.Count > 0 else u''
+                vals[_parse_col_index(ref)] = text
+            if rn == 1:
+                header = vals
+            elif rn > 1:
+                rows_raw[rn] = vals
+
+        if header:
+            max_ci  = max(header.keys())
+            # index 0 = Timestamp, 1..max_ci-1 = field columns, max_ci = Screenshot
+            columns = [header.get(ci, u'Field {0}'.format(ci)) for ci in range(1, max_ci)]
+        n_cols = len(columns)
+
+        anchor_seq = []   # [(embed_rid, row_number), ...] in document order
+        de = za.GetEntry(u'xl/drawings/drawing1.xml')
+        if de is not None:
+            dr   = StreamReader(de.Open(), Encoding.UTF8)
+            dxml = dr.ReadToEnd()
+            dr.Dispose()
+            ddoc = SysXml.XmlDocument()
+            ddoc.LoadXml(dxml)
+            dns = SysXml.XmlNamespaceManager(ddoc.NameTable)
+            dns.AddNamespace(u'xdr', u'http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing')
+            dns.AddNamespace(u'a',   u'http://schemas.openxmlformats.org/drawingml/2006/main')
+            REL_NS = u'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+            for anc in ddoc.SelectNodes(u'//xdr:oneCellAnchor', dns):
+                rn_nd = anc.SelectSingleNode(u'xdr:from/xdr:row', dns)
+                blip  = anc.SelectSingleNode(u'.//a:blip', dns)
+                if rn_nd and blip:
+                    embed = blip.GetAttribute(u'embed', REL_NS)
+                    if embed:
+                        anchor_seq.append((embed, int(rn_nd.InnerText) + 1))
+
+        rid_to_media = {}
+        re_ent = za.GetEntry(u'xl/drawings/_rels/drawing1.xml.rels')
+        if re_ent is not None:
+            rr = StreamReader(re_ent.Open(), Encoding.UTF8)
+            rels_xml = rr.ReadToEnd()
+            rr.Dispose()
+            rdoc = SysXml.XmlDocument()
+            rdoc.LoadXml(rels_xml)
+            rns  = SysXml.XmlNamespaceManager(rdoc.NameTable)
+            rns.AddNamespace(u'rel', u'http://schemas.openxmlformats.org/package/2006/relationships')
+            for rel in rdoc.SelectNodes(u'//rel:Relationship', rns):
+                rid_to_media[rel.GetAttribute(u'Id')] = (
+                    u'xl/media/' + rel.GetAttribute(u'Target').split(u'/')[-1])
+
+        img_by_rn = {}
+        for embed, rn in anchor_seq:
+            media = rid_to_media.get(embed)
+            if not media:
+                continue
+            ie = za.GetEntry(media)
+            if ie is None:
+                continue
+            ms  = MemoryStream()
+            ies = ie.Open()
+            buf = Array.CreateInstance(Byte, 8192)
+            while True:
+                n = ies.Read(buf, 0, buf.Length)
+                if n == 0:
+                    break
+                ms.Write(buf, 0, n)
+            ies.Dispose()
+            img_by_rn.setdefault(rn, []).append(ms.ToArray())
+
+        for rn in sorted(rows_raw.keys()):
+            vals   = rows_raw[rn]
+            ts     = vals.get(0, u'')
+            values = [vals.get(1 + ci, u'') for ci in range(n_cols)]
+            issues.append((ts, values, img_by_rn.get(rn, [])))
+
+    except Exception as ex:
+        print(u'[IssueLogger] _read_xlsx error: ' + unicode(ex))
+        columns, issues = [], []
+    finally:
+        if za:  za.Dispose()
+        if fs:  fs.Dispose()
+
+    if not columns:
+        columns = [u'Comment']
+    return columns, issues
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  SHARED WPF HELPERS
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _same_path(a, b):
+    """Case-insensitive path equality (Windows-friendly)."""
+    try:
+        return os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
+    except Exception:
+        return a == b
+
+
+def _default_dir():
+    """A sensible starting directory for the file dialogs."""
+    try:
+        docs = os.path.join(os.environ.get(u'USERPROFILE', u''), u'Documents')
+        if os.path.isdir(docs):
+            return docs
+    except Exception:
+        pass
+    return os.environ.get(u'USERPROFILE', u'')
+
+
+def _pick_new_file(initial_dir=u'', overwrite_prompt=False, default_name=u'Issues.xlsx',
+                   title=u'Create a new Issue Logger file'):
+    """Save-As dialog: user names + places a .xlsx. Returns full path or None.
+    overwrite_prompt=False lets the caller decide how to treat an existing file
+    (used by '+', which opens it instead of wiping it); Save As passes True so
+    the user is warned before replacing an unrelated file."""
+    dlg = SaveFileDialog()
+    dlg.Title           = title
+    dlg.Filter          = u'Excel Workbook (*.xlsx)|*.xlsx'
+    dlg.DefaultExt      = u'xlsx'
+    dlg.AddExtension    = True
+    dlg.OverwritePrompt = overwrite_prompt
+    dlg.FileName        = default_name
+    if initial_dir and os.path.isdir(initial_dir):
+        dlg.InitialDirectory = initial_dir
+    # Own the dialog to the tool window. The window is modeless now, so an
+    # unowned WinForms dialog can slip behind it -- and because the dialog is
+    # thread-modal the tool window would then stop responding and look hung.
+    owner = _dialog_owner()
+    if owner is not None:
+        ok = dlg.ShowDialog(owner)
+    else:
+        ok = dlg.ShowDialog()
+    return dlg.FileName if ok == WFDialogResult.OK else None
+
+
+# The one live tool window, and a WinForms-compatible owner handle for the
+# file dialogs it opens.
+_LIVE_WINDOW  = [None]
+_DIALOG_OWNER = [None]
+
+# Key under which the live window is parked in pyRevit's session environment.
+# Module globals are re-created on every run even with a persistent engine, so
+# the env var is what actually survives from one button click to the next.
+_ENVVAR_WINDOW = u'B_DARE95_ISSUE_LOGGER_WINDOW'
+
+
+def _get_session_window():
+    try:
+        from pyrevit import script
+        return script.get_envvar(_ENVVAR_WINDOW)
+    except Exception:
+        return None
+
+
+def _set_session_window(win):
+    try:
+        from pyrevit import script
+        script.set_envvar(_ENVVAR_WINDOW, win)
+    except Exception:
+        pass
+
+
+def _dialog_owner():
+    """IWin32Window wrapper around the tool window, or None."""
+    return _DIALOG_OWNER[0]
+
+
+def show_modeless(window):
+    """Show the tool window without taking over Revit's message loop.
+
+    This used to be Dispatcher.PushFrame, which runs a *nested* message loop on
+    Revit's UI thread. That kept the pyRevit external command 'executing' for
+    as long as the window was open, with two visible consequences:
+
+      * Esc stopped cancelling Revit commands. Revit is an MFC application and
+        its keyboard handling (Esc-to-cancel, two-letter shortcuts, the
+        accelerator table) lives in the PreTranslateMessage chain that Revit's
+        own loop runs before dispatching a message. A WPF nested frame pumps
+        the same queue through its own path, so that hook never saw the key.
+      * The Properties palette stopped following the selection. Revit defers
+        selection-driven UI refreshes (Properties, contextual ribbon tabs,
+        status bar) to idle processing, and idle work only runs when the
+        *owning* loop goes idle -- which it never did. Revit also suppresses
+        the Idling event while an external command is executing.
+
+    Showing modeless and returning immediately hands the loop back to Revit.
+    Safe here only because this script makes no Revit API calls at all; a
+    modeless window has no valid API context, so anything touching the API
+    would have to go through ExternalEvent / IExternalEventHandler.
+
+    Requires __persistentengine__ = True at the top of this file.
+    """
+    _LIVE_WINDOW[0] = window          # strong ref: keep GC away from it
+    _set_session_window(window)
+
+    def _on_closed(s, e):
+        _LIVE_WINDOW[0]  = None
+        _DIALOG_OWNER[0] = None
+        _set_session_window(None)
+
+    window.Closed += _on_closed
+    window.Show()
+
+    # Cache an owner handle for the WinForms file dialogs (see _pick_new_file).
+    try:
+        hwnd = WindowInteropHelper(window).Handle
+        if hwnd != IntPtr.Zero:
+            nw = WFNativeWindow()
+            nw.AssignHandle(hwnd)
+            _DIALOG_OWNER[0] = nw
+    except Exception:
+        _DIALOG_OWNER[0] = None
+
+    try:
+        window.Activate()
+    except Exception:
+        pass
+
+
+def focus_existing_window(win):
+    """Bring an already-open logger to the front. Returns False if the stored
+    window is stale (closed in a previous run), so the caller opens a fresh
+    one."""
+    try:
+        win.Show()          # throws if the window has already been closed
+        if win.WindowState == WindowState.Minimized:
+            win.WindowState = WindowState.Normal
+        win.Activate()
+        win.Topmost = True
+        win.Topmost = False
+        return True
+    except Exception:
+        return False
+
+
+def hide_pyrevit_console():
+    """Push pyRevit's output console out of the way.
+
+    The console is another WPF window owned by this running script. The moment
+    our tool window hides, Windows hands activation to the next top-level
+    window of the process — which is that console — so an empty black panel
+    pops up in front of Revit. Hiding it first stops that.
+
+    Deliberately uses the ``__window__`` builtin rather than
+    ``script.get_output()``: get_output() would *create* a console when none
+    exists, which is the opposite of what we want.
+    """
+    try:
+        w = __window__          # noqa: F821 — injected by pyRevit
+    except NameError:
+        return
+    if w is None:
+        return
+    for name in (u'Hide', u'Close'):
+        try:
+            fn = getattr(w, name, None)
+            if fn is not None:
+                fn()
+                return
+        except Exception:
+            pass
+
+
+def snipaste_overlay_open():
+    """True while Snipaste has a real (non-tray) window on screen.
+
+    When Snipaste is already resident, ``Snipaste.exe snip`` only relays the
+    command to the running instance and the spawned process exits immediately,
+    so process exit is useless as a signal. Watching for the overlay window
+    appearing and then disappearing is what lets an Esc-cancelled snip be
+    noticed straight away.
+    """
+    try:
+        procs = Process.GetProcessesByName(_SNIP_PROC_NAME)
+    except Exception:
+        return False
+    found = False
+    for p in procs:
+        try:
+            if not found and p.MainWindowHandle != IntPtr.Zero:
+                found = True
+        except Exception:
+            pass
+        try:
+            p.Dispose()
+        except Exception:
+            pass
+    return found
+
+
+def launch_snipaste():
+    """Start the snip overlay.
+
+    UseShellExecute is forced True on purpose. With it False the child process
+    inherits this script's stdio handles, and pyRevit has those wired to its
+    output console — which is enough on its own to make a blank console appear.
+    It is also the only mode that reliably launches the Microsoft Store app
+    alias under %LOCALAPPDATA%\\Microsoft\\WindowsApps.
+    """
+    psi                  = ProcessStartInfo()
+    psi.FileName         = SNIPASTE_PATH
+    psi.Arguments        = u'snip'
+    psi.UseShellExecute  = True
+    try:
+        d = os.path.dirname(SNIPASTE_PATH)
+        if d and os.path.isdir(d):
+            psi.WorkingDirectory = d
+    except Exception:
+        pass
+    return Process.Start(psi)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  PREVIEW CARD HELPERS
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _bytes_to_bitmap(png_bytes):
+    """Convert Array[Byte] PNG to a frozen WPF BitmapImage, or None on failure."""
+    if png_bytes is None:
+        return None
+    try:
+        ms  = MemoryStream(png_bytes)
+        bmp = BitmapImage()
+        bmp.BeginInit()
+        bmp.StreamSource = ms
+        bmp.CacheOption  = BitmapCacheOption.OnLoad
+        bmp.EndInit()
+        bmp.Freeze()      # detach from stream, make thread-safe
+        ms.Dispose()
+        return bmp
+    except Exception:
+        return None
+
+
+def _make_input_thumb(bmp, delete_handler):
+    """An 80x80 staged-screenshot chip with a small red x delete button,
+    used in the left input panel while composing / editing an issue."""
+    g        = WpfGrid()
+    g.Width  = 80
+    g.Height = 80
+    g.Margin = Thickness(0, 0, 6, 0)
+
+    frame              = Border()
+    frame.Background   = SolidColorBrush(Color.FromRgb(0x18, 0x18, 0x25))
+    frame.CornerRadius = CornerRadius(4)
+    img                = WpfImage()
+    img.Source         = bmp
+    img.Stretch        = MediaStretch.Uniform
+    img.Margin         = Thickness(2)
+    frame.Child        = img
+    g.Children.Add(frame)
+
+    x                     = Button()
+    x.Content             = u'\u00d7'
+    x.ToolTip             = u'Remove this screenshot'
+    x.Width               = 18
+    x.Height              = 18
+    x.Padding             = Thickness(0)
+    x.FontSize            = 11
+    x.HorizontalAlignment = HorizontalAlignment.Right
+    x.VerticalAlignment   = VerticalAlignment.Top
+    x.Margin              = Thickness(0, 2, 2, 0)
+    x.Background          = SolidColorBrush(Color.FromRgb(0x3D, 0x1A, 0x22))
+    x.Foreground          = SolidColorBrush(Color.FromRgb(0xF3, 0x8B, 0xA8))
+    x.Click              += delete_handler
+    g.Children.Add(x)
+    return g
+
+
+# Parsed once; reused per card to avoid repeated XAML parsing.
+_DEL_BTN_XML = (
+    u'<Button'
+    u' xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"'
+    u' xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"'
+    u' Background="#3D1A22" Foreground="#F38BA8"'
+    u' BorderThickness="0" Padding="9,5" Cursor="Hand" FontSize="14">'
+    u'<Button.Template><ControlTemplate TargetType="Button">'
+    u'<Border x:Name="bd" Background="{TemplateBinding Background}"'
+    u' CornerRadius="4" Padding="{TemplateBinding Padding}">'
+    u'<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>'
+    u'</Border>'
+    u'<ControlTemplate.Triggers>'
+    u'<Trigger Property="IsMouseOver" Value="True">'
+    u'<Setter TargetName="bd" Property="Opacity" Value="0.72"/></Trigger>'
+    u'<Trigger Property="IsPressed" Value="True">'
+    u'<Setter TargetName="bd" Property="Opacity" Value="0.50"/></Trigger>'
+    u'</ControlTemplate.Triggers>'
+    u'</ControlTemplate></Button.Template>'
+    u'</Button>'
+)
+
+
+def _make_card_delete_btn():
+    """Return a styled WPF delete Button with 🗑 icon."""
+    btn         = XamlReader.Parse(_DEL_BTN_XML)
+    btn.Content = u'\U0001F5D1'   # set after parsing to dodge XML surrogate issues
+    return btn
+
+
+def _make_issue_card(num, ts, columns, values, pngs, delete_handler, edit_handler):
+    """
+    Build one issue preview card entirely in Python (no extra XAML parsing).
+    `columns`/`values` are aligned lists of field names/values.
+    `pngs` is a list of PNG byte-arrays; each thumbnail is clickable via
+    `edit_handler`, which loads this issue back into the left panel for
+    re-editing. Returns a WPF Border element ready to be added to a StackPanel.
+    """
+    # ── outer card border ────────────────────────────────────────
+    card             = Border()
+    card.Background  = SolidColorBrush(_C_SURFACE)
+    card.CornerRadius = CornerRadius(6)
+    card.Margin      = Thickness(0, 0, 0, 8)
+    card.Padding     = Thickness(10, 8, 10, 8)
+
+    inner = StackPanel()
+    card.Child = inner
+
+    # ── header: "Issue · #N" + timestamp  |  delete button ──────
+    hdr = WpfGrid()
+    hdr.Margin = Thickness(0, 0, 0, 6)
+    c0 = ColumnDefinition(); c0.Width = GridLength(1, GridUnitType.Star)
+    c1 = ColumnDefinition(); c1.Width = GridLength.Auto
+    hdr.ColumnDefinitions.Add(c0)
+    hdr.ColumnDefinitions.Add(c1)
+
+    meta = StackPanel()
+    meta.VerticalAlignment = VerticalAlignment.Center
+
+    title_lbl            = TextBlock()
+    title_lbl.Text       = u'Issue  \u00b7  #{0}'.format(num)
+    title_lbl.FontSize   = 12
+    title_lbl.FontWeight = FontWeights.Bold
+    title_lbl.Foreground = SolidColorBrush(_C_TEXT)
+    meta.Children.Add(title_lbl)
+
+    ts_lbl            = TextBlock()
+    ts_lbl.Text       = ts
+    ts_lbl.FontSize   = 10
+    ts_lbl.Foreground = SolidColorBrush(_C_SUB)
+    ts_lbl.Margin     = Thickness(0, 2, 0, 0)
+    meta.Children.Add(ts_lbl)
+
+    WpfGrid.SetColumn(meta, 0)
+    hdr.Children.Add(meta)
+
+    del_btn                  = _make_card_delete_btn()
+    del_btn.VerticalAlignment = VerticalAlignment.Center
+    del_btn.Click            += delete_handler
+    WpfGrid.SetColumn(del_btn, 1)
+    hdr.Children.Add(del_btn)
+
+    inner.Children.Add(hdr)
+
+    # ── screenshot thumbnails (each clickable → re-edit) ──────────
+    if pngs:
+        strip        = WrapPanel()
+        strip.Margin = Thickness(0, 0, 0, 6)
+        for png in pngs:
+            bmp = _bytes_to_bitmap(png)
+            if bmp is None:
+                continue
+            img_wrap                    = Border()
+            img_wrap.Cursor             = Cursors.Hand
+            img_wrap.Margin             = Thickness(0, 0, 6, 6)
+            img_wrap.ToolTip            = u'Click to load this issue for editing'
+            img                         = WpfImage()
+            img.Source                  = bmp
+            img.MaxHeight               = 110
+            img.Stretch                 = MediaStretch.Uniform
+            img_wrap.Child              = img
+            img_wrap.MouseLeftButtonUp += edit_handler
+            strip.Children.Add(img_wrap)
+        if strip.Children.Count > 0:
+            inner.Children.Add(strip)
+
+    # ── field values ────────────────────────────────────────────
+    for i, col_name in enumerate(columns):
+        val = values[i] if i < len(values) else u''
+        if not val.strip():
+            continue
+        field_stack        = StackPanel()
+        field_stack.Margin = Thickness(0, 0, 0, 5)
+
+        name_lbl              = TextBlock()
+        name_lbl.Text         = col_name + u':'
+        name_lbl.FontSize     = 10
+        name_lbl.FontWeight   = FontWeights.Bold
+        name_lbl.Foreground   = SolidColorBrush(_C_SUB)
+        field_stack.Children.Add(name_lbl)
+
+        val_lbl              = TextBlock()
+        val_lbl.Text         = val
+        val_lbl.FontSize     = 12
+        val_lbl.Foreground   = SolidColorBrush(_C_TEXT)
+        val_lbl.TextWrapping = TextWrapping.Wrap
+        field_stack.Children.Add(val_lbl)
+
+        inner.Children.Add(field_stack)
+
+    return card
+
+
+def _make_field_row(name, value, delete_handler):
+    """
+    Build one editable field row for the left panel: a renamable title chip
+    next to a multi-line value TextBox, with a small remove button.
+    Returns (row, name_box, value_box).
+    """
+    row = WpfGrid()
+    row.Margin = Thickness(0, 0, 0, 8)
+    c0 = ColumnDefinition(); c0.Width = GridLength(92)
+    c1 = ColumnDefinition(); c1.Width = GridLength(1, GridUnitType.Star)
+    c2 = ColumnDefinition(); c2.Width = GridLength(24)
+    row.ColumnDefinitions.Add(c0)
+    row.ColumnDefinitions.Add(c1)
+    row.ColumnDefinitions.Add(c2)
+
+    # ── renamable title chip ────────────────────────────────────
+    name_wrap                  = Border()
+    name_wrap.Background       = SolidColorBrush(_C_SURFACE)
+    name_wrap.CornerRadius     = CornerRadius(6)
+    name_wrap.Padding          = Thickness(6, 5, 6, 5)
+    name_wrap.VerticalAlignment = VerticalAlignment.Top
+    name_wrap.Margin           = Thickness(0, 0, 8, 0)
+
+    name_box                = TextBox()
+    name_box.Text            = name
+    name_box.Background      = Brushes.Transparent
+    name_box.BorderThickness = Thickness(0)
+    name_box.Padding         = Thickness(0)
+    name_box.Foreground      = SolidColorBrush(_C_TEXT)
+    name_box.CaretBrush      = SolidColorBrush(_C_TEXT)
+    name_box.FontSize        = 12
+    name_box.FontWeight      = FontWeights.Bold
+    name_box.TextWrapping    = TextWrapping.Wrap
+    name_box.AcceptsReturn   = False
+    name_box.ToolTip         = u'Click to rename this field'
+    name_wrap.Child          = name_box
+    WpfGrid.SetColumn(name_wrap, 0)
+    row.Children.Add(name_wrap)
+
+    # ── value box ────────────────────────────────────────────────
+    value_box                          = TextBox()
+    value_box.Text                     = value
+    value_box.AcceptsReturn            = True
+    value_box.TextWrapping             = TextWrapping.Wrap
+    value_box.MinHeight                = 56
+    value_box.VerticalContentAlignment = VerticalAlignment.Top
+    WpfGrid.SetColumn(value_box, 1)
+    row.Children.Add(value_box)
+
+    # ── remove field button ─────────────────────────────────────
+    del_btn                    = Button()
+    del_btn.Content             = u'\u00d7'
+    del_btn.FontSize            = 13
+    del_btn.Width                = 22
+    del_btn.Height               = 22
+    del_btn.Padding              = Thickness(0)
+    del_btn.Background           = Brushes.Transparent
+    del_btn.Foreground           = SolidColorBrush(_C_SUB)
+    del_btn.Cursor               = Cursors.Hand
+    del_btn.ToolTip              = u'Remove this field'
+    del_btn.VerticalAlignment    = VerticalAlignment.Top
+    del_btn.Click               += delete_handler
+    WpfGrid.SetColumn(del_btn, 2)
+    row.Children.Add(del_btn)
+
+    return row, name_box, value_box
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  TAB BAR HELPERS  (each tab = one .xlsx file)
+# ═══════════════════════════════════════════════════════════════════════════
+
+_C_ACCENT = Color.FromRgb(0xF0, 0xA5, 0x00)   # Catppuccin-style accent (amber)
+
+
+def _make_file_tab(label, tooltip, is_active, activate_handler, close_handler):
+    """
+    Build one file tab as a rounded chip:  [ filename  x ]
+    Active tabs get the surface background + accent, bold label.
+    The label and the close button are separate Buttons so clicking x
+    never also fires the activate handler.
+    Returns a WPF Border ready to add to the horizontal tab strip.
+    """
+    chip              = Border()
+    chip.CornerRadius = CornerRadius(6)
+    chip.Margin       = Thickness(0, 0, 6, 0)
+    chip.Background   = (SolidColorBrush(_C_SURFACE) if is_active else Brushes.Transparent)
+
+    grid = WpfGrid()
+    c0 = ColumnDefinition(); c0.Width = GridLength.Auto
+    c1 = ColumnDefinition(); c1.Width = GridLength.Auto
+    grid.ColumnDefinitions.Add(c0)
+    grid.ColumnDefinitions.Add(c1)
+
+    lbl            = Button()
+    lbl.Content    = label
+    lbl.ToolTip    = tooltip
+    lbl.Background  = Brushes.Transparent
+    lbl.Padding    = Thickness(11, 6, 6, 6)
+    lbl.FontSize   = 12
+    lbl.FontWeight = (FontWeights.Bold if is_active else FontWeights.Normal)
+    lbl.Foreground = (SolidColorBrush(_C_ACCENT) if is_active else SolidColorBrush(_C_SUB))
+    lbl.Click     += activate_handler
+    WpfGrid.SetColumn(lbl, 0)
+    grid.Children.Add(lbl)
+
+    x            = Button()
+    x.Content    = u'\u00d7'
+    x.ToolTip    = u'Close tab (the file stays on disk)'
+    x.Background  = Brushes.Transparent
+    x.Foreground = SolidColorBrush(_C_SUB)
+    x.Padding    = Thickness(2, 6, 10, 6)
+    x.FontSize   = 12
+    x.Click     += close_handler
+    WpfGrid.SetColumn(x, 1)
+    grid.Children.Add(x)
+
+    chip.Child = grid
+    return chip
+
+
+def _make_plus_tab(add_handler):
+    """The trailing '+' tab that creates a new file."""
+    b            = Button()
+    b.Content    = u'+'
+    b.ToolTip    = u'Create a new issue file'
+    b.FontSize   = 15
+    b.FontWeight = FontWeights.Bold
+    b.Padding    = Thickness(11, 3, 11, 3)
+    b.Foreground = SolidColorBrush(_C_ACCENT)
+    b.Click     += add_handler
+    return b
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  SHARED BUTTON / TEXTBOX STYLES  (injected into both windows)
+# ═══════════════════════════════════════════════════════════════════════════
+
+_SHARED_STYLES = u"""
+    <Window.Resources>
+        <Style TargetType="Button">
+            <Setter Property="Background"      Value="#313244"/>
+            <Setter Property="Foreground"      Value="#CDD6F4"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding"         Value="14,9"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.80"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.60"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.35"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Background"      Value="#313244"/>
+            <Setter Property="Foreground"      Value="#CDD6F4"/>
+            <Setter Property="BorderBrush"     Value="#45475A"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding"         Value="8,6"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="CaretBrush"      Value="#CDD6F4"/>
+            <Setter Property="SelectionBrush"  Value="#F0A500"/>
+        </Style>
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#CDD6F4"/>
+        </Style>
+    </Window.Resources>
+"""
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  LOGGER WINDOW XAML  (normal click)
+#  Two-column layout: left = input, right = scrollable issue preview
+# ═══════════════════════════════════════════════════════════════════════════
+
+LOGGER_XAML = u"""<Window
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Issue Logger"
+    Width="960" Height="540"
+    MinWidth="720" MinHeight="440"
+    WindowStartupLocation="CenterScreen"
+    Background="#1E1E2E"
+    ResizeMode="CanResize">
+    __STYLES__
+
+    <Grid Margin="20,16,20,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- ── File tab bar (each tab = one .xlsx file, '+' adds a new one) ── -->
+        <Border Grid.Row="0" Margin="0,0,0,10" BorderBrush="#313244"
+                BorderThickness="0,0,0,1" Padding="0,0,0,6">
+            <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="TabStrip" Orientation="Horizontal"/>
+            </ScrollViewer>
+        </Border>
+
+        <!-- ── Snipaste not-found warning banner (hidden when found) ── -->
+        <Border Grid.Row="1" x:Name="SnipWarning"
+                Background="#3D2A1A" CornerRadius="6"
+                Padding="12,9" Margin="0,0,0,10"
+                Visibility="Collapsed">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <TextBlock Text="Snipaste is not installed on this machine."
+                               Foreground="#FAB387" FontSize="12" FontWeight="Bold"/>
+                    <TextBlock Text="Screenshot capture is disabled. Install Snipaste to enable it."
+                               Foreground="#FAB387" FontSize="11" Margin="0,3,0,0"/>
+                </StackPanel>
+                <Button Grid.Column="1" x:Name="GetSnipBtn"
+                        Content="Get from Microsoft Store"
+                        Background="#F0A500" Foreground="#1E1E2E"
+                        FontWeight="Bold" FontSize="11"
+                        Padding="12,6" Margin="14,0,0,0"/>
+            </Grid>
+        </Border>
+
+        <!-- ── Main two-column layout ── -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MinWidth="340"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="360"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Vertical divider -->
+            <Rectangle Grid.Column="1" Fill="#313244" Width="1"
+                       VerticalAlignment="Stretch" HorizontalAlignment="Center"/>
+
+            <!-- ═══ LEFT: input panel ═══ -->
+            <Grid Grid.Column="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Title row -->
+                <Grid Grid.Row="0" Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Issue Logger"
+                               FontSize="19" FontWeight="Bold" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                        <Border x:Name="SnipPill" Background="#313244" CornerRadius="9"
+                                Padding="10,4" Margin="0,0,8,0">
+                            <TextBlock x:Name="SnipPillText" Text="Snipaste: checking..."
+                                       Foreground="#A6ADC8" FontSize="11"/>
+                        </Border>
+                        <Button x:Name="SaveAsBtn" Content="Save As&#x2026;"
+                                FontSize="11" Padding="10,5"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Path chip -->
+                <Border Grid.Row="1" Background="#2A2A3C" CornerRadius="6"
+                        Padding="10,5" Margin="0,0,0,10">
+                    <TextBlock x:Name="PathChip" Text="No file configured"
+                               Foreground="#A6ADC8" FontSize="11"
+                               TextTrimming="CharacterEllipsis"/>
+                </Border>
+
+                <!-- Screenshots + editing indicator -->
+                <Border Grid.Row="2" Background="#2A2A3C" CornerRadius="6"
+                        Padding="10" Margin="0,0,0,10">
+                    <StackPanel>
+                        <TextBlock x:Name="ThumbCaption"
+                                   Text="Take a screenshot to begin, or click a saved issue to re-edit it."
+                                   Foreground="#A6ADC8" FontSize="11" TextWrapping="Wrap"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,8">
+                            <Button x:Name="SnipBtn" Content="Take Screenshot"
+                                    FontSize="11" Padding="10,5"/>
+                            <Button x:Name="CancelEditBtn" Content="Cancel edit"
+                                    FontSize="10" Padding="8,5" Margin="8,0,0,0"
+                                    Visibility="Collapsed"/>
+                        </StackPanel>
+                        <Border Background="#181825" CornerRadius="4" Padding="6" MinHeight="94">
+                            <Grid>
+                                <TextBlock x:Name="ThumbPlaceholder"
+                                           Text="No screenshots yet &#8212; click &#8220;Take Screenshot&#8221; to add one (you can add several)."
+                                           Foreground="#6C7086" FontSize="11"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           TextWrapping="Wrap" TextAlignment="Center"/>
+                                <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                              VerticalScrollBarVisibility="Disabled">
+                                    <StackPanel x:Name="ThumbStrip" Orientation="Horizontal"/>
+                                </ScrollViewer>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- Dynamic fields (Comment + any user-added columns) -->
+                <ScrollViewer Grid.Row="3"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Margin="0,0,0,8">
+                    <StackPanel x:Name="FieldsPanel"/>
+                </ScrollViewer>
+
+                <Button Grid.Row="4" x:Name="AddFieldBtn" Content="+ Add Field"
+                        HorizontalAlignment="Left" FontSize="11" Padding="10,5"
+                        Margin="0,0,0,10"/>
+
+                <!-- Status bar -->
+                <Border Grid.Row="5" Background="#2A2A3C" CornerRadius="6"
+                        Padding="10,6" Margin="0,0,0,12">
+                    <TextBlock x:Name="StatusLabel"
+                               Text="Ready &#x2014; take a screenshot, fill in the fields, then save."
+                               Foreground="#A6ADC8" FontSize="11" TextWrapping="Wrap"/>
+                </Border>
+
+                <!-- Action buttons -->
+                <Grid Grid.Row="6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="12"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" x:Name="NewIssueBtn" Content="New Issue"/>
+                    <Button Grid.Column="2" x:Name="SaveBtn" Content="Save Issue"
+                            Background="#F0A500" Foreground="#1E1E2E" FontWeight="Bold"/>
+                </Grid>
+            </Grid>
+
+            <!-- ═══ RIGHT: issues preview panel ═══ -->
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" x:Name="PreviewHeader"
+                           Text="Saved Issues  (0)"
+                           FontSize="13" FontWeight="Bold" Margin="8,0,0,10"/>
+
+                <ScrollViewer Grid.Row="1"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Margin="8,0,0,0">
+                    <StackPanel x:Name="IssuesPanel"/>
+                </ScrollViewer>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>""".replace(u'__STYLES__', _SHARED_STYLES)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  NORMAL CLICK MODE  —  issue logger  (tabbed, one .xlsx file per tab)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def run_logger():
+    paths, active = load_config()
+
+    state = {
+        u'tabs':          [],    # [{'path':..., 'columns':[...], 'issues':[...]}, ...]
+        u'active':        0,     # index into state['tabs'] (0 when empty)
+        u'path':          None,  # live view of the active tab's file path
+        u'columns':       [u'Comment'],   # live view of active tab's columns
+        u'issues':        [],    # live view of active tab's issues
+        u'field_rows':    [],    # [{'name_box':TextBox, 'value_box':TextBox}, ...]
+        u'pending_pngs':  [],    # list of Array[Byte] screenshots staged for save
+        u'editing_index': None,  # index into state['issues'] being re-edited, or None
+    }
+
+    # Load every tracked file into a tab (missing files are kept as empty
+    # tabs and get (re)created on first save).
+    for p in paths:
+        if File.Exists(p):
+            cols, iss = _read_xlsx(p)
+            state[u'tabs'].append(
+                {u'path': p, u'columns': cols or [u'Comment'], u'issues': iss})
+        else:
+            state[u'tabs'].append(
+                {u'path': p, u'columns': [u'Comment'], u'issues': []})
+
+    if state[u'tabs']:
+        if active < 0 or active >= len(state[u'tabs']):
+            active = 0
+        state[u'active']  = active
+        t                 = state[u'tabs'][active]
+        state[u'path']    = t[u'path']
+        state[u'columns'] = t[u'columns']
+        state[u'issues']  = t[u'issues']
+
+    # ── Find all named elements ──────────────────────────────────
+    window            = XamlReader.Parse(LOGGER_XAML)
+    path_chip         = window.FindName(u'PathChip')
+    status_lbl        = window.FindName(u'StatusLabel')
+    snip_btn          = window.FindName(u'SnipBtn')
+    save_btn          = window.FindName(u'SaveBtn')
+    snip_pill_txt     = window.FindName(u'SnipPillText')
+    snip_pill         = window.FindName(u'SnipPill')
+    save_as_btn       = window.FindName(u'SaveAsBtn')
+    tab_strip         = window.FindName(u'TabStrip')
+    snip_warning      = window.FindName(u'SnipWarning')
+    get_snip_btn      = window.FindName(u'GetSnipBtn')
+    preview_header    = window.FindName(u'PreviewHeader')
+    issues_panel      = window.FindName(u'IssuesPanel')
+    fields_panel      = window.FindName(u'FieldsPanel')
+    add_field_btn     = window.FindName(u'AddFieldBtn')
+    thumb_strip       = window.FindName(u'ThumbStrip')
+    thumb_placeholder = window.FindName(u'ThumbPlaceholder')
+    thumb_caption     = window.FindName(u'ThumbCaption')
+    cancel_edit_btn   = window.FindName(u'CancelEditBtn')
+    new_issue_btn     = window.FindName(u'NewIssueBtn')
+
+    # ── Helpers ──────────────────────────────────────────────────
+    def set_status(msg, brush=None):
+        status_lbl.Text       = msg
+        status_lbl.Foreground = brush if brush else _BR_SUBTEXT
+
+    def update_path_chip():
+        if not state[u'path']:
+            path_chip.Text = u'No file yet \u2014 click  +  in the tab bar to create one.'
+            return
+        n = len(state[u'issues'])
+        path_chip.Text = u'{p}   ({n} issue{s})'.format(
+            p=state[u'path'], n=n, s=u's' if n != 1 else u'')
+
+    def rebuild_thumb_strip():
+        """Repopulate the staged-screenshot strip from state['pending_pngs']."""
+        thumb_strip.Children.Clear()
+        pngs = state[u'pending_pngs']
+        for k, png in enumerate(pngs):
+            bmp = _bytes_to_bitmap(png)
+            if bmp is None:
+                continue
+            chip = _make_input_thumb(bmp, (lambda s, e, idx=k: delete_pending(idx)))
+            thumb_strip.Children.Add(chip)
+        thumb_placeholder.Visibility = (
+            Visibility.Collapsed if pngs else Visibility.Visible)
+
+    def delete_pending(idx):
+        if 0 <= idx < len(state[u'pending_pngs']):
+            state[u'pending_pngs'].pop(idx)
+            rebuild_thumb_strip()
+            n = len(state[u'pending_pngs'])
+            set_status(u'Screenshot removed \u2014 {0} staged.'.format(n))
+
+    def sync_column_names():
+        """Pull any in-progress renames out of the title chips into state['columns']."""
+        for i, fr in enumerate(state[u'field_rows']):
+            if i < len(state[u'columns']):
+                txt = fr[u'name_box'].Text.strip()
+                if txt:
+                    state[u'columns'][i] = txt
+
+    def clear_field_values():
+        for fr in state[u'field_rows']:
+            fr[u'value_box'].Text = u''
+
+    def load_field_values(values):
+        for i, fr in enumerate(state[u'field_rows']):
+            fr[u'value_box'].Text = values[i] if i < len(values) else u''
+
+    def remove_column_everywhere(idx):
+        state[u'columns'].pop(idx)
+        for k, (ts, values, pngs) in enumerate(state[u'issues']):
+            if idx < len(values):
+                nv = list(values)
+                nv.pop(idx)
+                state[u'issues'][k] = (ts, nv, pngs)
+
+    def rebuild_fields_ui():
+        fields_panel.Children.Clear()
+        state[u'field_rows'] = []
+        for i, name in enumerate(state[u'columns']):
+            def make_delete(i=i):
+                def _del(s, e):
+                    if len(state[u'columns']) <= 1:
+                        set_status(u'At least one field must remain.', _BR_WARN)
+                        return
+                    sync_column_names()
+                    was_editing = state[u'editing_index']
+                    remove_column_everywhere(i)
+                    rebuild_fields_ui()
+                    if was_editing is not None:
+                        ts, values, pngs = state[u'issues'][was_editing]
+                        load_field_values(values)
+                    rebuild_preview()
+                    try:
+                        File.WriteAllBytes(
+                            state[u'path'], _build_xlsx(state[u'columns'], state[u'issues']))
+                    except Exception as ex:
+                        set_status(u'Field removed, but re-saving the file failed: ' + unicode(ex), _BR_WARN)
+                return _del
+            row, name_box, value_box = _make_field_row(name, u'', make_delete())
+            fields_panel.Children.Add(row)
+            state[u'field_rows'].append(
+                {u'name_box': name_box, u'value_box': value_box})
+
+    rebuild_fields_ui()
+
+    def rebuild_preview():
+        """Repopulate the right panel; newest issue shown first."""
+        issues_panel.Children.Clear()
+        n = len(state[u'issues'])
+        preview_header.Text = u'Saved Issues  ({0})'.format(n)
+        for i, (ts, values, pngs) in enumerate(reversed(state[u'issues'])):
+            real_idx = n - 1 - i
+            card = _make_issue_card(
+                real_idx + 1, ts, state[u'columns'], values, pngs,
+                lambda s, e, idx=real_idx: on_delete(idx),
+                lambda s, e, idx=real_idx: on_edit(idx)
+            )
+            issues_panel.Children.Add(card)
+
+    def reset_editing_state(msg=None, brush=None):
+        state[u'editing_index'] = None
+        state[u'pending_pngs']  = []
+        rebuild_thumb_strip()
+        clear_field_values()
+        thumb_caption.Text         = u'Take a screenshot to begin, or click a saved issue to re-edit it.'
+        cancel_edit_btn.Visibility = Visibility.Collapsed
+        save_btn.Content           = u'Save Issue'
+        if msg:
+            set_status(msg, brush)
+
+    # ── Tab / multi-file management ──────────────────────────────
+    def persist_tabs():
+        save_config([t[u'path'] for t in state[u'tabs']], state[u'active'])
+
+    def load_active_into_views():
+        """Point the live views (path/columns/issues) at the active tab."""
+        if state[u'tabs']:
+            t                 = state[u'tabs'][state[u'active']]
+            state[u'path']    = t[u'path']
+            state[u'columns'] = t[u'columns']
+            state[u'issues']  = t[u'issues']
+        else:
+            state[u'path']    = None
+            state[u'columns'] = [u'Comment']
+            state[u'issues']  = []
+
+    def refresh_enabled():
+        """Enable/disable input controls based on whether a file is open."""
+        on = bool(state[u'tabs'])
+        save_btn.IsEnabled      = on
+        save_as_btn.IsEnabled   = on
+        add_field_btn.IsEnabled = on
+        new_issue_btn.IsEnabled = on
+        if SNIPASTE_PATH:
+            snip_btn.IsEnabled = on
+        if not on:
+            set_status(
+                u'No file yet \u2014 click  +  in the tab bar to create your first issue file.')
+
+    def rebuild_tab_bar():
+        tab_strip.Children.Clear()
+        for i, t in enumerate(state[u'tabs']):
+            base  = os.path.splitext(os.path.basename(t[u'path']))[0]
+            label = base if len(base) <= 24 else (base[:23] + u'\u2026')
+            chip  = _make_file_tab(
+                label, t[u'path'], i == state[u'active'],
+                (lambda s, e, idx=i: activate_tab(idx)),
+                (lambda s, e, idx=i: close_tab(idx)))
+            tab_strip.Children.Add(chip)
+        tab_strip.Children.Add(_make_plus_tab(lambda s, e: add_new_file()))
+
+    def refresh_all():
+        rebuild_fields_ui()
+        reset_editing_state()
+        rebuild_preview()
+        update_path_chip()
+        rebuild_tab_bar()
+        refresh_enabled()
+
+    def activate_tab(idx):
+        if idx < 0 or idx >= len(state[u'tabs']):
+            return
+        if idx == state[u'active'] and state[u'path'] is not None:
+            return
+        sync_column_names()          # keep any in-progress renames on the old tab
+        state[u'active'] = idx
+        load_active_into_views()
+        refresh_all()
+        persist_tabs()
+        set_status(u'Switched to \u201c{0}\u201d.'.format(
+            os.path.basename(state[u'path'])))
+
+    def add_new_file():
+        path = _pick_new_file(_default_dir() if not state[u'path']
+                              else os.path.dirname(state[u'path']))
+        if not path:
+            return
+        for i, t in enumerate(state[u'tabs']):        # already open? just switch
+            if _same_path(t[u'path'], path):
+                activate_tab(i)
+                return
+        if File.Exists(path):                         # exists → open (don't wipe)
+            cols, iss = _read_xlsx(path)
+            tab = {u'path': path, u'columns': cols or [u'Comment'], u'issues': iss}
+            msg = u'Opened existing \u201c{0}\u201d.'.format(os.path.basename(path))
+        else:                                         # new → create empty workbook
+            tab = {u'path': path, u'columns': [u'Comment'], u'issues': []}
+            try:
+                File.WriteAllBytes(path, _build_xlsx(tab[u'columns'], tab[u'issues']))
+            except Exception as ex:
+                set_status(u'Could not create file: ' + unicode(ex), _BR_WARN)
+                return
+            msg = u'Created \u201c{0}\u201d.'.format(os.path.basename(path))
+        state[u'tabs'].append(tab)
+        state[u'active'] = len(state[u'tabs']) - 1
+        load_active_into_views()
+        refresh_all()
+        persist_tabs()
+        set_status(msg, _BR_SUCCESS)
+
+    def save_as_file():
+        """Write the active file's contents to a new name/location, then point
+        the active tab at that new file. The original file is left on disk."""
+        if not state[u'path']:
+            set_status(u'No file open to save. Click  +  to create one.', _BR_WARN)
+            return
+        src = state[u'path']
+        new = _pick_new_file(
+            os.path.dirname(src),
+            overwrite_prompt=True,
+            default_name=os.path.basename(src),
+            title=u'Save As \u2014 choose a new name / location')
+        if not new:
+            return
+
+        sync_column_names()   # capture any in-progress field renames
+
+        if _same_path(new, src):
+            # Same target -> just re-save the current file in place.
+            try:
+                File.WriteAllBytes(new, _build_xlsx(state[u'columns'], state[u'issues']))
+                set_status(u'Saved in place \u2192 ' + new, _BR_SUCCESS)
+            except Exception as ex:
+                set_status(u'Save failed \u2014 is the file open in Excel?  ' + unicode(ex),
+                           _BR_WARN)
+            return
+
+        # Don't clobber a *different* file that's already open in another tab.
+        for i, t in enumerate(state[u'tabs']):
+            if i != state[u'active'] and _same_path(t[u'path'], new):
+                set_status(u'That file is already open in another tab \u2014 '
+                           u'pick a different name.', _BR_WARN)
+                return
+
+        try:
+            File.WriteAllBytes(new, _build_xlsx(state[u'columns'], state[u'issues']))
+        except Exception as ex:
+            set_status(u'Save As failed: ' + unicode(ex), _BR_WARN)
+            return
+
+        # Relocate the active tab to the new file (original stays on disk).
+        state[u'tabs'][state[u'active']][u'path'] = new
+        load_active_into_views()
+        refresh_all()
+        persist_tabs()
+        set_status(
+            u'Saved to new location \u2192 {0}   (the original file was left on disk)'.format(new),
+            _BR_SUCCESS)
+
+    def close_tab(idx):
+        if idx < 0 or idx >= len(state[u'tabs']):
+            return
+        name = os.path.basename(state[u'tabs'][idx][u'path'])
+        sync_column_names()
+        del state[u'tabs'][idx]
+        if not state[u'tabs']:
+            state[u'active'] = 0
+        elif idx < state[u'active']:
+            state[u'active'] -= 1
+        elif state[u'active'] >= len(state[u'tabs']):
+            state[u'active'] = len(state[u'tabs']) - 1
+        load_active_into_views()
+        refresh_all()
+        persist_tabs()
+        set_status(u'Closed tab \u201c{0}\u201d (the file is still on disk).'.format(name))
+
+    def on_delete(idx):
+        deleted = state[u'issues'][idx]
+        state[u'issues'].pop(idx)
+        try:
+            File.WriteAllBytes(state[u'path'], _build_xlsx(state[u'columns'], state[u'issues']))
+            if state[u'editing_index'] == idx:
+                reset_editing_state()
+            elif state[u'editing_index'] is not None and state[u'editing_index'] > idx:
+                state[u'editing_index'] -= 1
+            rebuild_preview()
+            update_path_chip()
+            set_status(u'Issue #{0} deleted.'.format(idx + 1))
+        except Exception as ex:
+            state[u'issues'].insert(idx, deleted)   # rollback
+            rebuild_preview()
+            set_status(
+                u'Delete failed \u2014 is the file open in Excel?  ' + unicode(ex),
+                _BR_WARN)
+
+    def on_edit(idx):
+        sync_column_names()
+        ts, values, pngs         = state[u'issues'][idx]
+        state[u'editing_index']  = idx
+        state[u'pending_pngs']   = list(pngs)
+        rebuild_thumb_strip()
+        load_field_values(values)
+        thumb_caption.Text         = (
+            u'Editing Issue #{0} \u2014 add more screenshots or remove any with '
+            u'the \u00d7, then press Update.'.format(idx + 1))
+        cancel_edit_btn.Visibility = Visibility.Visible
+        save_btn.Content           = u'Update Issue #{0}'.format(idx + 1)
+        set_status(u'Editing Issue #{0}. Make your changes and press Update.'.format(idx + 1))
+
+    cancel_edit_btn.Click += lambda s, e: reset_editing_state(u'Edit cancelled.')
+    new_issue_btn.Click   += lambda s, e: reset_editing_state(u'Started a new issue \u2014 fields are cleared.')
+
+    # ── Snipaste status ──────────────────────────────────────────
+    if SNIPASTE_PATH:
+        snip_pill_txt.Text       = u'Snipaste: found'
+        snip_pill_txt.Foreground = _BR_SUCCESS
+        snip_pill.Background     = SolidColorBrush(Color.FromRgb(0x1E, 0x35, 0x27))
+    else:
+        snip_pill_txt.Text       = u'Snipaste: not found'
+        snip_pill_txt.Foreground = _BR_WARN
+        snip_pill.Background     = SolidColorBrush(Color.FromRgb(0x35, 0x1A, 0x22))
+        snip_warning.Visibility  = Visibility.Visible
+        snip_btn.IsEnabled       = False
+
+    # ── Initial population ───────────────────────────────────────
+    update_path_chip()
+    rebuild_preview()
+
+    # ── Get Snipaste from Microsoft Store ────────────────────────
+    def on_get_snipaste(s, e):
+        try:
+            psi                = ProcessStartInfo()
+            psi.FileName       = u'ms-windows-store://pdp/?ProductId=9P1WXPKB68KX'
+            psi.UseShellExecute = True
+            Process.Start(psi)
+        except Exception as ex:
+            set_status(u'Could not open Microsoft Store: ' + unicode(ex), _BR_WARN)
+
+    get_snip_btn.Click += on_get_snipaste
+
+    # ── Save As (re-save the active file into a new location) ────
+    save_as_btn.Click += lambda s, e: save_as_file()
+
+    # ── Take Screenshot ──────────────────────────────────────────
+    # This used to run on a background STA thread that slept and polled the
+    # clipboard. Three things were wrong with that:
+    #
+    #   1. Clipboard is an OLE/COM API. A bare Thread with
+    #      SetApartmentState(STA) has NO message pump, so the marshalling call
+    #      into the clipboard owner's apartment can block forever — that is the
+    #      hang. The WPF UI thread is an STA that *is* pumping (we sit inside
+    #      Dispatcher.PushFrame), so a DispatcherTimer is the safe place to
+    #      poll from.
+    #   2. proc.Start() was not guarded and window.Hide() had no matching
+    #      Show() on the failure paths, so any launch error left the tool
+    #      invisible, the dispatcher frame spinning and the script unable to
+    #      finish — Revit looking frozen with the console still open.
+    #   3. Cancelling the snip meant sitting through the full 60s timeout with
+    #      the window hidden. The overlay is now watched so a cancel restores
+    #      the window in about a second.
+    _SNIP_POLL_MS   = 150
+    _SNIP_ARM_MS    = 250      # let the desktop repaint after Hide()
+    _SNIP_GRACE_MS  = 1200     # keep polling briefly after the overlay closes
+    _SNIP_TIMEOUT_S = 45
+
+    snip = {
+        u'timer':    None,     # the live DispatcherTimer, or None when idle
+        u'proc':     None,
+        u'elapsed':  0,
+        u'baseline': None,     # fingerprint of an image we could not clear
+        u'saw_ui':   False,    # the snip overlay has been seen on screen
+        u'grace':    None,     # ms left after the overlay went away
+    }
+
+    def _snip_stop_timer():
+        t = snip[u'timer']
+        snip[u'timer'] = None
+        if t is not None:
+            try:
+                t.Stop()
+            except Exception:
+                pass
+
+    def _restore_after_snip():
+        """Bring the tool window back. Called on EVERY exit path — success,
+        cancel, timeout and launch failure — so the window can never be left
+        hidden with the script still running."""
+        try:
+            window.Show()
+            window.Activate()
+            window.Topmost = True
+            window.Topmost = False
+        except Exception:
+            pass
+
+    def _snip_finish(found, msg=None, brush=None):
+        _snip_stop_timer()
+        p = snip[u'proc']
+        snip[u'proc'] = None
+        if p is not None:
+            try:
+                p.Dispose()
+            except Exception:
+                pass
+        _restore_after_snip()
+        snip_btn.IsEnabled = bool(SNIPASTE_PATH)
+        if found is not None:
+            state[u'pending_pngs'].append(found)
+            rebuild_thumb_strip()
+            n = len(state[u'pending_pngs'])
+            set_status(
+                u'Screenshot captured ({0} staged) \u2014 add more, or fill in '
+                u'the fields and save.'.format(n), _BR_SUCCESS)
+        else:
+            set_status(msg or u'No screenshot captured.', brush or _BR_WARN)
+
+    def _snip_tick(sender, args):
+        try:
+            snip[u'elapsed'] += _SNIP_POLL_MS
+
+            # 1 ── has a new image landed on the clipboard?
+            try:
+                if WFClipboard.ContainsImage():
+                    png = clipboard_to_png()
+                    if png is not None and png_fingerprint(png) != snip[u'baseline']:
+                        _snip_finish(png)
+                        return
+            except Exception:
+                pass          # clipboard momentarily locked — just try again
+
+            # 2 ── did the overlay come and go without producing an image?
+            if snipaste_overlay_open():
+                snip[u'saw_ui'] = True
+                snip[u'grace']  = None
+            elif snip[u'saw_ui']:
+                if snip[u'grace'] is None:
+                    snip[u'grace'] = _SNIP_GRACE_MS
+                else:
+                    snip[u'grace'] -= _SNIP_POLL_MS
+                    if snip[u'grace'] <= 0:
+                        _snip_finish(
+                            None,
+                            u'Snip cancelled \u2014 nothing was copied to the clipboard.')
+                        return
+
+            # 3 ── hard timeout, so the window is never stranded
+            if snip[u'elapsed'] >= _SNIP_TIMEOUT_S * 1000:
+                _snip_finish(
+                    None,
+                    u'Timed out after {0}s waiting for a screenshot.'.format(_SNIP_TIMEOUT_S))
+        except Exception as ex:
+            _snip_finish(None, u'Screenshot failed \u2014 ' + unicode(ex))
+
+    def _snip_begin_poll(sender, args):
+        _snip_stop_timer()                     # stop the arming timer
+        try:
+            snip[u'proc'] = launch_snipaste()
+        except Exception as ex:
+            _snip_finish(None, u'Could not start Snipaste \u2014 ' + unicode(ex))
+            return
+        poll          = DispatcherTimer(DispatcherPriority.Normal)
+        poll.Interval = TimeSpan.FromMilliseconds(_SNIP_POLL_MS)
+        poll.Tick    += _snip_tick
+        snip[u'timer'] = poll
+        poll.Start()
+
+    def on_snip(s, e):
+        if snip[u'timer'] is not None:
+            return                              # a snip is already in flight
+        if not state[u'path']:
+            set_status(u'Create or open a file first (click  +  in the tab bar).', _BR_WARN)
+            return
+        if not SNIPASTE_PATH:
+            set_status(u'Snipaste not found \u2014 install it from the Microsoft Store.',
+                       _BR_WARN)
+            return
+
+        # Clear the clipboard so a stale image is not mistaken for the new
+        # snip. If clearing is refused (another app holds the clipboard),
+        # fingerprint what is there and accept only something different.
+        snip[u'baseline'] = None
+        try:
+            WFClipboard.Clear()
+        except Exception:
+            pass
+        try:
+            if WFClipboard.ContainsImage():
+                snip[u'baseline'] = png_fingerprint(clipboard_to_png())
+        except Exception:
+            pass
+
+        snip[u'elapsed'] = 0
+        snip[u'saw_ui']  = False
+        snip[u'grace']   = None
+        snip_btn.IsEnabled = False
+        set_status(u'Waiting for Snipaste\u2026 draw a selection, or press Esc to cancel.')
+
+        hide_pyrevit_console()
+        window.Hide()
+
+        # Arm on a timer instead of firing immediately: Hide() only queues the
+        # repaint, and without this gap the tool window can still be sitting in
+        # the frame Snipaste captures.
+        arm          = DispatcherTimer(DispatcherPriority.Normal)
+        arm.Interval = TimeSpan.FromMilliseconds(_SNIP_ARM_MS)
+        arm.Tick    += _snip_begin_poll
+        snip[u'timer'] = arm            # also blocks a second click while arming
+        arm.Start()
+
+    snip_btn.Click += on_snip
+
+    # If the window is closed mid-snip, kill the poller so no timer is left
+    # ticking against a dead window after the script has ended.
+    def on_window_closed(s, e):
+        _snip_stop_timer()
+
+    window.Closed += on_window_closed
+
+    # ── Add Field (+) ───────────────────────────────────────────
+    def on_add_field(s, e):
+        if not state[u'path']:
+            set_status(u'Create or open a file first (click  +  in the tab bar).', _BR_WARN)
+            return
+        sync_column_names()
+        state[u'columns'].append(u'Field {0}'.format(len(state[u'columns']) + 1))
+        rebuild_fields_ui()
+        if state[u'editing_index'] is not None:
+            ts, values, pngs = state[u'issues'][state[u'editing_index']]
+            load_field_values(values)
+        try:
+            last = state[u'field_rows'][-1][u'name_box']
+            last.Focus()
+            last.SelectAll()
+        except Exception:
+            pass
+
+    add_field_btn.Click += on_add_field
+
+    # ── Save / Update Issue ────────────────────────────────────────
+    def on_save(s, e):
+        if not state[u'path']:
+            set_status(u'Create or open a file first (click  +  in the tab bar).', _BR_WARN)
+            return
+        values = [fr[u'value_box'].Text.strip() for fr in state[u'field_rows']]
+        sync_column_names()
+        if not any(v for v in values):
+            set_status(u'Please fill in at least one field before saving.', _BR_WARN)
+            return
+        pngs = list(state[u'pending_pngs'])
+        if not pngs:
+            set_status(u'No screenshot captured \u2014 take at least one first.', _BR_WARN)
+            return
+
+        editing   = state[u'editing_index']
+        prev_item = state[u'issues'][editing] if editing is not None else None
+        if editing is not None:
+            ts = prev_item[0]
+            state[u'issues'][editing] = (ts, values, pngs)
+        else:
+            ts = DateTime.Now.ToString(u'yyyy-MM-dd HH:mm:ss')
+            state[u'issues'].append((ts, values, pngs))
+
+        try:
+            File.WriteAllBytes(state[u'path'], _build_xlsx(state[u'columns'], state[u'issues']))
+            n = len(state[u'issues'])
+            reset_editing_state()
+            rebuild_preview()
+            update_path_chip()
+            if editing is not None:
+                set_status(u'Issue #{0} updated \u2192 {1}'.format(editing + 1, state[u'path']),
+                           _BR_SUCCESS)
+            else:
+                set_status(u'Issue #{0} saved \u2192 {1}'.format(n, state[u'path']), _BR_SUCCESS)
+        except Exception as ex:
+            if editing is not None:
+                state[u'issues'][editing] = prev_item   # rollback
+            else:
+                state[u'issues'].pop()
+            set_status(
+                u'Save failed \u2014 is the file open in Excel?  ' + unicode(ex),
+                _BR_WARN)
+
+    save_btn.Click += on_save
+
+    # ── Tab bar init ─────────────────────────────────────────────
+    rebuild_tab_bar()
+    refresh_enabled()
+    if not state[u'tabs']:
+        # First run (or every file closed): jump straight to naming a new file.
+        add_new_file()
+
+    show_modeless(window)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  ENTRY POINT
+# ═══════════════════════════════════════════════════════════════════════════
+
+try:
+    _is_shift = __shiftclick__
+except NameError:
+    _is_shift = False
+
+# Files are now named + placed per-tab (via the '+' tab and "Open File..."),
+# so the old shift-click "configure save folder" mode is obsolete. Both a
+# normal click and a shift-click open the tabbed logger.
+#
+# The window is modeless and the engine is persistent, so a second click while
+# it is open must re-focus the existing one rather than stack up a duplicate.
+_existing = _get_session_window()
+if _existing is not None and focus_existing_window(_existing):
+    pass
+else:
+    _set_session_window(None)
+    run_logger()

@@ -71,7 +71,7 @@ XAML = """
     Width="420"
     SizeToContent="Height"
     WindowStartupLocation="CenterScreen"
-    Background="#1E1E2E"
+    Background="#161616"
     ResizeMode="NoResize"
     FontFamily="Segoe UI"
     FontSize="13">
@@ -80,8 +80,8 @@ XAML = """
 
     <!-- ── Radio-style toggle button ── -->
     <Style x:Key="TogBtn" TargetType="ToggleButton">
-      <Setter Property="Background"      Value="#313244"/>
-      <Setter Property="Foreground"      Value="#CDD6F4"/>
+      <Setter Property="Background"      Value="#393939"/>
+      <Setter Property="Foreground"      Value="#F4F4F4"/>
       <Setter Property="BorderThickness" Value="0"/>
       <Setter Property="Padding"         Value="10,8"/>
       <Setter Property="Cursor"          Value="Hand"/>
@@ -97,8 +97,8 @@ XAML = """
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsChecked" Value="True">
-                <Setter Property="Background" Value="#F0A500"/>
-                <Setter Property="Foreground" Value="#1E1E2E"/>
+                <Setter Property="Background" Value="#F1C21B"/>
+                <Setter Property="Foreground" Value="#161616"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
               </Trigger>
               <MultiTrigger>
@@ -106,7 +106,7 @@ XAML = """
                   <Condition Property="IsMouseOver" Value="True"/>
                   <Condition Property="IsChecked"   Value="False"/>
                 </MultiTrigger.Conditions>
-                <Setter Property="Background" Value="#45475A"/>
+                <Setter Property="Background" Value="#525252"/>
               </MultiTrigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -116,8 +116,8 @@ XAML = """
 
     <!-- ── Pill ON/OFF toggle ── -->
     <Style x:Key="PillTogBtn" TargetType="ToggleButton">
-      <Setter Property="Background"      Value="#45475A"/>
-      <Setter Property="Foreground"      Value="#A6ADC8"/>
+      <Setter Property="Background"      Value="#525252"/>
+      <Setter Property="Foreground"      Value="#A8A8A8"/>
       <Setter Property="BorderThickness" Value="0"/>
       <Setter Property="Padding"         Value="10,3"/>
       <Setter Property="Cursor"          Value="Hand"/>
@@ -133,8 +133,8 @@ XAML = """
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsChecked" Value="True">
-                <Setter Property="Background" Value="#F0A500"/>
-                <Setter Property="Foreground" Value="#1E1E2E"/>
+                <Setter Property="Background" Value="#F1C21B"/>
+                <Setter Property="Foreground" Value="#161616"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
               </Trigger>
             </ControlTemplate.Triggers>
@@ -145,7 +145,7 @@ XAML = """
 
     <!-- ── Section card ── -->
     <Style x:Key="Card" TargetType="Border">
-      <Setter Property="Background"   Value="#2A2A3C"/>
+      <Setter Property="Background"   Value="#262626"/>
       <Setter Property="CornerRadius" Value="8"/>
       <Setter Property="Padding"      Value="14"/>
       <Setter Property="Margin"       Value="0,0,0,10"/>
@@ -153,7 +153,7 @@ XAML = """
 
     <!-- ── Section heading ── -->
     <Style x:Key="SHead" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#F0A500"/>
+      <Setter Property="Foreground" Value="#F1C21B"/>
       <Setter Property="FontSize"   Value="10"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
       <Setter Property="Margin"     Value="0,0,0,10"/>
@@ -161,29 +161,29 @@ XAML = """
 
     <!-- ── Sub-label ── -->
     <Style x:Key="Sub" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#A6ADC8"/>
+      <Setter Property="Foreground" Value="#A8A8A8"/>
       <Setter Property="FontSize"   Value="11"/>
       <Setter Property="Margin"     Value="0,0,0,6"/>
     </Style>
 
     <!-- ── Search border (accent outline on keyboard focus) ── -->
     <Style x:Key="SearchBorder" TargetType="Border">
-      <Setter Property="Background"      Value="#1E1E2E"/>
-      <Setter Property="BorderBrush"     Value="#45475A"/>
+      <Setter Property="Background"      Value="#161616"/>
+      <Setter Property="BorderBrush"     Value="#525252"/>
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="CornerRadius"    Value="5"/>
       <Setter Property="Margin"          Value="0,0,0,6"/>
       <Setter Property="Padding"         Value="8,5"/>
       <Style.Triggers>
         <Trigger Property="IsKeyboardFocusWithin" Value="True">
-          <Setter Property="BorderBrush" Value="#F0A500"/>
+          <Setter Property="BorderBrush" Value="#F1C21B"/>
         </Trigger>
       </Style.Triggers>
     </Style>
 
     <!-- ── Custom dark CheckBox ── -->
     <Style x:Key="DarkChk" TargetType="CheckBox">
-      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
       <Setter Property="Padding"    Value="8,0,0,0"/>
       <Setter Property="Margin"     Value="4,3,4,3"/>
       <Setter Property="Cursor"     Value="Hand"/>
@@ -200,13 +200,13 @@ XAML = """
               <Border x:Name="chkBox"
                       Grid.Column="0"
                       Width="15" Height="15"
-                      BorderBrush="#45475A" BorderThickness="1.5"
+                      BorderBrush="#525252" BorderThickness="1.5"
                       Background="Transparent" CornerRadius="3"
                       VerticalAlignment="Center">
                 <!-- Checkmark path -->
                 <Path x:Name="chkMark"
                       Data="M 2,7 L 6,11 L 13,3"
-                      Stroke="#1E1E2E" StrokeThickness="2"
+                      Stroke="#161616" StrokeThickness="2"
                       Visibility="Collapsed"
                       VerticalAlignment="Center"
                       HorizontalAlignment="Center"/>
@@ -217,12 +217,12 @@ XAML = """
             </Grid>
             <ControlTemplate.Triggers>
               <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="chkBox"  Property="Background"  Value="#F0A500"/>
-                <Setter TargetName="chkBox"  Property="BorderBrush" Value="#F0A500"/>
+                <Setter TargetName="chkBox"  Property="Background"  Value="#F1C21B"/>
+                <Setter TargetName="chkBox"  Property="BorderBrush" Value="#F1C21B"/>
                 <Setter TargetName="chkMark" Property="Visibility"  Value="Visible"/>
               </Trigger>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="chkBox" Property="BorderBrush" Value="#F0A500"/>
+                <Setter TargetName="chkBox" Property="BorderBrush" Value="#F1C21B"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -232,8 +232,8 @@ XAML = """
 
     <!-- ── Run button ── -->
     <Style x:Key="RunBtn" TargetType="Button">
-      <Setter Property="Background"      Value="#F0A500"/>
-      <Setter Property="Foreground"      Value="#1E1E2E"/>
+      <Setter Property="Background"      Value="#F1C21B"/>
+      <Setter Property="Foreground"      Value="#161616"/>
       <Setter Property="BorderThickness" Value="0"/>
       <Setter Property="FontWeight"      Value="Bold"/>
       <Setter Property="Cursor"          Value="Hand"/>
@@ -257,8 +257,8 @@ XAML = """
 
     <!-- ── Cancel button ── -->
     <Style x:Key="SecBtn" TargetType="Button">
-      <Setter Property="Background"      Value="#313244"/>
-      <Setter Property="Foreground"      Value="#CDD6F4"/>
+      <Setter Property="Background"      Value="#393939"/>
+      <Setter Property="Foreground"      Value="#F4F4F4"/>
       <Setter Property="BorderThickness" Value="0"/>
       <Setter Property="Cursor"          Value="Hand"/>
       <Setter Property="Template">
@@ -271,7 +271,7 @@ XAML = """
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="#45475A"/>
+                <Setter Property="Background" Value="#525252"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -337,17 +337,17 @@ XAML = """
                   <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="&#x1F50D;"
-                           Foreground="#45475A" FontSize="11"
+                           Foreground="#525252" FontSize="11"
                            VerticalAlignment="Center" Margin="0,0,6,0"/>
                 <TextBox x:Name="txt_view_search"
                          Grid.Column="1"
-                         Background="Transparent" Foreground="#CDD6F4"
-                         CaretBrush="#F0A500" BorderThickness="0"
+                         Background="Transparent" Foreground="#F4F4F4"
+                         CaretBrush="#F1C21B" BorderThickness="0"
                          VerticalAlignment="Center" FontSize="12"/>
               </Grid>
             </Border>
             <!-- Checkbox list -->
-            <Border Background="#1E1E2E" BorderBrush="#45475A"
+            <Border Background="#161616" BorderBrush="#525252"
                     BorderThickness="1" CornerRadius="5">
               <ScrollViewer Height="145" VerticalScrollBarVisibility="Auto">
                 <StackPanel x:Name="panel_views" Margin="4"/>
@@ -384,17 +384,17 @@ XAML = """
                   <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="&#x1F50D;"
-                           Foreground="#45475A" FontSize="11"
+                           Foreground="#525252" FontSize="11"
                            VerticalAlignment="Center" Margin="0,0,6,0"/>
                 <TextBox x:Name="txt_cat_search"
                          Grid.Column="1"
-                         Background="Transparent" Foreground="#CDD6F4"
-                         CaretBrush="#F0A500" BorderThickness="0"
+                         Background="Transparent" Foreground="#F4F4F4"
+                         CaretBrush="#F1C21B" BorderThickness="0"
                          VerticalAlignment="Center" FontSize="12"/>
               </Grid>
             </Border>
             <!-- Checkbox list -->
-            <Border Background="#1E1E2E" BorderBrush="#45475A"
+            <Border Background="#161616" BorderBrush="#525252"
                     BorderThickness="1" CornerRadius="5">
               <ScrollViewer Height="172" VerticalScrollBarVisibility="Auto">
                 <StackPanel x:Name="panel_cats" Margin="4"/>

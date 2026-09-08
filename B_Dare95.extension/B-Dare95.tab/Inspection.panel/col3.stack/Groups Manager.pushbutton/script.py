@@ -277,12 +277,12 @@ XAML = """
         Title="Model Group Manager" Height="740" Width="1180"
         WindowStartupLocation="CenterScreen"
         ShowInTaskbar="True"
-        Background="#1E1E2E">
+        Background="#161616">
   <Window.Resources>
     <Style x:Key="FlatButton" TargetType="Button">
-      <Setter Property="Foreground" Value="#CDD6F4"/>
-      <Setter Property="Background" Value="#313244"/>
-      <Setter Property="BorderBrush" Value="#45475A"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
+      <Setter Property="Background" Value="#393939"/>
+      <Setter Property="BorderBrush" Value="#525252"/>
       <Setter Property="Padding" Value="14,8"/>
       <Setter Property="Margin" Value="0,0,8,0"/>
       <Setter Property="FontSize" Value="12"/>
@@ -299,12 +299,12 @@ XAML = """
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#45475A"/>
-                <Setter TargetName="Bd" Property="BorderBrush" Value="#F0A500"/>
+                <Setter TargetName="Bd" Property="Background" Value="#525252"/>
+                <Setter TargetName="Bd" Property="BorderBrush" Value="#F1C21B"/>
               </Trigger>
               <Trigger Property="IsEnabled" Value="False">
-                <Setter TargetName="Bd" Property="Background" Value="#2A2A3C"/>
-                <Setter Property="Foreground" Value="#6C7086"/>
+                <Setter TargetName="Bd" Property="Background" Value="#262626"/>
+                <Setter Property="Foreground" Value="#8D8D8D"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -313,14 +313,14 @@ XAML = """
     </Style>
 
     <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource FlatButton}">
-      <Setter Property="Foreground" Value="#1E1E2E"/>
-      <Setter Property="Background" Value="#F0A500"/>
-      <Setter Property="BorderBrush" Value="#F0A500"/>
+      <Setter Property="Foreground" Value="#161616"/>
+      <Setter Property="Background" Value="#F1C21B"/>
+      <Setter Property="BorderBrush" Value="#F1C21B"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
     </Style>
 
     <Style x:Key="ToggleChip" TargetType="ToggleButton">
-      <Setter Property="Foreground" Value="#A6ADC8"/>
+      <Setter Property="Foreground" Value="#A8A8A8"/>
       <Setter Property="Cursor" Value="Hand"/>
       <Setter Property="Margin" Value="0,0,12,0"/>
       <Setter Property="FontSize" Value="12"/>
@@ -328,17 +328,17 @@ XAML = """
         <Setter.Value>
           <ControlTemplate TargetType="ToggleButton">
             <Border x:Name="Chip" CornerRadius="6" BorderThickness="1"
-                    Background="#313244" BorderBrush="#45475A" Padding="12,7">
+                    Background="#393939" BorderBrush="#525252" Padding="12,7">
               <ContentPresenter VerticalAlignment="Center"/>
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="Chip" Property="Background" Value="#F0A500"/>
-                <Setter TargetName="Chip" Property="BorderBrush" Value="#F0A500"/>
-                <Setter Property="Foreground" Value="#1E1E2E"/>
+                <Setter TargetName="Chip" Property="Background" Value="#F1C21B"/>
+                <Setter TargetName="Chip" Property="BorderBrush" Value="#F1C21B"/>
+                <Setter Property="Foreground" Value="#161616"/>
               </Trigger>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Chip" Property="BorderBrush" Value="#F0A500"/>
+                <Setter TargetName="Chip" Property="BorderBrush" Value="#F1C21B"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -347,9 +347,9 @@ XAML = """
     </Style>
 
     <Style x:Key="HeaderStyle" TargetType="GridViewColumnHeader">
-      <Setter Property="Background" Value="#2A2A3C"/>
-      <Setter Property="Foreground" Value="#A6ADC8"/>
-      <Setter Property="BorderBrush" Value="#45475A"/>
+      <Setter Property="Background" Value="#262626"/>
+      <Setter Property="Foreground" Value="#A8A8A8"/>
+      <Setter Property="BorderBrush" Value="#525252"/>
       <Setter Property="BorderThickness" Value="0,0,1,1"/>
       <Setter Property="Padding" Value="8,6"/>
       <Setter Property="HorizontalContentAlignment" Value="Left"/>
@@ -357,7 +357,7 @@ XAML = """
     </Style>
 
     <Style x:Key="RowStyle" TargetType="ListViewItem">
-      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="BorderThickness" Value="0"/>
       <Setter Property="Padding" Value="4,5"/>
@@ -365,17 +365,17 @@ XAML = """
         <Setter.Value>
           <ControlTemplate TargetType="ListViewItem">
             <Border x:Name="RowBd" Background="{TemplateBinding Background}"
-                    BorderBrush="#2A2A3C" BorderThickness="0,0,0,1"
+                    BorderBrush="#262626" BorderThickness="0,0,0,1"
                     Padding="{TemplateBinding Padding}">
               <GridViewRowPresenter Content="{TemplateBinding Content}"
                                     Columns="{TemplateBinding GridView.ColumnCollection}"/>
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="RowBd" Property="Background" Value="#2A2A3C"/>
+                <Setter TargetName="RowBd" Property="Background" Value="#262626"/>
               </Trigger>
               <Trigger Property="IsSelected" Value="True">
-                <Setter TargetName="RowBd" Property="Background" Value="#45475A"/>
+                <Setter TargetName="RowBd" Property="Background" Value="#525252"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -393,19 +393,19 @@ XAML = """
     </Grid.RowDefinitions>
 
     <StackPanel Grid.Row="0" Margin="0,0,0,12">
-      <TextBlock Text="Model Group Manager" Foreground="#CDD6F4"
+      <TextBlock Text="Model Group Manager" Foreground="#F4F4F4"
                  FontSize="20" FontWeight="Bold"/>
-      <TextBlock x:Name="SubHeader" Foreground="#A6ADC8" FontSize="12" Margin="0,4,0,0"/>
+      <TextBlock x:Name="SubHeader" Foreground="#A8A8A8" FontSize="12" Margin="0,4,0,0"/>
     </StackPanel>
 
-    <Border Grid.Row="1" Background="#2A2A3C" CornerRadius="6" Padding="10,6"
-            BorderBrush="#45475A" BorderThickness="1" Margin="0,0,0,12">
+    <Border Grid.Row="1" Background="#262626" CornerRadius="6" Padding="10,6"
+            BorderBrush="#525252" BorderThickness="1" Margin="0,0,0,12">
       <Grid>
         <TextBlock x:Name="SearchHint" Text="Search group name, creator or status..."
-                   Foreground="#6C7086" FontSize="12" VerticalAlignment="Center"
+                   Foreground="#8D8D8D" FontSize="12" VerticalAlignment="Center"
                    IsHitTestVisible="False"/>
         <TextBox x:Name="SearchBox" Background="Transparent" BorderThickness="0"
-                 Foreground="#CDD6F4" CaretBrush="#F0A500" FontSize="12"
+                 Foreground="#F4F4F4" CaretBrush="#F1C21B" FontSize="12"
                  VerticalAlignment="Center"/>
       </Grid>
     </Border>
@@ -417,10 +417,10 @@ XAML = """
         <ColumnDefinition Width="1*"/>
       </Grid.ColumnDefinitions>
 
-      <Border Grid.Column="0" Background="#2A2A3C" CornerRadius="8"
-              BorderBrush="#45475A" BorderThickness="1" Padding="1">
+      <Border Grid.Column="0" Background="#262626" CornerRadius="8"
+              BorderBrush="#525252" BorderThickness="1" Padding="1">
         <ListView x:Name="GroupList" Background="Transparent" BorderThickness="0"
-                  Foreground="#CDD6F4"
+                  Foreground="#F4F4F4"
                   ItemContainerStyle="{StaticResource RowStyle}"
                   ScrollViewer.HorizontalScrollBarVisibility="Auto">
           <ListView.View>
@@ -444,20 +444,20 @@ XAML = """
         </ListView>
       </Border>
 
-      <Border Grid.Column="2" Background="#2A2A3C" CornerRadius="8"
-              BorderBrush="#45475A" BorderThickness="1" Padding="10">
+      <Border Grid.Column="2" Background="#262626" CornerRadius="8"
+              BorderBrush="#525252" BorderThickness="1" Padding="10">
         <Grid>
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
           </Grid.RowDefinitions>
           <StackPanel Grid.Row="0" Margin="0,0,0,8">
-            <TextBlock Text="CONTENTS" Foreground="#F0A500" FontSize="11" FontWeight="Bold"/>
+            <TextBlock Text="CONTENTS" Foreground="#F1C21B" FontSize="11" FontWeight="Bold"/>
             <TextBlock x:Name="ContentsHeader" Text="Select a group"
-                       Foreground="#A6ADC8" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                       Foreground="#A8A8A8" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"/>
           </StackPanel>
           <ListView x:Name="MemberList" Grid.Row="1" Background="Transparent"
-                    BorderThickness="0" Foreground="#CDD6F4"
+                    BorderThickness="0" Foreground="#F4F4F4"
                     ItemContainerStyle="{StaticResource RowStyle}">
             <ListView.View>
               <GridView ColumnHeaderContainerStyle="{StaticResource HeaderStyle}">

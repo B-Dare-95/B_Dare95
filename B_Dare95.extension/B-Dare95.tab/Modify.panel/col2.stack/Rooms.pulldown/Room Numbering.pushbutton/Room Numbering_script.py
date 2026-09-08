@@ -312,14 +312,14 @@ XAML_STR = """
     Width="760" Height="640"
     WindowStartupLocation="CenterScreen"
     ResizeMode="NoResize"
-    Background="#1E1E2E"
+    Background="#161616"
     FontFamily="Segoe UI">
 
     <Window.Resources>
 
         <!-- ListBoxItem -->
         <Style x:Key="S_LBI" TargetType="ListBoxItem">
-            <Setter Property="Foreground"      Value="#CDD6F4"/>
+            <Setter Property="Foreground"      Value="#F4F4F4"/>
             <Setter Property="Background"      Value="Transparent"/>
             <Setter Property="Padding"         Value="8,5"/>
             <Setter Property="FontSize"        Value="12"/>
@@ -327,20 +327,20 @@ XAML_STR = """
             <Setter Property="BorderThickness" Value="0"/>
             <Style.Triggers>
                 <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#F0A500"/>
-                    <Setter Property="Foreground" Value="#1E1E2E"/>
+                    <Setter Property="Background" Value="#F1C21B"/>
+                    <Setter Property="Foreground" Value="#161616"/>
                     <Setter Property="FontWeight" Value="SemiBold"/>
                 </Trigger>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#45475A"/>
+                    <Setter Property="Background" Value="#525252"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
 
         <!-- ListBox -->
         <Style TargetType="ListBox">
-            <Setter Property="Background"       Value="#313244"/>
-            <Setter Property="BorderBrush"      Value="#45475A"/>
+            <Setter Property="Background"       Value="#393939"/>
+            <Setter Property="BorderBrush"      Value="#525252"/>
             <Setter Property="BorderThickness"  Value="1"/>
             <Setter Property="ItemContainerStyle" Value="{StaticResource S_LBI}"/>
             <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
@@ -349,19 +349,19 @@ XAML_STR = """
 
         <!-- TextBox -->
         <Style TargetType="TextBox">
-            <Setter Property="Background"      Value="#313244"/>
-            <Setter Property="Foreground"      Value="#CDD6F4"/>
-            <Setter Property="BorderBrush"     Value="#45475A"/>
+            <Setter Property="Background"      Value="#393939"/>
+            <Setter Property="Foreground"      Value="#F4F4F4"/>
+            <Setter Property="BorderBrush"     Value="#525252"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding"         Value="7,5"/>
-            <Setter Property="CaretBrush"      Value="#CDD6F4"/>
+            <Setter Property="CaretBrush"      Value="#F4F4F4"/>
             <Setter Property="FontSize"        Value="12"/>
-            <Setter Property="SelectionBrush"  Value="#F0A500"/>
+            <Setter Property="SelectionBrush"  Value="#F1C21B"/>
         </Style>
 
         <!-- Panel section header -->
         <Style x:Key="S_PanelHeader" TargetType="TextBlock">
-            <Setter Property="Foreground"  Value="#A6ADC8"/>
+            <Setter Property="Foreground"  Value="#A8A8A8"/>
             <Setter Property="FontSize"    Value="11"/>
             <Setter Property="FontWeight"  Value="SemiBold"/>
             <Setter Property="Margin"      Value="0,0,0,7"/>
@@ -369,16 +369,16 @@ XAML_STR = """
 
         <!-- Field label -->
         <Style x:Key="S_FieldLabel" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#A6ADC8"/>
+            <Setter Property="Foreground" Value="#A8A8A8"/>
             <Setter Property="FontSize"   Value="11"/>
             <Setter Property="Margin"     Value="0,0,0,4"/>
         </Style>
 
         <!-- Corner tile RadioButton -->
         <Style x:Key="S_CornerBtn" TargetType="RadioButton">
-            <Setter Property="Background"      Value="#313244"/>
-            <Setter Property="Foreground"      Value="#A6ADC8"/>
-            <Setter Property="BorderBrush"     Value="#45475A"/>
+            <Setter Property="Background"      Value="#393939"/>
+            <Setter Property="Foreground"      Value="#A8A8A8"/>
+            <Setter Property="BorderBrush"     Value="#525252"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Cursor"          Value="Hand"/>
             <Setter Property="HorizontalContentAlignment" Value="Center"/>
@@ -400,21 +400,21 @@ XAML_STR = """
             </Setter>
             <Style.Triggers>
                 <Trigger Property="IsChecked" Value="True">
-                    <Setter Property="Background"  Value="#F0A500"/>
-                    <Setter Property="Foreground"  Value="#1E1E2E"/>
-                    <Setter Property="BorderBrush" Value="#F0A500"/>
+                    <Setter Property="Background"  Value="#F1C21B"/>
+                    <Setter Property="Foreground"  Value="#161616"/>
+                    <Setter Property="BorderBrush" Value="#F1C21B"/>
                 </Trigger>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#45475A"/>
+                    <Setter Property="Background" Value="#525252"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
 
         <!-- Pill RadioButton (sequence mode + future toggles) -->
         <Style x:Key="S_PillBtn" TargetType="RadioButton">
-            <Setter Property="Foreground"      Value="#CDD6F4"/>
-            <Setter Property="Background"      Value="#313244"/>
-            <Setter Property="BorderBrush"     Value="#45475A"/>
+            <Setter Property="Foreground"      Value="#F4F4F4"/>
+            <Setter Property="Background"      Value="#393939"/>
+            <Setter Property="BorderBrush"     Value="#525252"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="FontSize"        Value="12"/>
             <Setter Property="Padding"         Value="10,6"/>
@@ -435,21 +435,21 @@ XAML_STR = """
             </Setter>
             <Style.Triggers>
                 <Trigger Property="IsChecked" Value="True">
-                    <Setter Property="Background"  Value="#F0A500"/>
-                    <Setter Property="Foreground"  Value="#1E1E2E"/>
+                    <Setter Property="Background"  Value="#F1C21B"/>
+                    <Setter Property="Foreground"  Value="#161616"/>
                     <Setter Property="FontWeight"  Value="SemiBold"/>
-                    <Setter Property="BorderBrush" Value="#F0A500"/>
+                    <Setter Property="BorderBrush" Value="#F1C21B"/>
                 </Trigger>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#45475A"/>
+                    <Setter Property="Background" Value="#525252"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
 
         <!-- RUN button -->
         <Style x:Key="S_RunBtn" TargetType="Button">
-            <Setter Property="Background"      Value="#F0A500"/>
-            <Setter Property="Foreground"      Value="#1E1E2E"/>
+            <Setter Property="Background"      Value="#F1C21B"/>
+            <Setter Property="Foreground"      Value="#161616"/>
             <Setter Property="FontWeight"      Value="Bold"/>
             <Setter Property="FontSize"        Value="13"/>
             <Setter Property="BorderThickness" Value="0"/>
@@ -475,9 +475,9 @@ XAML_STR = """
 
         <!-- CANCEL button -->
         <Style x:Key="S_CancelBtn" TargetType="Button">
-            <Setter Property="Background"      Value="#313244"/>
-            <Setter Property="Foreground"      Value="#CDD6F4"/>
-            <Setter Property="BorderBrush"     Value="#45475A"/>
+            <Setter Property="Background"      Value="#393939"/>
+            <Setter Property="Foreground"      Value="#F4F4F4"/>
+            <Setter Property="BorderBrush"     Value="#525252"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="FontSize"        Value="13"/>
             <Setter Property="Cursor"          Value="Hand"/>
@@ -498,7 +498,7 @@ XAML_STR = """
             </Setter>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#45475A"/>
+                    <Setter Property="Background" Value="#525252"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -522,12 +522,12 @@ XAML_STR = """
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0">
                 <TextBlock Text="RENUMBER ROOMS  ·  NEAREST-TO-CORNER"
-                           Foreground="#F0A500" FontSize="15" FontWeight="Bold"/>
+                           Foreground="#F1C21B" FontSize="15" FontWeight="Bold"/>
                 <TextBlock Text="Per-level or project-wide  ·  nearest-first from the selected grid corner."
-                           Foreground="#585B70" FontSize="11" Margin="0,3,0,0"/>
+                           Foreground="#6F6F6F" FontSize="11" Margin="0,3,0,0"/>
             </StackPanel>
             <TextBlock x:Name="UI_version" Grid.Column="1"
-                       Foreground="#585B70" FontSize="11"
+                       Foreground="#6F6F6F" FontSize="11"
                        VerticalAlignment="Top"/>
         </Grid>
 
@@ -542,7 +542,7 @@ XAML_STR = """
             <!-- ────────────────────────────────────────────────────────── -->
             <!-- LEFT : Room parameter picker                               -->
             <!-- ────────────────────────────────────────────────────────── -->
-            <Border Grid.Column="0" Background="#2A2A3C" CornerRadius="8" Padding="12">
+            <Border Grid.Column="0" Background="#262626" CornerRadius="8" Padding="12">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>   <!-- header           -->
@@ -560,7 +560,7 @@ XAML_STR = """
 
                     <!-- Type hint (updates on selection) -->
                     <TextBlock x:Name="UI_param_hint" Grid.Row="2"
-                               Foreground="#585B70" FontSize="11"
+                               Foreground="#6F6F6F" FontSize="11"
                                Margin="0,6,0,0" TextWrapping="Wrap"/>
 
                     <!-- Inline error (Collapsed until Integer validation fails) -->
@@ -572,7 +572,7 @@ XAML_STR = """
                             Visibility="Collapsed"
                             x:Name="UI_error_border">
                         <TextBlock x:Name="UI_error_msg"
-                                   Foreground="#F38BA8"
+                                   Foreground="#FF8389"
                                    FontSize="11"
                                    TextWrapping="Wrap"/>
                     </Border>
@@ -583,7 +583,7 @@ XAML_STR = """
             <!-- ────────────────────────────────────────────────────────── -->
             <!-- RIGHT : Corner picker + Settings                           -->
             <!-- ────────────────────────────────────────────────────────── -->
-            <Border Grid.Column="2" Background="#2A2A3C" CornerRadius="8" Padding="12">
+            <Border Grid.Column="2" Background="#262626" CornerRadius="8" Padding="12">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>   <!-- "REFERENCE CORNER" header -->
@@ -680,7 +680,7 @@ XAML_STR = """
 
                     <!-- Status: N levels · M rooms -->
                     <TextBlock x:Name="UI_status" Grid.Row="2"
-                               Foreground="#585B70" FontSize="11"
+                               Foreground="#6F6F6F" FontSize="11"
                                HorizontalAlignment="Center" Margin="0,6,0,0"/>
 
                     <!-- Settings header -->
@@ -742,7 +742,7 @@ XAML_STR = """
         </Grid>
 
         <!-- ══ DIVIDER ══════════════════════════════════════════════════ -->
-        <Border Grid.Row="2" Height="1" Background="#313244" Margin="0,12,0,12"/>
+        <Border Grid.Row="2" Height="1" Background="#393939" Margin="0,12,0,12"/>
 
         <!-- ══ BUTTONS ══════════════════════════════════════════════════ -->
         <Grid Grid.Row="3">

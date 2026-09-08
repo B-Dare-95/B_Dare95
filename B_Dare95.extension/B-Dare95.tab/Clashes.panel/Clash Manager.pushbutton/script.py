@@ -894,11 +894,11 @@ XAML = u"""
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Clash Navigator" Height="620" Width="820"
         WindowStartupLocation="CenterScreen"
-        Background="#1E1E2E">
+        Background="#161616">
     <Window.Resources>
         <Style x:Key="RoundButton" TargetType="Button">
-            <Setter Property="Background" Value="#313244"/>
-            <Setter Property="Foreground" Value="#CDD6F4"/>
+            <Setter Property="Background" Value="#393939"/>
+            <Setter Property="Foreground" Value="#F4F4F4"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Padding" Value="10,6"/>
             <Setter Property="Margin" Value="0,0,0,8"/>
@@ -913,8 +913,8 @@ XAML = u"""
             </Setter>
         </Style>
         <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource RoundButton}">
-            <Setter Property="Background" Value="#F0A500"/>
-            <Setter Property="Foreground" Value="#1E1E2E"/>
+            <Setter Property="Background" Value="#F1C21B"/>
+            <Setter Property="Foreground" Value="#161616"/>
         </Style>
     </Window.Resources>
     <Grid Margin="12">
@@ -927,7 +927,7 @@ XAML = u"""
         <DockPanel Grid.Row="0" Margin="0,0,0,10">
             <Button x:Name="LoadButton" Content="Load HTML Report..." DockPanel.Dock="Left"
                     Width="170" Style="{StaticResource AccentButton}" Margin="0,0,10,0"/>
-            <TextBlock x:Name="ReportLabel" Text="No report loaded" Foreground="#A6ADC8"
+            <TextBlock x:Name="ReportLabel" Text="No report loaded" Foreground="#A8A8A8"
                        VerticalAlignment="Center"/>
         </DockPanel>
 
@@ -939,30 +939,30 @@ XAML = u"""
 
             <DockPanel Grid.Column="0" Margin="0,0,10,0">
                 <TextBox x:Name="FilterBox" DockPanel.Dock="Top" Margin="0,0,0,8"
-                         Background="#2A2A3C" Foreground="#CDD6F4" BorderBrush="#45475A"
+                         Background="#262626" Foreground="#F4F4F4" BorderBrush="#525252"
                          Padding="6" Tag="Filter clashes..."/>
-                <ListBox x:Name="ClashList" Background="#2A2A3C" Foreground="#CDD6F4"
+                <ListBox x:Name="ClashList" Background="#262626" Foreground="#F4F4F4"
                          BorderThickness="0"/>
             </DockPanel>
 
             <StackPanel Grid.Column="1">
                 <Image x:Name="ClashImage" Height="160" Stretch="Uniform" Margin="0,0,0,10"/>
-                <TextBlock Text="Clash Details" Foreground="#CDD6F4" FontWeight="Bold" Margin="0,0,0,8"/>
-                <TextBlock x:Name="Item1Label" Foreground="#A6ADC8" TextWrapping="Wrap" Margin="0,0,0,6"/>
-                <TextBlock x:Name="Item2Label" Foreground="#A6ADC8" TextWrapping="Wrap" Margin="0,0,0,6"/>
-                <TextBlock x:Name="PointLabel" Foreground="#A6ADC8" TextWrapping="Wrap" Margin="0,0,0,16"/>
+                <TextBlock Text="Clash Details" Foreground="#F4F4F4" FontWeight="Bold" Margin="0,0,0,8"/>
+                <TextBlock x:Name="Item1Label" Foreground="#A8A8A8" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                <TextBlock x:Name="Item2Label" Foreground="#A8A8A8" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                <TextBlock x:Name="PointLabel" Foreground="#A8A8A8" TextWrapping="Wrap" Margin="0,0,0,16"/>
 
                 <Button x:Name="FocusButton" Content="Focus / Isolate" Style="{StaticResource RoundButton}"/>
 
-                <TextBlock Text="Clash Box Size (m)" Foreground="#A6ADC8" Margin="0,8,0,2"/>
-                <TextBox x:Name="BoxSizeBox" Background="#2A2A3C" Foreground="#CDD6F4"
-                         BorderBrush="#45475A" Padding="6" Margin="0,0,0,8"/>
+                <TextBlock Text="Clash Box Size (m)" Foreground="#A8A8A8" Margin="0,8,0,2"/>
+                <TextBox x:Name="BoxSizeBox" Background="#262626" Foreground="#F4F4F4"
+                         BorderBrush="#525252" Padding="6" Margin="0,0,0,8"/>
                 <Button x:Name="ClashBoxButton" Content="Create Clash Box" Style="{StaticResource RoundButton}"/>
             </StackPanel>
         </Grid>
 
         <TextBlock x:Name="StatusLabel" Grid.Row="2" Margin="0,10,0,0"
-                   Foreground="#A6ADC8" Text="Ready."/>
+                   Foreground="#A8A8A8" Text="Ready."/>
     </Grid>
 </Window>
 """

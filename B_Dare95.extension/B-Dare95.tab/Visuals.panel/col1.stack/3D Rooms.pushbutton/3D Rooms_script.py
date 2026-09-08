@@ -177,8 +177,8 @@ def contrast_brush(rgb):
     """
     luminance = 0.299 * int(rgb[0]) + 0.587 * int(rgb[1]) + 0.114 * int(rgb[2])
     if luminance > 145:
-        return SolidColorBrush(WpfColor.FromRgb(30, 30, 46))     # #1E1E2E
-    return SolidColorBrush(WpfColor.FromRgb(205, 214, 244))      # #CDD6F4
+        return SolidColorBrush(WpfColor.FromRgb(22, 22, 22))     # #161616
+    return SolidColorBrush(WpfColor.FromRgb(244, 244, 244))      # #F4F4F4
 
 
 def hex_of(rgb):
@@ -575,22 +575,22 @@ XAML = u"""
         Title="3D Room Visualization - Sets"
         Height="700" Width="920" MinHeight="600" MinWidth="820"
         WindowStartupLocation="CenterScreen"
-        Background="#1E1E2E" Foreground="#CDD6F4"
+        Background="#161616" Foreground="#F4F4F4"
         FontFamily="Segoe UI" FontSize="12"
         ShowInTaskbar="True">
 
   <Window.Resources>
     <Style x:Key="SectionLabel" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#A6ADC8"/>
+      <Setter Property="Foreground" Value="#A8A8A8"/>
       <Setter Property="FontWeight" Value="Bold"/>
       <Setter Property="FontSize" Value="11"/>
       <Setter Property="Margin" Value="0,0,0,6"/>
     </Style>
 
     <Style x:Key="FlatButton" TargetType="Button">
-      <Setter Property="Foreground" Value="#CDD6F4"/>
-      <Setter Property="Background" Value="#45475A"/>
-      <Setter Property="BorderBrush" Value="#45475A"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
+      <Setter Property="Background" Value="#525252"/>
+      <Setter Property="BorderBrush" Value="#525252"/>
       <Setter Property="Padding" Value="10,6"/>
       <Setter Property="Template">
         <Setter.Value>
@@ -605,7 +605,7 @@ XAML = u"""
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#585B70"/>
+                <Setter TargetName="bd" Property="Background" Value="#6F6F6F"/>
               </Trigger>
               <Trigger Property="IsEnabled" Value="False">
                 <Setter TargetName="bd" Property="Opacity" Value="0.5"/>
@@ -618,15 +618,15 @@ XAML = u"""
 
     <Style x:Key="AccentButton" TargetType="Button"
            BasedOn="{StaticResource FlatButton}">
-      <Setter Property="Background" Value="#F0A500"/>
-      <Setter Property="BorderBrush" Value="#F0A500"/>
-      <Setter Property="Foreground" Value="#1E1E2E"/>
+      <Setter Property="Background" Value="#F1C21B"/>
+      <Setter Property="BorderBrush" Value="#F1C21B"/>
+      <Setter Property="Foreground" Value="#161616"/>
       <Setter Property="FontWeight" Value="Bold"/>
     </Style>
 
     <Style x:Key="DangerButton" TargetType="Button"
            BasedOn="{StaticResource FlatButton}">
-      <Setter Property="Foreground" Value="#F38BA8"/>
+      <Setter Property="Foreground" Value="#FF8389"/>
     </Style>
   </Window.Resources>
 
@@ -647,8 +647,8 @@ XAML = u"""
                  Style="{StaticResource SectionLabel}"/>
       <TextBox x:Name="search_box" DockPanel.Dock="Top"
                Height="28" Padding="6,4" Margin="0,0,0,8"
-               Background="#313244" Foreground="#CDD6F4"
-               CaretBrush="#CDD6F4" BorderBrush="#45475A" BorderThickness="1"/>
+               Background="#393939" Foreground="#F4F4F4"
+               CaretBrush="#F4F4F4" BorderBrush="#525252" BorderThickness="1"/>
       <Grid DockPanel.Dock="Bottom" Margin="0,8,0,0">
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="Auto"/>
@@ -661,12 +661,12 @@ XAML = u"""
         <Button x:Name="btn_none" Grid.Column="2" Content="Uncheck All"
                 Width="100" Style="{StaticResource FlatButton}"/>
         <TextBlock x:Name="lbl_count" Grid.Column="3"
-                   Foreground="#A6ADC8" FontSize="11"
+                   Foreground="#A8A8A8" FontSize="11"
                    VerticalAlignment="Center" TextAlignment="Right"/>
       </Grid>
       <ListBox x:Name="room_list"
-               Background="#313244" Foreground="#CDD6F4"
-               BorderBrush="#45475A" BorderThickness="1"
+               Background="#393939" Foreground="#F4F4F4"
+               BorderBrush="#525252" BorderThickness="1"
                ScrollViewer.HorizontalScrollBarVisibility="Disabled">
         <ListBox.ItemContainerStyle>
           <Style TargetType="ListBoxItem">
@@ -692,9 +692,9 @@ XAML = u"""
       <TextBlock DockPanel.Dock="Top" Text="SETS"
                  Style="{StaticResource SectionLabel}"/>
 
-      <Border DockPanel.Dock="Bottom" Background="#2A2A3C" CornerRadius="4"
+      <Border DockPanel.Dock="Bottom" Background="#262626" CornerRadius="4"
               Padding="10" Margin="0,14,0,0">
-        <TextBlock x:Name="lbl_status" Foreground="#A6ADC8" FontSize="11"
+        <TextBlock x:Name="lbl_status" Foreground="#A8A8A8" FontSize="11"
                    TextWrapping="Wrap" Text=""/>
       </Border>
 
@@ -703,7 +703,7 @@ XAML = u"""
           <TextBlock Text="TRANSPARENCY" Style="{StaticResource SectionLabel}"
                      HorizontalAlignment="Left"/>
           <TextBlock x:Name="lbl_trans_value" Text="25%" FontFamily="Consolas"
-                     FontWeight="Bold" Foreground="#CDD6F4"
+                     FontWeight="Bold" Foreground="#F4F4F4"
                      HorizontalAlignment="Right" Margin="0,-2,0,0"/>
         </Grid>
         <Slider x:Name="slider" Minimum="0" Maximum="100" Value="25"
@@ -733,8 +733,8 @@ XAML = u"""
       </StackPanel>
 
       <ListBox x:Name="sets_list"
-               Background="#313244" Foreground="#CDD6F4"
-               BorderBrush="#45475A" BorderThickness="1"
+               Background="#393939" Foreground="#F4F4F4"
+               BorderBrush="#525252" BorderThickness="1"
                ScrollViewer.HorizontalScrollBarVisibility="Disabled">
         <ListBox.ItemContainerStyle>
           <Style TargetType="ListBoxItem">

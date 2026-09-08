@@ -372,8 +372,8 @@ XAML = """
     Height="440" Width="420"
     WindowStartupLocation="CenterScreen"
     ResizeMode="NoResize"
-    Background="#1E1E2E"
-    Foreground="#CDD6F4"
+    Background="#161616"
+    Foreground="#F4F4F4"
     FontFamily="Segoe UI"
     FontSize="12">
 
@@ -395,25 +395,25 @@ XAML = """
         <StackPanel Grid.Row="0" Margin="0,0,0,18">
             <TextBlock Text="PICK LINKED SHAFT — OPEN ABOVE"
                        FontSize="14" FontWeight="Bold"
-                       Foreground="#F0A500" TextWrapping="Wrap"/>
+                       Foreground="#F1C21B" TextWrapping="Wrap"/>
             <TextBlock Text="Configure the detail line style and annotation text, then click OK to begin picking."
-                       Foreground="#6C7086" FontSize="10.5"
+                       Foreground="#8D8D8D" FontSize="10.5"
                        TextWrapping="Wrap" Margin="0,4,0,0"/>
         </StackPanel>
 
         <!-- 1  Line Style label -->
         <TextBlock Grid.Row="1" Text="Detail Line Style"
-                   Foreground="#BAC2DE" FontWeight="SemiBold"
+                   Foreground="#C6C6C6" FontWeight="SemiBold"
                    Margin="0,0,0,5"/>
 
         <!-- 2  Line Style combo -->
         <ComboBox Grid.Row="2" x:Name="LineStyleCombo"
                   Height="30" Margin="0,0,0,14"
-                  Background="#FFFFFF" Foreground="#1E1E2E"
-                  BorderBrush="#45475A">
+                  Background="#FFFFFF" Foreground="#161616"
+                  BorderBrush="#525252">
             <ComboBox.ItemContainerStyle>
                 <Style TargetType="ComboBoxItem">
-                    <Setter Property="Foreground" Value="#1E1E2E"/>
+                    <Setter Property="Foreground" Value="#161616"/>
                     <Setter Property="Background" Value="#FFFFFF"/>
                     <Style.Triggers>
                         <Trigger Property="IsHighlighted" Value="True">
@@ -426,17 +426,17 @@ XAML = """
 
         <!-- 3  Text Note Type label -->
         <TextBlock Grid.Row="3" Text="Text Note Type"
-                   Foreground="#BAC2DE" FontWeight="SemiBold"
+                   Foreground="#C6C6C6" FontWeight="SemiBold"
                    Margin="0,0,0,5"/>
 
         <!-- 4  Text Note Type combo -->
         <ComboBox Grid.Row="4" x:Name="TextTypeCombo"
                   Height="30" Margin="0,0,0,14"
-                  Background="#FFFFFF" Foreground="#1E1E2E"
-                  BorderBrush="#45475A">
+                  Background="#FFFFFF" Foreground="#161616"
+                  BorderBrush="#525252">
             <ComboBox.ItemContainerStyle>
                 <Style TargetType="ComboBoxItem">
-                    <Setter Property="Foreground" Value="#1E1E2E"/>
+                    <Setter Property="Foreground" Value="#161616"/>
                     <Setter Property="Background" Value="#FFFFFF"/>
                     <Style.Triggers>
                         <Trigger Property="IsHighlighted" Value="True">
@@ -449,23 +449,23 @@ XAML = """
 
         <!-- 5  Annotation label -->
         <TextBlock Grid.Row="5" Text="Annotation Text"
-                   Foreground="#BAC2DE" FontWeight="SemiBold"
+                   Foreground="#C6C6C6" FontWeight="SemiBold"
                    Margin="0,0,0,5"/>
 
         <!-- 6  Annotation textbox -->
         <TextBox Grid.Row="6" x:Name="AnnotationTextBox"
                  Height="32" Padding="8,6"
-                 Background="#181825" Foreground="#CDD6F4"
-                 BorderBrush="#45475A" CaretBrush="#F0A500"
+                 Background="#0D0D0D" Foreground="#F4F4F4"
+                 BorderBrush="#525252" CaretBrush="#F1C21B"
                  Text="OPEN ABOVE"/>
 
         <!-- 7  X-mark checkbox -->
         <CheckBox Grid.Row="7" x:Name="DrawXCheckBox"
                   Margin="0,14,0,0"
-                  Foreground="#CDD6F4"
+                  Foreground="#F4F4F4"
                   IsChecked="True">
             <TextBlock Text="Draw X mark (diagonals across shaft)"
-                       Foreground="#CDD6F4" VerticalAlignment="Center"/>
+                       Foreground="#F4F4F4" VerticalAlignment="Center"/>
         </CheckBox>
 
         <!-- 9  Buttons -->
@@ -473,12 +473,12 @@ XAML = """
                     HorizontalAlignment="Right">
             <Button x:Name="CancelBtn" Content="Cancel"
                     Width="90" Height="32" Margin="0,0,10,0"
-                    Background="#313244" Foreground="#CDD6F4"
-                    BorderBrush="#45475A"/>
+                    Background="#393939" Foreground="#F4F4F4"
+                    BorderBrush="#525252"/>
             <Button x:Name="OkBtn" Content="OK  →  Pick"
                     Width="110" Height="32"
-                    Background="#F0A500" Foreground="#1E1E2E"
-                    FontWeight="Bold" BorderBrush="#F0A500"/>
+                    Background="#F1C21B" Foreground="#161616"
+                    FontWeight="Bold" BorderBrush="#F1C21B"/>
         </StackPanel>
 
     </Grid>

@@ -248,7 +248,7 @@ def build_tree(family, level=0, visited_names=None):
 # Each tuple: (card_bg_tint, border_color, badge_bg, connector_color)
 LEVEL_COLORS = [
     ("#2A2060", "#9D8FF7", "#7C6FF7", "#7C6FF7"),   # L0  lavender
-    ("#2B1F00", "#F0C050", "#F0A500", "#F0A500"),   # L1  amber
+    ("#2B1F00", "#F0C050", "#F1C21B", "#F1C21B"),   # L1  amber
     ("#082820", "#4DD9B8", "#22C9A0", "#22C9A0"),   # L2  teal
     ("#2E0F1A", "#F07FAA", "#E05C8A", "#E05C8A"),   # L3  pink
     ("#0A1E30", "#7FC0F0", "#5BA4E0", "#5BA4E0"),   # L4  blue
@@ -353,7 +353,7 @@ def node_to_html(node, is_last=True, ancestors_last=None):
             '&#128196; {tc} Types</span>'
             '<span class="stat stat-inst" style="border-color:#22C9A0;">'
             '&#9881; {ip} Instance Params</span>'
-            '<span class="stat stat-type-p" style="border-color:#F0A500;">'
+            '<span class="stat stat-type-p" style="border-color:#F1C21B;">'
             '&#9881; {tp} Type Params</span>'
         ).format(
             bc = border,
@@ -442,7 +442,7 @@ def generate_html(family_name, root_node):
     --border:  #2A2A42;
     --text:    #E2E8F8;
     --subtext: #8892B0;
-    --accent:  #F0A500;
+    --accent:  #F1C21B;
     --radius:  10px;
     --mono:    'JetBrains Mono', monospace;
     --display: 'Syne', sans-serif;

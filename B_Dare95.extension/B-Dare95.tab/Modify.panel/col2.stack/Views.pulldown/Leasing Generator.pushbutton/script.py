@@ -194,7 +194,7 @@ XAML = """<Window
     Width="780" Height="600"
     MinWidth="680" MinHeight="480"
     WindowStartupLocation="CenterScreen"
-    Background="#1E1E2E"
+    Background="#161616"
     ResizeMode="CanResizeWithGrip"
     FontFamily="Segoe UI">
 
@@ -216,10 +216,10 @@ XAML = """<Window
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#45475A"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#525252"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#313244"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#393939"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -229,7 +229,7 @@ XAML = """<Window
 
         <!-- ── CheckBox ── -->
         <Style TargetType="CheckBox">
-            <Setter Property="Foreground"              Value="#CDD6F4"/>
+            <Setter Property="Foreground"              Value="#F4F4F4"/>
             <Setter Property="FontSize"                Value="12"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="Cursor"                  Value="Hand"/>
@@ -237,16 +237,16 @@ XAML = """<Window
 
         <!-- ── ComboBoxItem ── -->
         <Style TargetType="ComboBoxItem">
-            <Setter Property="Background" Value="#313244"/>
-            <Setter Property="Foreground" Value="#CDD6F4"/>
+            <Setter Property="Background" Value="#393939"/>
+            <Setter Property="Foreground" Value="#F4F4F4"/>
             <Setter Property="Padding"    Value="10,6"/>
             <Setter Property="FontSize"   Value="12"/>
         </Style>
 
         <!-- ── Generate Button ── -->
         <Style x:Key="AccentButton" TargetType="Button">
-            <Setter Property="Background"   Value="#F0A500"/>
-            <Setter Property="Foreground"   Value="#1E1E2E"/>
+            <Setter Property="Background"   Value="#F1C21B"/>
+            <Setter Property="Foreground"   Value="#161616"/>
             <Setter Property="FontWeight"   Value="Bold"/>
             <Setter Property="FontSize"     Value="13"/>
             <Setter Property="BorderThickness" Value="0"/>
@@ -269,8 +269,8 @@ XAML = """<Window
                                 <Setter TargetName="Bd" Property="Background" Value="#A87200"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Bd" Property="Background" Value="#45475A"/>
-                                <Setter Property="Foreground" Value="#585B70"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#525252"/>
+                                <Setter Property="Foreground" Value="#6F6F6F"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -303,31 +303,31 @@ XAML = """<Window
             <!-- Section label -->
             <TextBlock Grid.Row="0"
                        Text="R O O M S"
-                       Foreground="#F0A500"
+                       Foreground="#F1C21B"
                        FontSize="10"
                        FontWeight="Bold"
                        />
 
             <!-- Search box -->
             <Border Grid.Row="2"
-                    Background="#313244"
+                    Background="#393939"
                     CornerRadius="6"
-                    BorderBrush="#45475A"
+                    BorderBrush="#525252"
                     BorderThickness="1">
                 <Grid>
                     <TextBlock x:Name="SearchPlaceholder"
                                Text="Search rooms..."
-                               Foreground="#585B70"
+                               Foreground="#6F6F6F"
                                FontSize="12"
                                Padding="10,7,0,0"
                                IsHitTestVisible="False"/>
                     <TextBox x:Name="SearchBox"
                              Background="Transparent"
-                             Foreground="#CDD6F4"
+                             Foreground="#F4F4F4"
                              BorderThickness="0"
                              Padding="8,6"
                              FontSize="12"
-                             CaretBrush="#CDD6F4"
+                             CaretBrush="#F4F4F4"
                              VerticalContentAlignment="Center"/>
                 </Grid>
             </Border>
@@ -336,14 +336,14 @@ XAML = """<Window
             <CheckBox x:Name="SelectAllBox"
                       Grid.Row="4"
                       Content="Select All"
-                      Foreground="#A6ADC8"
+                      Foreground="#A8A8A8"
                       FontSize="11"/>
 
             <!-- Room list container -->
             <Border Grid.Row="6"
-                    Background="#2A2A3C"
+                    Background="#262626"
                     CornerRadius="9"
-                    BorderBrush="#313244"
+                    BorderBrush="#393939"
                     BorderThickness="1"
                     Padding="6,6,3,6">
                 <ListBox x:Name="RoomListBox"
@@ -375,7 +375,7 @@ XAML = """<Window
             <!-- Section label -->
             <TextBlock Grid.Row="0"
                        Text="S E T T I N G S"
-                       Foreground="#F0A500"
+                       Foreground="#F1C21B"
                        FontSize="10"
                        FontWeight="Bold"
                        />
@@ -383,12 +383,12 @@ XAML = """<Window
             <!-- ── Plan View Template ── -->
             <StackPanel Grid.Row="2">
                 <TextBlock Text="Enlarged Plan  —  View Template"
-                           Foreground="#A6ADC8"
+                           Foreground="#A8A8A8"
                            FontSize="11"
                            Margin="0,0,0,7"/>
-                <Border Background="#313244"
+                <Border Background="#393939"
                         CornerRadius="6"
-                        BorderBrush="#45475A"
+                        BorderBrush="#525252"
                         BorderThickness="1">
                     <ComboBox x:Name="PlanTemplateCombo"
                               Background="Transparent"
@@ -403,12 +403,12 @@ XAML = """<Window
             <!-- ── Section View Template ── -->
             <StackPanel Grid.Row="4">
                 <TextBlock Text="Section  —  View Template"
-                           Foreground="#A6ADC8"
+                           Foreground="#A8A8A8"
                            FontSize="11"
                            Margin="0,0,0,7"/>
-                <Border Background="#313244"
+                <Border Background="#393939"
                         CornerRadius="6"
-                        BorderBrush="#45475A"
+                        BorderBrush="#525252"
                         BorderThickness="1">
                     <ComboBox x:Name="SectionTemplateCombo"
                               Background="Transparent"
@@ -421,7 +421,7 @@ XAML = """<Window
             </StackPanel>
 
             <!-- Divider -->
-            <Border Grid.Row="6" Height="1" Background="#45475A"/>
+            <Border Grid.Row="6" Height="1" Background="#525252"/>
 
             <!-- ── Prefix / Suffix labels ── -->
             <Grid Grid.Row="8">
@@ -432,11 +432,11 @@ XAML = """<Window
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0"
                            Text="Prefix"
-                           Foreground="#A6ADC8"
+                           Foreground="#A8A8A8"
                            FontSize="11"/>
                 <TextBlock Grid.Column="2"
                            Text="Suffix"
-                           Foreground="#A6ADC8"
+                           Foreground="#A8A8A8"
                            FontSize="11"/>
             </Grid>
 
@@ -449,35 +449,35 @@ XAML = """<Window
                 </Grid.ColumnDefinitions>
 
                 <Border Grid.Column="0"
-                        Background="#313244"
+                        Background="#393939"
                         CornerRadius="6"
-                        BorderBrush="#45475A"
+                        BorderBrush="#525252"
                         BorderThickness="1">
                     <TextBox x:Name="PrefixBox"
                              Background="Transparent"
-                             Foreground="#CDD6F4"
+                             Foreground="#F4F4F4"
                              BorderThickness="0"
                              Padding="8,0"
                              FontSize="12"
                              Height="36"
-                             CaretBrush="#CDD6F4"
+                             CaretBrush="#F4F4F4"
                              Text="EP - "
                              VerticalContentAlignment="Center"/>
                 </Border>
 
                 <Border Grid.Column="2"
-                        Background="#313244"
+                        Background="#393939"
                         CornerRadius="6"
-                        BorderBrush="#45475A"
+                        BorderBrush="#525252"
                         BorderThickness="1">
                     <TextBox x:Name="SuffixBox"
                              Background="Transparent"
-                             Foreground="#CDD6F4"
+                             Foreground="#F4F4F4"
                              BorderThickness="0"
                              Padding="8,0"
                              FontSize="12"
                              Height="36"
-                             CaretBrush="#CDD6F4"
+                             CaretBrush="#F4F4F4"
                              VerticalContentAlignment="Center"/>
                 </Border>
             </Grid>
@@ -485,7 +485,7 @@ XAML = """<Window
             <!-- Preview / spacer -->
             <StackPanel Grid.Row="11" VerticalAlignment="Bottom" Margin="0,0,0,16">
                 <TextBlock x:Name="PreviewLabel"
-                           Foreground="#585B70"
+                           Foreground="#6F6F6F"
                            FontSize="11"
                            TextWrapping="Wrap"/>
             </StackPanel>
@@ -508,8 +508,8 @@ class EnlargedPlanUI(object):
     """Single-window controller for the Enlarged Plan Generator."""
 
     # Catppuccin palette shortcuts
-    _TEXT    = Color.FromRgb(0xCD, 0xD6, 0xF4)   # #CDD6F4
-    _SUBTEXT = Color.FromRgb(0xA6, 0xAD, 0xC8)   # #A6ADC8
+    _TEXT    = Color.FromRgb(0xCD, 0xD6, 0xF4)   # #F4F4F4
+    _SUBTEXT = Color.FromRgb(0xA6, 0xAD, 0xC8)   # #A8A8A8
 
     def __init__(self):
         self.window     = XamlReader.Parse(XAML)

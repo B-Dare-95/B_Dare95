@@ -135,7 +135,7 @@ WINDOW_XAML = u"""
     MinHeight="520" MinWidth="740"
     WindowStartupLocation="CenterScreen"
     ResizeMode="CanResizeWithGrip"
-    Background="#1E1E2E">
+    Background="#161616">
 
   <Grid Margin="16">
     <Grid.ColumnDefinitions>
@@ -145,32 +145,32 @@ WINDOW_XAML = u"""
     </Grid.ColumnDefinitions>
 
     <!-- ═══════════════════════════  LEFT  ═══════════════════════════ -->
-    <Border Grid.Column="0" Background="#2A2A3C" CornerRadius="9" Padding="12">
+    <Border Grid.Column="0" Background="#262626" CornerRadius="9" Padding="12">
       <DockPanel>
 
         <!-- Section label -->
         <TextBlock DockPanel.Dock="Top"
             Text="CATEGORY"
-            Foreground="#F0A500" FontSize="10" FontWeight="Bold"
+            Foreground="#F1C21B" FontSize="10" FontWeight="Bold"
             Margin="2,0,0,8"/>
 
         <!-- Search box -->
         <TextBox DockPanel.Dock="Top" x:Name="SearchBox"
-            Background="#313244" Foreground="#CDD6F4" CaretBrush="#CDD6F4"
-            BorderBrush="#45475A" BorderThickness="1"
+            Background="#393939" Foreground="#F4F4F4" CaretBrush="#F4F4F4"
+            BorderBrush="#525252" BorderThickness="1"
             Padding="8,6" Margin="0,0,0,6" FontSize="12"/>
 
         <!-- Category list -->
         <ListBox x:Name="CategoryList"
             Background="Transparent" BorderThickness="0"
-            Foreground="#CDD6F4" FontSize="12"
+            Foreground="#F4F4F4" FontSize="12"
             HorizontalContentAlignment="Stretch"
             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
           <ListBox.ItemContainerStyle>
             <Style TargetType="ListBoxItem">
               <Setter Property="Padding" Value="8,5"/>
               <Setter Property="Margin"  Value="0,1"/>
-              <Setter Property="Foreground" Value="#CDD6F4"/>
+              <Setter Property="Foreground" Value="#F4F4F4"/>
               <Setter Property="Template">
                 <Setter.Value>
                   <ControlTemplate TargetType="ListBoxItem">
@@ -180,8 +180,8 @@ WINDOW_XAML = u"""
                     </Border>
                     <ControlTemplate.Triggers>
                       <Trigger Property="IsSelected" Value="True">
-                        <Setter TargetName="Bd" Property="Background" Value="#F0A500"/>
-                        <Setter Property="Foreground" Value="#1E1E2E"/>
+                        <Setter TargetName="Bd" Property="Background" Value="#F1C21B"/>
+                        <Setter Property="Foreground" Value="#161616"/>
                       </Trigger>
                       <MultiTrigger>
                         <MultiTrigger.Conditions>
@@ -202,7 +202,7 @@ WINDOW_XAML = u"""
     </Border>
 
     <!-- ═══════════════════════════  RIGHT  ═══════════════════════════ -->
-    <Border Grid.Column="2" Background="#2A2A3C" CornerRadius="9" Padding="16,14">
+    <Border Grid.Column="2" Background="#262626" CornerRadius="9" Padding="16,14">
       <Grid>
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto"/>   <!-- column headers  -->
@@ -221,26 +221,26 @@ WINDOW_XAML = u"""
           </Grid.ColumnDefinitions>
 
           <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock Text="FROM TYPE" Foreground="#A6ADC8"
+            <TextBlock Text="FROM TYPE" Foreground="#A8A8A8"
                 FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
-            <TextBlock Text="  (instances present)" Foreground="#585B70"
+            <TextBlock Text="  (instances present)" Foreground="#6F6F6F"
                 FontSize="10" VerticalAlignment="Center"/>
           </StackPanel>
 
           <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock Text="TO TYPE" Foreground="#A6ADC8"
+            <TextBlock Text="TO TYPE" Foreground="#A8A8A8"
                 FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
-            <TextBlock Text="  (any loaded type)" Foreground="#585B70"
+            <TextBlock Text="  (any loaded type)" Foreground="#6F6F6F"
                 FontSize="10" VerticalAlignment="Center"/>
           </StackPanel>
 
           <Button Grid.Column="3" x:Name="AddRowBtn"
               Content="&#xFF0B;  Add Row"
-              Foreground="#CDD6F4" FontSize="11"
+              Foreground="#F4F4F4" FontSize="11"
               Cursor="Hand" IsEnabled="False" HorizontalAlignment="Right">
             <Button.Template>
               <ControlTemplate TargetType="Button">
-                <Border x:Name="ABd" Background="#313244"
+                <Border x:Name="ABd" Background="#393939"
                     CornerRadius="6" Padding="10,5">
                   <ContentPresenter HorizontalAlignment="Center"
                                     VerticalAlignment="Center"/>
@@ -248,10 +248,10 @@ WINDOW_XAML = u"""
                 <ControlTemplate.Triggers>
                   <Trigger Property="IsEnabled" Value="False">
                     <Setter TargetName="ABd" Property="Background" Value="#252535"/>
-                    <Setter Property="Foreground" Value="#45475A"/>
+                    <Setter Property="Foreground" Value="#525252"/>
                   </Trigger>
                   <Trigger Property="IsMouseOver" Value="True">
-                    <Setter TargetName="ABd" Property="Background" Value="#45475A"/>
+                    <Setter TargetName="ABd" Property="Background" Value="#525252"/>
                   </Trigger>
                 </ControlTemplate.Triggers>
               </ControlTemplate>
@@ -265,7 +265,7 @@ WINDOW_XAML = u"""
         <Grid Grid.Row="2">
           <TextBlock x:Name="HintLabel"
               Text="&#8592; Select a category to start building swap pairs"
-              Foreground="#585B70" FontSize="13"
+              Foreground="#6F6F6F" FontSize="13"
               HorizontalAlignment="Center" VerticalAlignment="Center"/>
 
           <ScrollViewer x:Name="RowsScroll"
@@ -283,25 +283,25 @@ WINDOW_XAML = u"""
             <ColumnDefinition Width="Auto"/>
           </Grid.ColumnDefinitions>
           <TextBlock x:Name="StatusLabel" Grid.Column="0"
-              Foreground="#A6ADC8" FontSize="11"
+              Foreground="#A8A8A8" FontSize="11"
               VerticalAlignment="Center"
               TextWrapping="Wrap" Margin="2,0,12,0"/>
           <Button x:Name="ConfirmBtn" Grid.Column="1"
               Content="CONFIRM SWAP"
-              Foreground="#1E1E2E"
+              Foreground="#161616"
               FontSize="13" FontWeight="Bold"
               Cursor="Hand" IsEnabled="False">
             <Button.Template>
               <ControlTemplate TargetType="Button">
-                <Border x:Name="CBd" Background="#F0A500"
+                <Border x:Name="CBd" Background="#F1C21B"
                     CornerRadius="9" Padding="22,10">
                   <ContentPresenter HorizontalAlignment="Center"
                                     VerticalAlignment="Center"/>
                 </Border>
                 <ControlTemplate.Triggers>
                   <Trigger Property="IsEnabled" Value="False">
-                    <Setter TargetName="CBd" Property="Background" Value="#45475A"/>
-                    <Setter Property="Foreground" Value="#585B70"/>
+                    <Setter TargetName="CBd" Property="Background" Value="#525252"/>
+                    <Setter Property="Foreground" Value="#6F6F6F"/>
                   </Trigger>
                   <Trigger Property="IsMouseOver" Value="True">
                     <Setter TargetName="CBd" Property="Background" Value="#FFB800"/>
@@ -325,8 +325,8 @@ _RM_BTN_XAML = u"""
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Content="\u2212"
-    Background="#45475A"
-    Foreground="#CDD6F4"
+    Background="#525252"
+    Foreground="#F4F4F4"
     BorderThickness="0"
     Width="28"
     Height="28"
@@ -349,7 +349,7 @@ _RM_BTN_XAML = u"""
         <Trigger Property="IsMouseOver" Value="True">
           <Setter TargetName="RBd"
                   Property="Background"
-                  Value="#585B70"/>
+                  Value="#6F6F6F"/>
         </Trigger>
       </ControlTemplate.Triggers>
 
@@ -408,9 +408,9 @@ search_box.TextChanged += _on_search
 def _make_combo(items, placeholder):
     """Build a styled ComboBox populated with (display_name, ElementId) pairs."""
     cb = ComboBox()
-    cb.Background      = _b('#313244')
+    cb.Background      = _b('#393939')
     cb.Foreground      = _b('#000000')
-    cb.BorderBrush     = _b('#45475A')
+    cb.BorderBrush     = _b('#525252')
     cb.BorderThickness = Thickness(1)
     cb.Padding         = Thickness(6, 4, 6, 4)
     cb.FontSize        = 12
@@ -418,7 +418,7 @@ def _make_combo(items, placeholder):
 
     ph            = ComboBoxItem()
     ph.Content    = placeholder
-    ph.Foreground = _b('#585B70')
+    ph.Foreground = _b('#6F6F6F')
     ph.IsEnabled  = False
     cb.Items.Add(ph)
     cb.SelectedIndex = 0
@@ -443,11 +443,11 @@ def _update_status():
 
     confirm_btn.IsEnabled = (valid > 0)
     if valid > 0:
-        status_label.Foreground = _b('#A6ADC8')
+        status_label.Foreground = _b('#A8A8A8')
         status_label.Text = u'{} swap pair{} configured \u2014 ready to apply'.format(
             valid, 's' if valid != 1 else '')
     elif rows:
-        status_label.Foreground = _b('#585B70')
+        status_label.Foreground = _b('#6F6F6F')
         status_label.Text = u'Select FROM and TO types for each row'
     else:
         status_label.Text = u''
@@ -554,7 +554,7 @@ def _on_cat_selected(s, e):
         return
 
     add_row_btn.IsEnabled = True
-    status_label.Foreground = _b('#585B70')
+    status_label.Foreground = _b('#6F6F6F')
     status_label.Text = u'{} type{} in use  \u00b7  {} type{} available'.format(
         len(in_use_data[0]),   's' if len(in_use_data[0])   != 1 else '',
         len(all_type_data[0]), 's' if len(all_type_data[0]) != 1 else '',
@@ -587,7 +587,7 @@ def _on_confirm(s, e):
             swap_map[fid] = tid
 
     if not swap_map:
-        status_label.Foreground = _b('#F38BA8')
+        status_label.Foreground = _b('#FF8389')
         status_label.Text = u'\u26A0  No valid swap pairs \u2014 check your selections.'
         return
 
@@ -609,7 +609,7 @@ def _on_confirm(s, e):
             to_change.append((inst, swap_map[inst_tid]))
 
     if not to_change:
-        status_label.Foreground = _b('#F38BA8')
+        status_label.Foreground = _b('#FF8389')
         status_label.Text = u'\u26A0  No instances matched the selected FROM types.'
         return
 
@@ -628,17 +628,17 @@ def _on_confirm(s, e):
         t.Commit()
     except Exception as ex:
         t.RollBack()
-        status_label.Foreground = _b('#F38BA8')
+        status_label.Foreground = _b('#FF8389')
         status_label.Text = u'\u274C  Transaction failed: {}'.format(str(ex))
         return
 
     # Report result
     if failed[0] == 0:
-        status_label.Foreground = _b('#A6E3A1')
+        status_label.Foreground = _b('#42BE65')
         status_label.Text = u'\u2713  {} element{} swapped successfully.'.format(
             changed[0], 's' if changed[0] != 1 else '')
     else:
-        status_label.Foreground = _b('#F9E2AF')
+        status_label.Foreground = _b('#F1C21B')
         status_label.Text = u'\u26A0  {} swapped, {} could not be changed.'.format(
             changed[0], failed[0])
 

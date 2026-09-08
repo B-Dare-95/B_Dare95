@@ -62,14 +62,14 @@ doc   = __revit__.ActiveUIDocument.Document
 uidoc = __revit__.ActiveUIDocument
 
 # ─── THEME ─────────────────────────────────────────────────────────────────────
-BG      = "#1E1E2E"
-CARD    = "#2A2A3C"
-SURFACE = "#313244"
-MUTED   = "#45475A"
-TEXT    = "#CDD6F4"
-SUBTEXT = "#A6ADC8"
-ACCENT  = "#F0A500"
-ROW_A   = "#2A2A3C"   # even-indexed rows
+BG      = "#161616"
+CARD    = "#262626"
+SURFACE = "#393939"
+MUTED   = "#525252"
+TEXT    = "#F4F4F4"
+SUBTEXT = "#A8A8A8"
+ACCENT  = "#F1C21B"
+ROW_A   = "#262626"   # even-indexed rows
 ROW_B   = "#252535"   # odd-indexed rows (zebra stripe)
 HDR_BG  = "#1A1A28"   # column header row background
 

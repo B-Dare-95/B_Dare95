@@ -61,8 +61,8 @@ XAML = """
     SizeToContent="Height"
     WindowStartupLocation="CenterScreen"
     ResizeMode="NoResize"
-    Background="#1E1E2E"
-    BorderBrush="#45475A"
+    Background="#161616"
+    BorderBrush="#525252"
     BorderThickness="1">
 
     <Window.Resources>
@@ -72,7 +72,7 @@ XAML = """
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Thumb">
-                        <Border Background="#45475A" CornerRadius="3"/>
+                        <Border Background="#525252" CornerRadius="3"/>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -80,11 +80,11 @@ XAML = """
 
         <Style x:Key="ScrollBarStyle" TargetType="ScrollBar">
             <Setter Property="Width" Value="6"/>
-            <Setter Property="Background" Value="#181825"/>
+            <Setter Property="Background" Value="#0D0D0D"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ScrollBar">
-                        <Grid Background="#181825">
+                        <Grid Background="#0D0D0D">
                             <Track Name="PART_Track" IsDirectionReversed="True">
                                 <Track.Thumb>
                                     <Thumb Style="{StaticResource ThumbStyle}"/>
@@ -102,7 +102,7 @@ XAML = """
 
         <!-- ── ListBox ── -->
         <Style x:Key="RailItemStyle" TargetType="ListBoxItem">
-            <Setter Property="Foreground" Value="#A6ADC8"/>
+            <Setter Property="Foreground" Value="#A8A8A8"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Padding" Value="10,8"/>
             <Setter Property="FontSize" Value="13"/>
@@ -120,13 +120,13 @@ XAML = """
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#313244"/>
-                                <Setter Property="Foreground" Value="#CDD6F4"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#393939"/>
+                                <Setter Property="Foreground" Value="#F4F4F4"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#2A2A3C"/>
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#F0A500"/>
-                                <Setter Property="Foreground" Value="#F0A500"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#262626"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#F1C21B"/>
+                                <Setter Property="Foreground" Value="#F1C21B"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -136,8 +136,8 @@ XAML = """
 
         <!-- ── Primary Button ── -->
         <Style x:Key="PrimaryBtn" TargetType="Button">
-            <Setter Property="Background" Value="#F0A500"/>
-            <Setter Property="Foreground" Value="#1E1E2E"/>
+            <Setter Property="Background" Value="#F1C21B"/>
+            <Setter Property="Foreground" Value="#161616"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Padding" Value="0,9"/>
@@ -160,8 +160,8 @@ XAML = """
                                 <Setter TargetName="Bd" Property="Background" Value="#B87E08"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Bd" Property="Background" Value="#45475A"/>
-                                <Setter Property="Foreground" Value="#6C7086"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#525252"/>
+                                <Setter Property="Foreground" Value="#8D8D8D"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -171,11 +171,11 @@ XAML = """
 
         <!-- ── Cancel Button ── -->
         <Style x:Key="CancelBtn" TargetType="Button">
-            <Setter Property="Background" Value="#313244"/>
-            <Setter Property="Foreground" Value="#A6ADC8"/>
+            <Setter Property="Background" Value="#393939"/>
+            <Setter Property="Foreground" Value="#A8A8A8"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="Padding" Value="0,9"/>
-            <Setter Property="BorderBrush" Value="#45475A"/>
+            <Setter Property="BorderBrush" Value="#525252"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
@@ -191,11 +191,11 @@ XAML = """
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#45475A"/>
-                                <Setter Property="Foreground" Value="#CDD6F4"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#525252"/>
+                                <Setter Property="Foreground" Value="#F4F4F4"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#585B70"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#6F6F6F"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -205,11 +205,11 @@ XAML = """
 
         <!-- ── TextBox (search) ── -->
         <Style x:Key="SearchBox" TargetType="TextBox">
-            <Setter Property="Background" Value="#313244"/>
-            <Setter Property="Foreground" Value="#CDD6F4"/>
-            <Setter Property="CaretBrush" Value="#F0A500"/>
+            <Setter Property="Background" Value="#393939"/>
+            <Setter Property="Foreground" Value="#F4F4F4"/>
+            <Setter Property="CaretBrush" Value="#F1C21B"/>
             <Setter Property="FontSize" Value="13"/>
-            <Setter Property="BorderBrush" Value="#45475A"/>
+            <Setter Property="BorderBrush" Value="#525252"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="32,8,10,8"/>
             <Setter Property="Template">
@@ -226,10 +226,10 @@ XAML = """
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsFocused" Value="True">
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#F0A500"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#F1C21B"/>
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#6C7086"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#8D8D8D"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -241,19 +241,19 @@ XAML = """
 
     <!-- ── Title Bar ── -->
     <StackPanel>
-        <Border Background="#181825"
-                BorderBrush="#45475A"
+        <Border Background="#0D0D0D"
+                BorderBrush="#525252"
                 BorderThickness="0,0,0,1"
                 Padding="14,10">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock Text="&#xE9C2;"
                            FontFamily="Segoe MDL2 Assets"
                            FontSize="15"
-                           Foreground="#F0A500"
+                           Foreground="#F1C21B"
                            VerticalAlignment="Center"
                            Margin="0,0,8,0"/>
                 <TextBlock Text="Column Guard Generator"
-                           Foreground="#CDD6F4"
+                           Foreground="#F4F4F4"
                            FontSize="13"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"/>
@@ -265,7 +265,7 @@ XAML = """
 
             <!-- Label -->
             <TextBlock Text="RAILING TYPE"
-                       Foreground="#6C7086"
+                       Foreground="#8D8D8D"
                        FontSize="10"
                        FontWeight="SemiBold"
                        Margin="0,0,0,6"/>
@@ -279,14 +279,14 @@ XAML = """
                 <TextBlock Text="&#xE721;"
                            FontFamily="Segoe MDL2 Assets"
                            FontSize="14"
-                           Foreground="#6C7086"
+                           Foreground="#8D8D8D"
                            VerticalAlignment="Center"
                            Margin="10,0,0,0"
                            IsHitTestVisible="False"/>
                 <!-- Placeholder -->
                 <TextBlock x:Name="Placeholder"
                            Text="Filter railing types..."
-                           Foreground="#6C7086"
+                           Foreground="#8D8D8D"
                            FontSize="13"
                            VerticalAlignment="Center"
                            Margin="32,0,0,0"
@@ -294,10 +294,10 @@ XAML = """
             </Grid>
 
             <!-- List -->
-            <Border BorderBrush="#45475A"
+            <Border BorderBrush="#525252"
                     BorderThickness="1"
                     CornerRadius="8"
-                    Background="#181825"
+                    Background="#0D0D0D"
                     Margin="0,0,0,12">
                 <ListBox x:Name="RailList"
                          Background="Transparent"
@@ -320,19 +320,19 @@ XAML = """
             </Border>
 
             <!-- Selected label -->
-            <Border Background="#2A2A3C"
-                    BorderBrush="#45475A"
+            <Border Background="#262626"
+                    BorderBrush="#525252"
                     BorderThickness="1"
                     CornerRadius="6"
                     Padding="10,7"
                     Margin="0,0,0,12">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Selected: "
-                               Foreground="#6C7086"
+                               Foreground="#8D8D8D"
                                FontSize="12"/>
                     <TextBlock x:Name="SelectedLabel"
                                Text="None"
-                               Foreground="#F0A500"
+                               Foreground="#F1C21B"
                                FontSize="12"
                                FontWeight="SemiBold"/>
                 </StackPanel>

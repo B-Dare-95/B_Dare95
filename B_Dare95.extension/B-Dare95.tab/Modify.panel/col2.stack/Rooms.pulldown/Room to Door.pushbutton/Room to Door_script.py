@@ -112,53 +112,53 @@ XAML = """
     Width="880" Height="720"
     MinWidth="720" MinHeight="580"
     WindowStartupLocation="CenterScreen"
-    Background="#1E1E2E"
-    Foreground="#CDD6F4"
+    Background="#161616"
+    Foreground="#F4F4F4"
     FontFamily="Segoe UI"
     FontSize="13">
 
   <Window.Resources>
 
     <Style TargetType="ScrollBar">
-      <Setter Property="Background" Value="#2A2A3C"/>
-      <Setter Property="Foreground" Value="#45475A"/>
+      <Setter Property="Background" Value="#262626"/>
+      <Setter Property="Foreground" Value="#525252"/>
       <Setter Property="Width" Value="6"/>
     </Style>
 
     <Style TargetType="TextBox">
-      <Setter Property="Background" Value="#313244"/>
-      <Setter Property="Foreground" Value="#CDD6F4"/>
-      <Setter Property="BorderBrush" Value="#45475A"/>
+      <Setter Property="Background" Value="#393939"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
+      <Setter Property="BorderBrush" Value="#525252"/>
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="Padding" Value="6,4"/>
-      <Setter Property="CaretBrush" Value="#F0A500"/>
+      <Setter Property="CaretBrush" Value="#F1C21B"/>
     </Style>
 
     <Style TargetType="ListBox">
-      <Setter Property="Background" Value="#313244"/>
-      <Setter Property="Foreground" Value="#CDD6F4"/>
-      <Setter Property="BorderBrush" Value="#45475A"/>
+      <Setter Property="Background" Value="#393939"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
+      <Setter Property="BorderBrush" Value="#525252"/>
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
     </Style>
     <Style TargetType="ListBoxItem">
       <Setter Property="Padding" Value="8,4"/>
-      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
       <Setter Property="Background" Value="Transparent"/>
       <Style.Triggers>
         <Trigger Property="IsSelected" Value="True">
-          <Setter Property="Background" Value="#F0A500"/>
-          <Setter Property="Foreground" Value="#1E1E2E"/>
+          <Setter Property="Background" Value="#F1C21B"/>
+          <Setter Property="Foreground" Value="#161616"/>
         </Trigger>
         <Trigger Property="IsMouseOver" Value="True">
-          <Setter Property="Background" Value="#45475A"/>
+          <Setter Property="Background" Value="#525252"/>
         </Trigger>
       </Style.Triggers>
     </Style>
 
     <Style TargetType="Button">
-      <Setter Property="Background" Value="#45475A"/>
-      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="Background" Value="#525252"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
       <Setter Property="BorderThickness" Value="0"/>
       <Setter Property="Padding" Value="14,6"/>
       <Setter Property="Cursor" Value="Hand"/>
@@ -172,11 +172,11 @@ XAML = """
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="#585B70"/>
+                <Setter Property="Background" Value="#6F6F6F"/>
               </Trigger>
               <Trigger Property="IsPressed" Value="True">
-                <Setter Property="Background" Value="#F0A500"/>
-                <Setter Property="Foreground" Value="#1E1E2E"/>
+                <Setter Property="Background" Value="#F1C21B"/>
+                <Setter Property="Foreground" Value="#161616"/>
               </Trigger>
               <Trigger Property="IsEnabled" Value="False">
                 <Setter Property="Opacity" Value="0.4"/>
@@ -188,8 +188,8 @@ XAML = """
     </Style>
 
     <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-      <Setter Property="Background" Value="#F0A500"/>
-      <Setter Property="Foreground" Value="#1E1E2E"/>
+      <Setter Property="Background" Value="#F1C21B"/>
+      <Setter Property="Foreground" Value="#161616"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
       <Style.Triggers>
         <Trigger Property="IsMouseOver" Value="True">
@@ -202,8 +202,8 @@ XAML = """
     </Style>
 
     <Style x:Key="ToggleBtn" TargetType="RadioButton">
-      <Setter Property="Background" Value="#45475A"/>
-      <Setter Property="Foreground" Value="#A6ADC8"/>
+      <Setter Property="Background" Value="#525252"/>
+      <Setter Property="Foreground" Value="#A8A8A8"/>
       <Setter Property="BorderThickness" Value="0"/>
       <Setter Property="Padding" Value="18,7"/>
       <Setter Property="Cursor" Value="Hand"/>
@@ -217,11 +217,11 @@ XAML = """
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsChecked" Value="True">
-                <Setter Property="Background" Value="#F0A500"/>
-                <Setter Property="Foreground" Value="#1E1E2E"/>
+                <Setter Property="Background" Value="#F1C21B"/>
+                <Setter Property="Foreground" Value="#161616"/>
               </Trigger>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="#585B70"/>
+                <Setter Property="Background" Value="#6F6F6F"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -235,8 +235,8 @@ XAML = """
     </Style>
 
     <Style x:Key="IconBtn" TargetType="Button">
-      <Setter Property="Background" Value="#45475A"/>
-      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="Background" Value="#525252"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
       <Setter Property="BorderThickness" Value="0"/>
       <Setter Property="Width" Value="28"/>
       <Setter Property="Height" Value="28"/>
@@ -253,11 +253,11 @@ XAML = """
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="#585B70"/>
+                <Setter Property="Background" Value="#6F6F6F"/>
               </Trigger>
               <Trigger Property="IsPressed" Value="True">
-                <Setter Property="Background" Value="#F0A500"/>
-                <Setter Property="Foreground" Value="#1E1E2E"/>
+                <Setter Property="Background" Value="#F1C21B"/>
+                <Setter Property="Foreground" Value="#161616"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -267,7 +267,7 @@ XAML = """
 
     <!-- CheckBox style -->
     <Style TargetType="CheckBox">
-      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
       <Setter Property="Cursor" Value="Hand"/>
       <Setter Property="VerticalContentAlignment" Value="Center"/>
       <Setter Property="Template">
@@ -275,22 +275,22 @@ XAML = """
           <ControlTemplate TargetType="CheckBox">
             <StackPanel Orientation="Horizontal">
               <Border x:Name="box" Width="16" Height="16" CornerRadius="4"
-                      Background="#313244" BorderBrush="#45475A" BorderThickness="1.5"
+                      Background="#393939" BorderBrush="#525252" BorderThickness="1.5"
                       VerticalAlignment="Center">
                 <TextBlock x:Name="tick" Text="✓" FontSize="11" FontWeight="Bold"
-                           Foreground="#1E1E2E" HorizontalAlignment="Center"
+                           Foreground="#161616" HorizontalAlignment="Center"
                            VerticalAlignment="Center" Visibility="Collapsed"/>
               </Border>
               <ContentPresenter Margin="8,0,0,0" VerticalAlignment="Center"/>
             </StackPanel>
             <ControlTemplate.Triggers>
               <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="box"  Property="Background"    Value="#F0A500"/>
-                <Setter TargetName="box"  Property="BorderBrush"   Value="#F0A500"/>
+                <Setter TargetName="box"  Property="Background"    Value="#F1C21B"/>
+                <Setter TargetName="box"  Property="BorderBrush"   Value="#F1C21B"/>
                 <Setter TargetName="tick" Property="Visibility"     Value="Visible"/>
               </Trigger>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="box" Property="BorderBrush" Value="#F0A500"/>
+                <Setter TargetName="box" Property="BorderBrush" Value="#F1C21B"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -313,9 +313,9 @@ XAML = """
     <!-- ── Row 0: Header ── -->
     <StackPanel Grid.Row="0" Margin="0,0,0,14">
       <TextBlock Text="Room to Door Parameter Transfer"
-                 FontSize="18" FontWeight="SemiBold" Foreground="#F0A500"/>
+                 FontSize="18" FontWeight="SemiBold" Foreground="#F1C21B"/>
       <TextBlock Text="Map room parameter values to door parameters via FromRoom / ToRoom"
-                 Foreground="#A6ADC8" FontSize="11" Margin="0,2,0,0"/>
+                 Foreground="#A8A8A8" FontSize="11" Margin="0,2,0,0"/>
     </StackPanel>
 
     <!-- ── Row 1: Toggles ── -->
@@ -327,7 +327,7 @@ XAML = """
       </Grid.ColumnDefinitions>
 
       <StackPanel Grid.Column="0" Orientation="Horizontal">
-        <Border Background="#2A2A3C" CornerRadius="9" Padding="3">
+        <Border Background="#262626" CornerRadius="9" Padding="3">
           <StackPanel Orientation="Horizontal">
             <RadioButton x:Name="rbFromRoom" Content="FromRoom" IsChecked="True"
                          Style="{StaticResource ToggleBtn}" GroupName="RoomSide"/>
@@ -336,14 +336,14 @@ XAML = """
           </StackPanel>
         </Border>
         <TextBlock x:Name="tbRoomSideNote" Text="Using FromRoom"
-                   VerticalAlignment="Center" Foreground="#A6ADC8"
+                   VerticalAlignment="Center" Foreground="#A8A8A8"
                    FontSize="11" Margin="10,0,0,0"/>
       </StackPanel>
 
       <StackPanel Grid.Column="2" Orientation="Horizontal">
         <TextBlock Text="Mode:" VerticalAlignment="Center"
-                   Foreground="#A6ADC8" Margin="0,0,8,0" FontSize="12"/>
-        <Border Background="#2A2A3C" CornerRadius="9" Padding="3">
+                   Foreground="#A8A8A8" Margin="0,0,8,0" FontSize="12"/>
+        <Border Background="#262626" CornerRadius="9" Padding="3">
           <StackPanel Orientation="Horizontal">
             <RadioButton x:Name="rbSingle"  Content="Single"  IsChecked="True"
                          Style="{StaticResource ModeBtn}" GroupName="TransferMode"/>
@@ -363,7 +363,7 @@ XAML = """
       </Grid.ColumnDefinitions>
 
       <!-- LEFT: Room Parameters -->
-      <Border Grid.Column="0" Background="#2A2A3C" CornerRadius="8" Padding="12">
+      <Border Grid.Column="0" Background="#262626" CornerRadius="8" Padding="12">
         <Grid>
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -371,17 +371,17 @@ XAML = """
             <RowDefinition Height="*"/>
           </Grid.RowDefinitions>
           <TextBlock Text="ROOM PARAMETERS" FontSize="10" FontWeight="SemiBold"
-                     Foreground="#F0A500" Margin="0,0,0,8"/>
+                     Foreground="#F1C21B" Margin="0,0,0,8"/>
           <TextBox x:Name="tbRoomSearch" Grid.Row="1" Margin="0,0,0,6"/>
           <ListBox x:Name="lbRoomParams" Grid.Row="2" SelectionMode="Extended"/>
         </Grid>
       </Border>
 
-      <TextBlock Grid.Column="1" Text="&#x2192;" FontSize="22" Foreground="#F0A500"
+      <TextBlock Grid.Column="1" Text="&#x2192;" FontSize="22" Foreground="#F1C21B"
                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
 
       <!-- RIGHT: Door Parameters -->
-      <Border Grid.Column="2" Background="#2A2A3C" CornerRadius="8" Padding="12">
+      <Border Grid.Column="2" Background="#262626" CornerRadius="8" Padding="12">
         <Grid>
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -389,7 +389,7 @@ XAML = """
             <RowDefinition Height="*"/>
           </Grid.RowDefinitions>
           <TextBlock Text="DOOR PARAMETERS" FontSize="10" FontWeight="SemiBold"
-                     Foreground="#F0A500" Margin="0,0,0,8"/>
+                     Foreground="#F1C21B" Margin="0,0,0,8"/>
           <TextBox x:Name="tbDoorSearch" Grid.Row="1" Margin="0,0,0,6"/>
           <ListBox x:Name="lbDoorParams" Grid.Row="2" SelectionMode="Single"/>
         </Grid>
@@ -398,7 +398,7 @@ XAML = """
 
     <!-- ── Row 3: Combine panel ── -->
     <Border x:Name="pnlCombine" Grid.Row="3"
-            Background="#2A2A3C" CornerRadius="8" Padding="12"
+            Background="#262626" CornerRadius="8" Padding="12"
             Margin="0,10,0,0" Visibility="Collapsed">
       <Grid>
         <Grid.ColumnDefinitions>
@@ -413,8 +413,8 @@ XAML = """
             <RowDefinition Height="110"/>
           </Grid.RowDefinitions>
           <TextBlock Text="COMBINE ORDER" FontSize="10" FontWeight="SemiBold"
-                     Foreground="#F0A500" Margin="0,0,0,6"/>
-          <TextBlock Grid.Row="1" Foreground="#A6ADC8" FontSize="11" Margin="0,0,0,6"
+                     Foreground="#F1C21B" Margin="0,0,0,6"/>
+          <TextBlock Grid.Row="1" Foreground="#A8A8A8" FontSize="11" Margin="0,0,0,6"
                      Text="Select params in the room list then click Add  •  Use arrows to reorder"/>
           <ListBox x:Name="lbCombineOrder" Grid.Row="2" SelectionMode="Single"/>
         </Grid>
@@ -423,14 +423,14 @@ XAML = """
           <Button x:Name="btnRemoveCombine" Content="- Remove" Style="{StaticResource IconBtn}" Width="80" Height="28" Margin="0,0,0,4"/>
           <Button x:Name="btnMoveUp"   Content="Up"   Style="{StaticResource IconBtn}" Width="80" Height="28" Margin="0,0,0,4"/>
           <Button x:Name="btnMoveDown" Content="Down" Style="{StaticResource IconBtn}" Width="80" Height="28" Margin="0,8,0,0"/>
-          <TextBlock Text="Separator" Foreground="#A6ADC8" FontSize="10" Margin="0,10,0,3"/>
+          <TextBlock Text="Separator" Foreground="#A8A8A8" FontSize="10" Margin="0,10,0,3"/>
           <TextBox x:Name="tbSeparator" Width="80" Text=" - " TextAlignment="Center"/>
         </StackPanel>
       </Grid>
     </Border>
 
     <!-- ── Row 4: Designator panel ── -->
-    <Border Grid.Row="4" Background="#2A2A3C" CornerRadius="8"
+    <Border Grid.Row="4" Background="#262626" CornerRadius="8"
             Padding="14,10" Margin="0,10,0,0">
       <Grid>
         <Grid.ColumnDefinitions>
@@ -448,9 +448,9 @@ XAML = """
                     Orientation="Horizontal" HorizontalAlignment="Right"
                     VerticalAlignment="Center" Visibility="Collapsed">
 
-          <TextBlock Text="Type:" Foreground="#A6ADC8" VerticalAlignment="Center"
+          <TextBlock Text="Type:" Foreground="#A8A8A8" VerticalAlignment="Center"
                      Margin="0,0,10,0" FontSize="12"/>
-          <Border Background="#313244" CornerRadius="9" Padding="3">
+          <Border Background="#393939" CornerRadius="9" Padding="3">
             <StackPanel Orientation="Horizontal">
               <RadioButton x:Name="rbDesAlpha" Content="A, B, C" IsChecked="True"
                            Style="{StaticResource ModeBtn}" GroupName="DesType"/>
@@ -459,15 +459,15 @@ XAML = """
             </StackPanel>
           </Border>
 
-          <TextBlock Text="Separator:" Foreground="#A6ADC8" VerticalAlignment="Center"
+          <TextBlock Text="Separator:" Foreground="#A8A8A8" VerticalAlignment="Center"
                      Margin="20,0,10,0" FontSize="12"/>
           <TextBox x:Name="tbDesSep" Width="55" Text="-" TextAlignment="Center"/>
 
-          <Border Background="#313244" CornerRadius="6" Padding="10,4" Margin="20,0,0,0">
+          <Border Background="#393939" CornerRadius="6" Padding="10,4" Margin="20,0,0,0">
             <StackPanel Orientation="Horizontal">
-              <TextBlock Text="&#x2139;" Foreground="#F0A500" FontSize="13"
+              <TextBlock Text="&#x2139;" Foreground="#F1C21B" FontSize="13"
                          VerticalAlignment="Center" Margin="0,0,6,0"/>
-              <TextBlock Foreground="#A6ADC8" FontSize="11" VerticalAlignment="Center"
+              <TextBlock Foreground="#A8A8A8" FontSize="11" VerticalAlignment="Center"
                          Text="Designator resets per level — same room numbers on different levels are treated independently"/>
             </StackPanel>
           </Border>
@@ -483,7 +483,7 @@ XAML = """
         <ColumnDefinition Width="Auto"/>
       </Grid.ColumnDefinitions>
       <TextBlock x:Name="tbStatus" Grid.Column="0"
-                 Foreground="#A6ADC8" FontSize="12" VerticalAlignment="Center"
+                 Foreground="#A8A8A8" FontSize="12" VerticalAlignment="Center"
                  Text="Select a room parameter and a door parameter, then click Run."/>
       <StackPanel Grid.Column="1" Orientation="Horizontal">
         <Button x:Name="btnCancel" Content="Cancel"       Margin="0,0,8,0"/>

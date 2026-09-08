@@ -50,13 +50,13 @@ selection = uidoc.Selection
 
 
 # ─── THEME COLOURS ────────────────────────────────────────────────────────────
-BG      = "#1E1E2E"
-CARD    = "#2A2A3C"
-SURFACE = "#313244"
-MUTED   = "#45475A"
-TEXT    = "#CDD6F4"
-SUBTEXT = "#A6ADC8"
-ACCENT  = "#F0A500"
+BG      = "#161616"
+CARD    = "#262626"
+SURFACE = "#393939"
+MUTED   = "#525252"
+TEXT    = "#F4F4F4"
+SUBTEXT = "#A8A8A8"
+ACCENT  = "#F1C21B"
 # ──────────────────────────────────────────────────────────────────────────────
 
 XAML_TEMPLATE = """

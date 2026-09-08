@@ -242,22 +242,22 @@ SETTINGS_XAML = """
         Width="430" Height="520"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
-        Background="#1E1E2E"
+        Background="#161616"
         FontFamily="Segoe UI">
 
   <Window.Resources>
 
     <Style x:Key="Label" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#A6ADC8"/>
+      <Setter Property="Foreground" Value="#A8A8A8"/>
       <Setter Property="FontSize" Value="12"/>
       <Setter Property="Margin" Value="0,0,0,6"/>
     </Style>
 
     <Style x:Key="Field" TargetType="TextBox">
-      <Setter Property="Background" Value="#313244"/>
-      <Setter Property="Foreground" Value="#CDD6F4"/>
-      <Setter Property="CaretBrush" Value="#F0A500"/>
-      <Setter Property="BorderBrush" Value="#45475A"/>
+      <Setter Property="Background" Value="#393939"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
+      <Setter Property="CaretBrush" Value="#F1C21B"/>
+      <Setter Property="BorderBrush" Value="#525252"/>
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="Padding" Value="8,6"/>
       <Setter Property="FontSize" Value="13"/>
@@ -277,7 +277,7 @@ SETTINGS_XAML = """
     </Style>
 
     <Style x:Key="Chip" TargetType="Button">
-      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
       <Setter Property="FontSize" Value="13"/>
       <Setter Property="Height" Value="34"/>
       <Setter Property="Cursor" Value="Hand"/>
@@ -300,7 +300,7 @@ SETTINGS_XAML = """
     </Style>
 
     <Style x:Key="TypeItem" TargetType="ListBoxItem">
-      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
       <Setter Property="FontSize" Value="13"/>
       <Setter Property="Padding" Value="10,7"/>
       <Setter Property="Margin" Value="0,0,0,3"/>
@@ -312,11 +312,11 @@ SETTINGS_XAML = """
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#45475A"/>
+                <Setter TargetName="bd" Property="Background" Value="#525252"/>
               </Trigger>
               <Trigger Property="IsSelected" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#F0A500"/>
-                <Setter Property="Foreground" Value="#1E1E2E"/>
+                <Setter TargetName="bd" Property="Background" Value="#F1C21B"/>
+                <Setter Property="Foreground" Value="#161616"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
               </Trigger>
             </ControlTemplate.Triggers>
@@ -327,7 +327,7 @@ SETTINGS_XAML = """
 
   </Window.Resources>
 
-  <Border Background="#2A2A3C" CornerRadius="10" Margin="10" Padding="18">
+  <Border Background="#262626" CornerRadius="10" Margin="10" Padding="18">
     <Grid>
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto"/>
@@ -339,7 +339,7 @@ SETTINGS_XAML = """
       </Grid.RowDefinitions>
 
       <TextBlock Grid.Row="0" Text="Magic 3D Box"
-                 Foreground="#F0A500" FontSize="18" FontWeight="SemiBold"
+                 Foreground="#F1C21B" FontSize="18" FontWeight="SemiBold"
                  Margin="0,0,0,14"/>
 
       <TextBlock Grid.Row="1" Text="View template"
@@ -348,7 +348,7 @@ SETTINGS_XAML = """
       <TextBox Grid.Row="2" x:Name="TemplateFilter"
                Style="{StaticResource Field}" Margin="0,0,0,8"/>
 
-      <Border Grid.Row="3" Background="#313244" CornerRadius="6" Padding="6">
+      <Border Grid.Row="3" Background="#393939" CornerRadius="6" Padding="6">
         <ListBox x:Name="TemplateList"
                  Background="Transparent" BorderThickness="0"
                  ItemContainerStyle="{StaticResource TypeItem}"
@@ -363,10 +363,10 @@ SETTINGS_XAML = """
       <StackPanel Grid.Row="5" Orientation="Horizontal"
                   HorizontalAlignment="Right" Margin="0,16,0,0">
         <Button x:Name="CancelBtn" Content="Cancel" Width="90"
-                Background="#45475A" Style="{StaticResource Chip}"
+                Background="#525252" Style="{StaticResource Chip}"
                 Margin="0,0,8,0"/>
         <Button x:Name="OkBtn" Content="Run" Width="110"
-                Background="#F0A500" Foreground="#1E1E2E"
+                Background="#F1C21B" Foreground="#161616"
                 FontWeight="SemiBold" Style="{StaticResource Chip}"/>
       </StackPanel>
 

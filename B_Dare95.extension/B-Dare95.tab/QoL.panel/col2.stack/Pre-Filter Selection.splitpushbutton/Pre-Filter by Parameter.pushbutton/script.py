@@ -56,13 +56,13 @@ uidoc     = __revit__.ActiveUIDocument
 selection = uidoc.Selection
 
 # ─── THEME ────────────────────────────────────────────────────────────────────
-BG      = "#1E1E2E"
-CARD    = "#2A2A3C"
-SURFACE = "#313244"
-MUTED   = "#45475A"
-TEXT    = "#CDD6F4"
+BG      = "#161616"
+CARD    = "#262626"
+SURFACE = "#393939"
+MUTED   = "#525252"
+TEXT    = "#F4F4F4"
 SUBTEXT = "#000000"   # kept as-is (used for scrollbar-thumb hover in XAML)
-ACCENT  = "#F0A500"
+ACCENT  = "#F1C21B"
 
 def _brush(hex_str):
     h = hex_str.lstrip('#')

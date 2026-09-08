@@ -383,7 +383,7 @@ XAML = """
     Height="640" Width="460"
     MinHeight="480"
     WindowStartupLocation="CenterScreen"
-    Background="#1E1E2E" Foreground="#CDD6F4"
+    Background="#161616" Foreground="#F4F4F4"
     FontFamily="Segoe UI" FontSize="12">
 
     <Window.Resources>
@@ -407,7 +407,7 @@ XAML = """
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Margin="0,0,0,10">
-            <TextBlock Text="SHAFT FUNCTION TAG" FontSize="16" FontWeight="Bold" Foreground="#F0A500"/>
+            <TextBlock Text="SHAFT FUNCTION TAG" FontSize="16" FontWeight="Bold" Foreground="#F1C21B"/>
         </StackPanel>
 
         <CheckBox Grid.Row="1" x:Name="IncludeLinkedCheckBox"
@@ -415,7 +415,7 @@ XAML = """
                   IsChecked="True" Margin="0,0,0,10"/>
 
         <TextBox Grid.Row="2" x:Name="SearchBox" Height="25" Margin="0,0,0,10"
-                 Background="#181825" Foreground="White" BorderBrush="#45475A"
+                 Background="#0D0D0D" Foreground="White" BorderBrush="#525252"
                  VerticalContentAlignment="Center" Padding="5,0,0,0"/>
 
         <Grid Grid.Row="3" Margin="0,0,0,6">
@@ -425,23 +425,23 @@ XAML = """
                 <ColumnDefinition Width="10"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="Plan Views" Foreground="#BAC2DE" FontWeight="SemiBold"/>
-            <Button Grid.Column="1" x:Name="SelectAllBtn" Content="Select All" Background="Transparent" BorderBrush="Transparent" Foreground="#F0A500"/>
-            <Button Grid.Column="3" x:Name="ClearAllBtn" Content="Clear All" Background="Transparent" BorderBrush="Transparent" Foreground="#6C7086"/>
+            <TextBlock Grid.Column="0" Text="Plan Views" Foreground="#C6C6C6" FontWeight="SemiBold"/>
+            <Button Grid.Column="1" x:Name="SelectAllBtn" Content="Select All" Background="Transparent" BorderBrush="Transparent" Foreground="#F1C21B"/>
+            <Button Grid.Column="3" x:Name="ClearAllBtn" Content="Clear All" Background="Transparent" BorderBrush="Transparent" Foreground="#8D8D8D"/>
         </Grid>
 
-        <Border Grid.Row="4" Background="#181825" BorderBrush="#45475A" BorderThickness="1" CornerRadius="3" Margin="0,0,0,14">
+        <Border Grid.Row="4" Background="#0D0D0D" BorderBrush="#525252" BorderThickness="1" CornerRadius="3" Margin="0,0,0,14">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel x:Name="ViewsPanel" Margin="6"/>
             </ScrollViewer>
         </Border>
 
-        <TextBlock Grid.Row="5" Text="Text Note Type" Foreground="#BAC2DE" FontWeight="SemiBold" Margin="0,0,0,5"/>
-        <ComboBox Grid.Row="6" x:Name="TextTypeCombo" Height="30" Margin="0,0,0,18" Background="White" Foreground="#1E1E2E"/>
+        <TextBlock Grid.Row="5" Text="Text Note Type" Foreground="#C6C6C6" FontWeight="SemiBold" Margin="0,0,0,5"/>
+        <ComboBox Grid.Row="6" x:Name="TextTypeCombo" Height="30" Margin="0,0,0,18" Background="White" Foreground="#161616"/>
 
         <StackPanel Grid.Row="7" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="CancelBtn" Content="Cancel" Width="90" Height="32" Margin="0,0,10,0" Background="#313244" Foreground="#CDD6F4"/>
-            <Button x:Name="ApplyBtn" Content="Apply" Width="90" Height="32" Background="#F0A500" Foreground="#1E1E2E" FontWeight="Bold"/>
+            <Button x:Name="CancelBtn" Content="Cancel" Width="90" Height="32" Margin="0,0,10,0" Background="#393939" Foreground="#F4F4F4"/>
+            <Button x:Name="ApplyBtn" Content="Apply" Width="90" Height="32" Background="#F1C21B" Foreground="#161616" FontWeight="Bold"/>
         </StackPanel>
     </Grid>
 </Window>

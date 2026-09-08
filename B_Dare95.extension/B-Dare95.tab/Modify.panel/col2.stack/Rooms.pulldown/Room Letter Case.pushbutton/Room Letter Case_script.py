@@ -68,15 +68,15 @@ XAML = """
     Width="580" Height="310"
     WindowStartupLocation="CenterScreen"
     ResizeMode="NoResize"
-    Background="#1E1E2E">
+    Background="#161616">
 
   <Window.Resources>
 
     <!-- Base button style with rounded corners -->
     <Style x:Key="BaseBtn" TargetType="Button">
-      <Setter Property="Foreground"   Value="#CDD6F4"/>
-      <Setter Property="Background"   Value="#313244"/>
-      <Setter Property="BorderBrush"  Value="#45475A"/>
+      <Setter Property="Foreground"   Value="#F4F4F4"/>
+      <Setter Property="Background"   Value="#393939"/>
+      <Setter Property="BorderBrush"  Value="#525252"/>
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="FontSize"     Value="12"/>
       <Setter Property="FontFamily"   Value="Segoe UI"/>
@@ -95,11 +95,11 @@ XAML = """
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#45475A"/>
+                <Setter TargetName="bd" Property="Background" Value="#525252"/>
               </Trigger>
               <Trigger Property="IsPressed" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#F0A500"/>
-                <Setter Property="Foreground" Value="#1E1E2E"/>
+                <Setter TargetName="bd" Property="Background" Value="#F1C21B"/>
+                <Setter Property="Foreground" Value="#161616"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -114,17 +114,17 @@ XAML = """
 
     <!-- Apply button -->
     <Style x:Key="ApplyBtn" TargetType="Button" BasedOn="{StaticResource BaseBtn}">
-      <Setter Property="Background"  Value="#F0A500"/>
-      <Setter Property="Foreground"  Value="#1E1E2E"/>
+      <Setter Property="Background"  Value="#F1C21B"/>
+      <Setter Property="Foreground"  Value="#161616"/>
       <Setter Property="FontWeight"  Value="Bold"/>
       <Setter Property="FontSize"    Value="13"/>
     </Style>
 
     <!-- ComboBox style -->
     <Style TargetType="ComboBox">
-      <Setter Property="Background"         Value="#313244"/>
-      <Setter Property="Foreground"         Value="#CDD6F4"/>
-      <Setter Property="BorderBrush"        Value="#45475A"/>
+      <Setter Property="Background"         Value="#393939"/>
+      <Setter Property="Foreground"         Value="#F4F4F4"/>
+      <Setter Property="BorderBrush"        Value="#525252"/>
       <Setter Property="BorderThickness"    Value="1"/>
       <Setter Property="FontFamily"         Value="Segoe UI"/>
       <Setter Property="FontSize"           Value="12"/>
@@ -134,9 +134,9 @@ XAML = """
 
     <!-- TextBox style -->
     <Style TargetType="TextBox">
-      <Setter Property="Background"      Value="#313244"/>
-      <Setter Property="Foreground"      Value="#CDD6F4"/>
-      <Setter Property="BorderBrush"     Value="#45475A"/>
+      <Setter Property="Background"      Value="#393939"/>
+      <Setter Property="Foreground"      Value="#F4F4F4"/>
+      <Setter Property="BorderBrush"     Value="#525252"/>
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="FontFamily"      Value="Segoe UI"/>
       <Setter Property="FontSize"        Value="12"/>
@@ -147,7 +147,7 @@ XAML = """
 
     <!-- Label style -->
     <Style TargetType="Label">
-      <Setter Property="Foreground"  Value="#A6ADC8"/>
+      <Setter Property="Foreground"  Value="#A8A8A8"/>
       <Setter Property="FontFamily"  Value="Segoe UI"/>
       <Setter Property="FontSize"    Value="11"/>
       <Setter Property="Padding"     Value="0,0,0,4"/>
@@ -155,12 +155,12 @@ XAML = """
 
   </Window.Resources>
 
-  <Border Margin="20" Background="#1E1E2E">
+  <Border Margin="20" Background="#161616">
     <StackPanel>
 
       <!-- Title -->
       <TextBlock Text="Room Name Formatter"
-                 Foreground="#CDD6F4"
+                 Foreground="#F4F4F4"
                  FontFamily="Segoe UI"
                  FontSize="16"
                  FontWeight="SemiBold"

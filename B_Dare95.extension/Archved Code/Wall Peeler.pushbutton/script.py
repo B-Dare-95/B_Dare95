@@ -257,8 +257,8 @@ def make_pill(children_list):
 
 
 def _apply_rounded_btn_template(btn, accent=False):
-    bg_hex    = "#185FA5" if accent else "#313244"
-    hover_hex = "#0C447C" if accent else "#45475A"
+    bg_hex    = "#185FA5" if accent else "#393939"
+    hover_hex = "#0C447C" if accent else "#525252"
     xaml = (
         '<ControlTemplate'
         ' xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"'
@@ -290,13 +290,13 @@ def _make_textbox_style():
     xaml = (
         '<Style xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"'
         '       TargetType="TextBox">'
-        '<Setter Property="Background"   Value="#313244"/>'
-        '<Setter Property="Foreground"   Value="#CDD6F4"/>'
-        '<Setter Property="BorderBrush"  Value="#45475A"/>'
+        '<Setter Property="Background"   Value="#393939"/>'
+        '<Setter Property="Foreground"   Value="#F4F4F4"/>'
+        '<Setter Property="BorderBrush"  Value="#525252"/>'
         '<Setter Property="BorderThickness" Value="1"/>'
         '<Setter Property="Padding"      Value="6,4,6,4"/>'
         '<Setter Property="FontSize"     Value="12"/>'
-        '<Setter Property="CaretBrush"   Value="#CDD6F4"/>'
+        '<Setter Property="CaretBrush"   Value="#F4F4F4"/>'
         '<Setter Property="SelectionBrush" Value="#378ADD"/>'
         '<Style.Triggers>'
         '<Trigger Property="IsFocused" Value="True">'

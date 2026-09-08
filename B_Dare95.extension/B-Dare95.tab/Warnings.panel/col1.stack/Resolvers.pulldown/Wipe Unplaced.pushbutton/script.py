@@ -77,7 +77,7 @@ unplaced = {
 }
 
 # ─────────────────────────────────────────────────────────────
-#  XAML  (Catppuccin dark — bg #1E1E2E, accent #F0A500)
+#  XAML  (Catppuccin dark — bg #161616, accent #F1C21B)
 # ─────────────────────────────────────────────────────────────
 
 XAML = """
@@ -89,14 +89,14 @@ XAML = """
     SizeToContent="Height"
     WindowStartupLocation="CenterScreen"
     ResizeMode="NoResize"
-    Background="#1E1E2E"
+    Background="#161616"
     FontFamily="Segoe UI">
 
     <Window.Resources>
 
         <!-- Card border -->
         <Style x:Key="Card" TargetType="Border">
-            <Setter Property="Background"     Value="#2A2A3C"/>
+            <Setter Property="Background"     Value="#262626"/>
             <Setter Property="CornerRadius"   Value="8"/>
             <Setter Property="Padding"        Value="14,12"/>
             <Setter Property="Margin"         Value="0,0,0,8"/>
@@ -104,7 +104,7 @@ XAML = """
 
         <!-- CheckBox -->
         <Style TargetType="CheckBox">
-            <Setter Property="Foreground"              Value="#CDD6F4"/>
+            <Setter Property="Foreground"              Value="#F4F4F4"/>
             <Setter Property="FontSize"                Value="13"/>
             <Setter Property="FontWeight"              Value="SemiBold"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -120,8 +120,8 @@ XAML = """
 
         <!-- OK button -->
         <Style x:Key="BtnOK" TargetType="Button">
-            <Setter Property="Background"   Value="#F0A500"/>
-            <Setter Property="Foreground"   Value="#1E1E2E"/>
+            <Setter Property="Background"   Value="#F1C21B"/>
+            <Setter Property="Foreground"   Value="#161616"/>
             <Setter Property="FontWeight"   Value="Bold"/>
             <Setter Property="FontSize"     Value="13"/>
             <Setter Property="Height"       Value="34"/>
@@ -143,8 +143,8 @@ XAML = """
 
         <!-- Cancel button -->
         <Style x:Key="BtnCancel" TargetType="Button">
-            <Setter Property="Background"   Value="#45475A"/>
-            <Setter Property="Foreground"   Value="#CDD6F4"/>
+            <Setter Property="Background"   Value="#525252"/>
+            <Setter Property="Foreground"   Value="#F4F4F4"/>
             <Setter Property="FontSize"     Value="13"/>
             <Setter Property="Height"       Value="34"/>
             <Setter Property="Width"        Value="88"/>
@@ -169,11 +169,11 @@ XAML = """
 
         <!-- ── Header ── -->
         <TextBlock Text="Wipe Unplaced Elements"
-                   Foreground="#CDD6F4"
+                   Foreground="#F4F4F4"
                    FontSize="16" FontWeight="Bold"
                    Margin="0,0,0,4"/>
         <TextBlock Text="Select the categories you want to purge from this document."
-                   Foreground="#A6ADC8" FontSize="11"
+                   Foreground="#A8A8A8" FontSize="11"
                    TextWrapping="Wrap"
                    Margin="0,0,0,18"/>
 
@@ -231,8 +231,8 @@ lbl_spaces = window.FindName("LblSpaces")
 btn_ok     = window.FindName("BtnOK")
 btn_cancel = window.FindName("BtnCancel")
 
-ACCENT  = SolidColorBrush(Color.FromRgb(0xF0, 0xA5, 0x00))   # #F0A500
-MUTED   = SolidColorBrush(Color.FromRgb(0xA6, 0xAD, 0xC8))   # #A6ADC8
+ACCENT  = SolidColorBrush(Color.FromRgb(0xF0, 0xA5, 0x00))   # #F1C21B
+MUTED   = SolidColorBrush(Color.FromRgb(0xA6, 0xAD, 0xC8))   # #A8A8A8
 
 
 def _set_count_label(label, count, singular, plural=None):

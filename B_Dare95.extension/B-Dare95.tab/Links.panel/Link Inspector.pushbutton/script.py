@@ -538,9 +538,9 @@ def table(headers, rows_data, empty_note="Nothing found."):
 
 REPORT_CSS = u"""
 :root{
-  --bg:#1e1e2e; --card:#2a2a3c; --surface:#313244; --muted:#45475a;
-  --text:#cdd6f4; --sub:#a6adc8; --accent:#f0a500;
-  --ok:#a6e3a1; --bad:#f38ba8;
+  --bg:#161616; --card:#262626; --surface:#393939; --muted:#525252;
+  --text:#f4f4f4; --sub:#a8a8a8; --accent:#f1c21b;
+  --ok:#42be65; --bad:#ff8389;
 }
 *{box-sizing:border-box;}
 body{margin:0;padding:28px 32px;background:var(--bg);color:var(--text);
@@ -910,17 +910,17 @@ XAML = u"""
         Title="Link Inspector"
         Height="720" Width="1300"
         WindowStartupLocation="CenterScreen"
-        Background="#1E1E2E">
+        Background="#161616">
 
   <Window.Resources>
     <Style TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
       <Setter Property="FontFamily" Value="Segoe UI"/>
     </Style>
 
     <Style x:Key="AccentButton" TargetType="Button">
-      <Setter Property="Foreground" Value="#1E1E2E"/>
-      <Setter Property="Background" Value="#F0A500"/>
+      <Setter Property="Foreground" Value="#161616"/>
+      <Setter Property="Background" Value="#F1C21B"/>
       <Setter Property="FontFamily" Value="Segoe UI"/>
       <Setter Property="FontSize" Value="12"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
@@ -939,8 +939,8 @@ XAML = u"""
     </Style>
 
     <Style x:Key="GhostButton" TargetType="Button">
-      <Setter Property="Foreground" Value="#CDD6F4"/>
-      <Setter Property="Background" Value="#45475A"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
+      <Setter Property="Background" Value="#525252"/>
       <Setter Property="FontFamily" Value="Segoe UI"/>
       <Setter Property="FontSize" Value="12"/>
       <Setter Property="Padding" Value="16,7"/>
@@ -958,8 +958,8 @@ XAML = u"""
     </Style>
 
     <Style x:Key="TabToggle" TargetType="ToggleButton">
-      <Setter Property="Foreground" Value="#A6ADC8"/>
-      <Setter Property="Background" Value="#313244"/>
+      <Setter Property="Foreground" Value="#A8A8A8"/>
+      <Setter Property="Background" Value="#393939"/>
       <Setter Property="FontFamily" Value="Segoe UI"/>
       <Setter Property="FontSize" Value="11"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
@@ -976,11 +976,11 @@ XAML = u"""
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#F0A500"/>
-                <Setter Property="Foreground" Value="#1E1E2E"/>
+                <Setter TargetName="Bd" Property="Background" Value="#F1C21B"/>
+                <Setter Property="Foreground" Value="#161616"/>
               </Trigger>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#45475A"/>
+                <Setter TargetName="Bd" Property="Background" Value="#525252"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -989,8 +989,8 @@ XAML = u"""
     </Style>
 
     <Style TargetType="GridViewColumnHeader">
-      <Setter Property="Background" Value="#313244"/>
-      <Setter Property="Foreground" Value="#A6ADC8"/>
+      <Setter Property="Background" Value="#393939"/>
+      <Setter Property="Foreground" Value="#A8A8A8"/>
       <Setter Property="FontFamily" Value="Segoe UI"/>
       <Setter Property="FontSize" Value="11"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
@@ -1001,7 +1001,7 @@ XAML = u"""
     </Style>
 
     <Style TargetType="ListViewItem">
-      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
       <Setter Property="FontFamily" Value="Segoe UI"/>
       <Setter Property="FontSize" Value="12"/>
       <Setter Property="Height" Value="26"/>
@@ -1016,11 +1016,11 @@ XAML = u"""
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#313244"/>
+                <Setter TargetName="Bd" Property="Background" Value="#393939"/>
               </Trigger>
               <Trigger Property="IsSelected" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#45475A"/>
-                <Setter Property="Foreground" Value="#F0A500"/>
+                <Setter TargetName="Bd" Property="Background" Value="#525252"/>
+                <Setter Property="Foreground" Value="#F1C21B"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -1052,7 +1052,7 @@ XAML = u"""
                         <Border Background="Transparent"
                                 Width="16" Height="16">
                           <TextBlock x:Name="Sign" Text="+"
-                                     Foreground="#F0A500" FontSize="12"
+                                     Foreground="#F1C21B" FontSize="12"
                                      FontWeight="Bold"
                                      HorizontalAlignment="Center"
                                      VerticalAlignment="Center"/>
@@ -1102,10 +1102,10 @@ XAML = u"""
     <StackPanel Grid.Row="0" Margin="0,0,0,10">
       <TextBlock Text="Link Inspector" FontSize="19" FontWeight="Bold"/>
       <TextBlock x:Name="SummaryText" Margin="0,4,0,0"
-                 FontSize="12" Foreground="#A6ADC8"/>
+                 FontSize="12" Foreground="#A8A8A8"/>
     </StackPanel>
 
-    <Border Grid.Row="1" Background="#2A2A3C" CornerRadius="6"
+    <Border Grid.Row="1" Background="#262626" CornerRadius="6"
             Padding="10,6" Margin="0,0,0,10">
       <Grid>
         <Grid.ColumnDefinitions>
@@ -1113,10 +1113,10 @@ XAML = u"""
           <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
         <TextBlock Grid.Column="0" Text="Search" VerticalAlignment="Center"
-                   Foreground="#A6ADC8" FontSize="12" Margin="0,0,10,0"/>
+                   Foreground="#A8A8A8" FontSize="12" Margin="0,0,10,0"/>
         <TextBox x:Name="SearchBox" Grid.Column="1"
-                 Background="#313244" Foreground="#CDD6F4"
-                 CaretBrush="#F0A500" BorderThickness="0"
+                 Background="#393939" Foreground="#F4F4F4"
+                 CaretBrush="#F1C21B" BorderThickness="0"
                  FontFamily="Segoe UI" FontSize="12" Padding="6,4"/>
       </Grid>
     </Border>
@@ -1128,9 +1128,9 @@ XAML = u"""
         <ColumnDefinition Width="1*"/>
       </Grid.ColumnDefinitions>
 
-      <Border Grid.Column="0" Background="#2A2A3C" CornerRadius="8" Padding="8">
+      <Border Grid.Column="0" Background="#262626" CornerRadius="8" Padding="8">
         <ListView x:Name="LinkList" Background="Transparent"
-                  BorderThickness="0" Foreground="#CDD6F4"
+                  BorderThickness="0" Foreground="#F4F4F4"
                   ScrollViewer.HorizontalScrollBarVisibility="Disabled">
           <ListView.View>
             <GridView>
@@ -1155,7 +1155,7 @@ XAML = u"""
         </ListView>
       </Border>
 
-      <Border Grid.Column="2" Background="#2A2A3C" CornerRadius="8" Padding="10">
+      <Border Grid.Column="2" Background="#262626" CornerRadius="8" Padding="10">
         <Grid>
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -1176,16 +1176,16 @@ XAML = u"""
 
           <TextBlock x:Name="DetailHeader" Grid.Row="1"
                      Text="Select a document" FontSize="12"
-                     FontWeight="SemiBold" Foreground="#A6ADC8"
+                     FontWeight="SemiBold" Foreground="#A8A8A8"
                      Margin="0,0,0,8" TextWrapping="Wrap"/>
 
-          <ListBox x:Name="DetailList" Grid.Row="2" Background="#313244"
-                   Foreground="#CDD6F4" BorderThickness="0"
+          <ListBox x:Name="DetailList" Grid.Row="2" Background="#393939"
+                   Foreground="#F4F4F4" BorderThickness="0"
                    FontFamily="Segoe UI" FontSize="11"
                    DisplayMemberPath="Display"
                    ScrollViewer.HorizontalScrollBarVisibility="Auto"/>
 
-          <TreeView x:Name="CategoryTree" Grid.Row="2" Background="#313244"
+          <TreeView x:Name="CategoryTree" Grid.Row="2" Background="#393939"
                     BorderThickness="0" Padding="4"
                     Visibility="Collapsed"
                     ScrollViewer.HorizontalScrollBarVisibility="Auto"/>

@@ -4,8 +4,9 @@
 Modeless browser / editor for every view in the project.
 
   * Filter by View Type, by "on sheet / not on sheet", and by name (live search).
-  * Edit View Name, Title on Sheet, Detail Number directly in the grid; nothing
-    touches the model until you press Apply.
+  * Edit View Name, View Template (dropdown), Title on Sheet, Detail Number and the
+    host sheet's Number / Name directly in the grid; nothing touches the model until
+    you press Apply.
   * "Open View" / "Open Sheet" jump to the selected row's view, or to the sheet it
     is placed on.
   * Extra columns: append a spec dict to default_columns() with kind "param" and the
@@ -28,11 +29,13 @@ clr.AddReference("PresentationCore")
 clr.AddReference("PresentationFramework")
 clr.AddReference("WindowsBase")
 
-from System import String, EventHandler, Int32, Int64
+from System import String, Object, EventHandler, Int32, Int64
+from System.Collections.Generic import List
 from System.Data import DataTable, DataRowChangeEventHandler
 from System.Windows import Window, RoutedEventHandler, Visibility
 from System.Windows.Markup import XamlReader
 from System.Windows.Controls import (DataGridTextColumn,
+                                     DataGridTemplateColumn,
                                      DataGridEditingUnit,
                                      SelectionChangedEventHandler,
                                      TextChangedEventHandler)
@@ -50,6 +53,9 @@ from pyrevit.coreutils import envvars
 
 
 STR_TYPE = clr.GetClrType(String)
+OBJ_TYPE = clr.GetClrType(Object)
+
+NO_TEMPLATE = u"<None>"
 
 ENV_WINDOW = "BDARE_VIEWMGR_WINDOW"
 ENV_HANDLER = "BDARE_VIEWMGR_HANDLER"
@@ -167,18 +173,25 @@ def default_columns():
          "ro": True, "min": 110.0, "max": 170.0},
         {"key": "Level", "header": "Level", "kind": "level",
          "ro": True, "min": 110.0, "max": 220.0},
+        {"key": "ViewTemplate", "header": "View Template", "kind": "template",
+         "ro": False, "min": 150.0, "max": 280.0},
         {"key": "TitleOnSheet", "header": "Title on Sheet", "kind": "bip",
          "bip": BuiltInParameter.VIEW_DESCRIPTION,
          "ro": False, "min": 170.0, "max": 340.0},
         {"key": "DetailNumber", "header": "Detail No.", "kind": "bip",
          "bip": BuiltInParameter.VIEWPORT_DETAIL_NUMBER,
          "ro": False, "min": 80.0, "max": 120.0},
-        {"key": "SheetName", "header": "Sheet", "kind": "sheet",
-         "ro": True, "min": 190.0, "max": 340.0},
+        # the three below render under one "SHEET" band in the header
+        {"key": "SheetName", "header": "Number - Name", "kind": "sheet",
+         "ro": True, "min": 190.0, "max": 340.0, "group": "first"},
+        {"key": "SheetNumberEdit", "header": "Number", "kind": "sheet_number",
+         "ro": False, "min": 85.0, "max": 130.0, "group": "mid"},
+        {"key": "SheetNameEdit", "header": "Name", "kind": "sheet_name",
+         "ro": False, "min": 150.0, "max": 300.0, "group": "mid"},
     ]
 
 
-def read_cell(view, col, sheet_labels):
+def read_cell(view, col, ctx):
     kind = col["kind"]
     if kind == "id":
         return u"{0}".format(id_val(view.Id))
@@ -200,11 +213,25 @@ def read_cell(view, col, sheet_labels):
         if param is not None:
             return param.AsString() or u""
         return u""
-    if kind == "sheet":
-        entries = sheet_labels.get(id_val(view.Id))
+    if kind == "template":
+        try:
+            tid = view.ViewTemplateId
+        except Exception:
+            return NO_TEMPLATE
+        if tid is None or id_val(tid) == -1:
+            return NO_TEMPLATE
+        tpl = ctx["doc"].GetElement(tid)
+        return tpl.Name if tpl is not None else NO_TEMPLATE
+    if kind in ("sheet", "sheet_number", "sheet_name"):
+        entries = ctx["sheets"].get(id_val(view.Id))
         if not entries:
             return u""
-        return u", ".join([label for _sid, label in entries])
+        if kind == "sheet_number":
+            return u", ".join([number for _sid, number, _name in entries])
+        if kind == "sheet_name":
+            return u", ".join([name for _sid, _number, name in entries])
+        return u", ".join([u"{0} - {1}".format(number, name)
+                           for _sid, number, name in entries])
     if kind == "bip":
         return param_to_str(view.get_Parameter(col["bip"]))
     if kind == "param":
@@ -212,7 +239,7 @@ def read_cell(view, col, sheet_labels):
     return u""
 
 
-def write_cell(view, col, value, on_sheet):
+def write_cell(view, col, value, ctx):
     kind = col["kind"]
     if kind == "name":
         if not value.strip():
@@ -220,12 +247,42 @@ def write_cell(view, col, value, on_sheet):
         if view.Name != value:
             view.Name = value
         return
+    if kind == "template":
+        if value == NO_TEMPLATE or not value.strip():
+            view.ViewTemplateId = ElementId.InvalidElementId
+            return
+        by_type = ctx["templates"].get(u"{0}".format(view.ViewType)) or {}
+        tid = by_type.get(value)
+        if tid is None:
+            raise Exception(u"'{0}' is not a view template for this view type".format(value))
+        view.ViewTemplateId = to_eid(tid)
+        return
+    if kind in ("sheet_number", "sheet_name"):
+        placements = ctx["placements"]
+        if not placements:
+            raise Exception("view is not placed on a sheet")
+        if len(placements) > 1:
+            raise Exception("view is placed on several sheets - edit them one sheet at a time")
+        if not value.strip():
+            raise Exception("sheet number / name cannot be empty")
+        sheet_id = placements[0][0]
+        sheet = ctx["doc"].GetElement(to_eid(sheet_id))
+        if sheet is None:
+            raise Exception("sheet no longer exists")
+        if kind == "sheet_number":
+            if sheet.SheetNumber != value:
+                sheet.SheetNumber = value
+        else:
+            if sheet.Name != value:
+                sheet.Name = value
+        return
     if kind == "bip":
         param = view.get_Parameter(col["bip"])
         if param is None:
             raise Exception("parameter not available on this view")
         if param.IsReadOnly:
-            if col["bip"] == BuiltInParameter.VIEWPORT_DETAIL_NUMBER and not on_sheet:
+            if col["bip"] == BuiltInParameter.VIEWPORT_DETAIL_NUMBER \
+                    and not ctx.get("on_sheet"):
                 raise Exception("detail number needs the view to be placed on a sheet")
             raise Exception("parameter is read-only for this view")
         str_to_param(param, value)
@@ -246,14 +303,14 @@ def write_cell(view, col, value, on_sheet):
 # ---------------------------------------------------------------------------
 
 def build_sheet_map(doc):
-    """view id -> [(sheet id, 'A101 - GROUND FLOOR PLAN'), ...]."""
+    """view id -> [(sheet id, sheet number, sheet name), ...]."""
     result = {}
     for vp in FilteredElementCollector(doc).OfClass(Viewport):
         sheet = doc.GetElement(vp.SheetId)
         if sheet is None:
             continue
-        label = u"{0} - {1}".format(sheet.SheetNumber, sheet.Name)
-        result.setdefault(id_val(vp.ViewId), []).append((id_val(sheet.Id), label))
+        result.setdefault(id_val(vp.ViewId), []).append(
+            (id_val(sheet.Id), sheet.SheetNumber, sheet.Name))
 
     for ssi in FilteredElementCollector(doc).OfClass(ScheduleSheetInstance):
         try:
@@ -264,25 +321,53 @@ def build_sheet_map(doc):
         sheet = doc.GetElement(ssi.OwnerViewId)
         if not isinstance(sheet, ViewSheet):
             continue
-        label = u"{0} - {1}".format(sheet.SheetNumber, sheet.Name)
-        result.setdefault(id_val(ssi.ScheduleId), []).append((id_val(sheet.Id), label))
+        result.setdefault(id_val(ssi.ScheduleId), []).append(
+            (id_val(sheet.Id), sheet.SheetNumber, sheet.Name))
     return result
 
 
 def collect_views(doc):
+    """(editable views, view templates) split out of one pass."""
     views = []
+    templates = []
     for v in FilteredElementCollector(doc).OfClass(View):
         try:
-            if v.IsTemplate:
-                continue
             if isinstance(v, ViewSheet):
+                continue
+            if v.IsTemplate:
+                templates.append(v)
                 continue
             if v.ViewType in SKIP_VIEW_TYPES:
                 continue
         except Exception:
             continue
         views.append(v)
-    return views
+    return views, templates
+
+
+def build_template_maps(templates):
+    """view type name -> {template name: template id}, plus the dropdown lists."""
+    by_type = {}
+    for tpl in templates:
+        try:
+            type_name = u"{0}".format(tpl.ViewType)
+            name = tpl.Name
+        except Exception:
+            continue
+        by_type.setdefault(type_name, {})[name] = id_val(tpl.Id)
+
+    choices = {}
+    for type_name in by_type:
+        items = List[String]()
+        items.Add(NO_TEMPLATE)
+        for name in sorted(by_type[type_name].keys()):
+            items.Add(name)
+        choices[type_name] = items
+
+    empty = List[String]()
+    empty.Add(NO_TEMPLATE)
+    choices[None] = empty
+    return by_type, choices
 
 
 # ---------------------------------------------------------------------------
@@ -319,17 +404,17 @@ XAML = u"""
         Title="View Manager" Height="740" Width="1230"
         MinHeight="500" MinWidth="900"
         WindowStartupLocation="CenterScreen"
-        Background="#1E1E2E" FontFamily="Segoe UI" FontSize="12">
+        Background="#161616" FontFamily="Segoe UI" FontSize="12">
 
   <Window.Resources>
-    <SolidColorBrush x:Key="BgBrush" Color="#1E1E2E"/>
-    <SolidColorBrush x:Key="CardBrush" Color="#2A2A3C"/>
-    <SolidColorBrush x:Key="SurfaceBrush" Color="#313244"/>
-    <SolidColorBrush x:Key="MutedBrush" Color="#45475A"/>
-    <SolidColorBrush x:Key="TextBrush" Color="#CDD6F4"/>
-    <SolidColorBrush x:Key="SubtextBrush" Color="#A6ADC8"/>
-    <SolidColorBrush x:Key="AccentBrush" Color="#F0A500"/>
-    <SolidColorBrush x:Key="ErrorBrush" Color="#F38BA8"/>
+    <SolidColorBrush x:Key="BgBrush" Color="#161616"/>
+    <SolidColorBrush x:Key="CardBrush" Color="#262626"/>
+    <SolidColorBrush x:Key="SurfaceBrush" Color="#393939"/>
+    <SolidColorBrush x:Key="MutedBrush" Color="#525252"/>
+    <SolidColorBrush x:Key="TextBrush" Color="#F4F4F4"/>
+    <SolidColorBrush x:Key="SubtextBrush" Color="#A8A8A8"/>
+    <SolidColorBrush x:Key="AccentBrush" Color="#F1C21B"/>
+    <SolidColorBrush x:Key="ErrorBrush" Color="#FF8389"/>
 
     <Style x:Key="FlatButton" TargetType="Button">
       <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
@@ -362,7 +447,7 @@ XAML = u"""
 
     <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource FlatButton}">
       <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
-      <Setter Property="Foreground" Value="#1E1E2E"/>
+      <Setter Property="Foreground" Value="#161616"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
     </Style>
 
@@ -387,7 +472,7 @@ XAML = u"""
               <Trigger Property="IsChecked" Value="True">
                 <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentBrush}"/>
                 <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
-                <Setter TargetName="Cp" Property="TextBlock.Foreground" Value="#1E1E2E"/>
+                <Setter TargetName="Cp" Property="TextBlock.Foreground" Value="#161616"/>
                 <Setter TargetName="Cp" Property="TextBlock.FontWeight" Value="SemiBold"/>
               </Trigger>
             </ControlTemplate.Triggers>
@@ -507,6 +592,25 @@ XAML = u"""
            BasedOn="{StaticResource {x:Type DataGridCell}}">
       <Setter Property="Foreground" Value="{StaticResource SubtextBrush}"/>
     </Style>
+
+    <!-- two-row header: a shared band on top, the sub-column label underneath -->
+    <DataTemplate x:Key="GroupHeadFirst">
+      <StackPanel Margin="-8,-7,-9,-7">
+        <Border Background="{StaticResource MutedBrush}" Padding="8,2">
+          <TextBlock Text="SHEET" Foreground="#F4F4F4" FontSize="10" FontWeight="Bold"/>
+        </Border>
+        <TextBlock Text="{Binding}" Margin="8,5,8,4"/>
+      </StackPanel>
+    </DataTemplate>
+
+    <DataTemplate x:Key="GroupHeadMid">
+      <StackPanel Margin="-8,-7,-9,-7">
+        <Border Background="{StaticResource MutedBrush}" Padding="8,2">
+          <TextBlock Text=" " FontSize="10" FontWeight="Bold"/>
+        </Border>
+        <TextBlock Text="{Binding}" Margin="8,5,8,4"/>
+      </StackPanel>
+    </DataTemplate>
   </Window.Resources>
 
   <Grid Margin="14">
@@ -520,13 +624,13 @@ XAML = u"""
 
     <!-- header -->
     <StackPanel Grid.Row="0" Margin="0,0,0,12">
-      <TextBlock Text="VIEW MANAGER" Foreground="#F0A500"
+      <TextBlock Text="VIEW MANAGER" Foreground="#F1C21B"
                  FontSize="17" FontWeight="Bold"/>
-      <TextBlock x:Name="StatusText" Text="" Foreground="#A6ADC8" Margin="0,3,0,0"/>
+      <TextBlock x:Name="StatusText" Text="" Foreground="#A8A8A8" Margin="0,3,0,0"/>
     </StackPanel>
 
     <!-- filters -->
-    <Border Grid.Row="1" Background="#2A2A3C" CornerRadius="8"
+    <Border Grid.Row="1" Background="#262626" CornerRadius="8"
             Padding="12" Margin="0,0,0,10">
       <Grid>
         <Grid.ColumnDefinitions>
@@ -535,14 +639,15 @@ XAML = u"""
           <ColumnDefinition Width="Auto"/>
           <ColumnDefinition Width="Auto"/>
           <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
-        <TextBlock Grid.Column="0" Text="View type" Foreground="#A6ADC8"
+        <TextBlock Grid.Column="0" Text="View type" Foreground="#A8A8A8"
                    VerticalAlignment="Center" Margin="0,0,8,0"/>
         <ComboBox Grid.Column="1" x:Name="TypeCombo" Width="200"
                   Style="{StaticResource DarkCombo}" Margin="0,0,18,0"/>
 
-        <TextBlock Grid.Column="2" Text="Sheet" Foreground="#A6ADC8"
+        <TextBlock Grid.Column="2" Text="Sheet" Foreground="#A8A8A8"
                    VerticalAlignment="Center" Margin="0,0,8,0"/>
         <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="0,0,18,0">
           <ToggleButton x:Name="TglAll" Content="All" IsChecked="True"
@@ -553,20 +658,31 @@ XAML = u"""
                         Style="{StaticResource PillToggle}"/>
         </StackPanel>
 
-        <Grid Grid.Column="4" MinWidth="200">
-          <Border CornerRadius="6" Background="#313244"
-                  BorderBrush="#45475A" BorderThickness="1"/>
-          <TextBox x:Name="SearchBox" Background="Transparent" Foreground="#CDD6F4"
-                   CaretBrush="#F0A500" BorderThickness="0"
+        <Grid Grid.Column="4" MinWidth="180" Margin="0,0,8,0">
+          <Border CornerRadius="6" Background="#393939"
+                  BorderBrush="#525252" BorderThickness="1"/>
+          <TextBox x:Name="SearchBox" Background="Transparent" Foreground="#F4F4F4"
+                   CaretBrush="#F1C21B" BorderThickness="0"
                    VerticalContentAlignment="Center" Padding="10,0" Height="28"/>
-          <TextBlock x:Name="SearchHint" Text="Search view name..." Foreground="#6C7086"
+          <TextBlock x:Name="SearchHint" Text="Search view name..." Foreground="#8D8D8D"
+                     IsHitTestVisible="False" VerticalAlignment="Center" Margin="12,0,0,0"/>
+        </Grid>
+
+        <Grid Grid.Column="5" MinWidth="180">
+          <Border CornerRadius="6" Background="#393939"
+                  BorderBrush="#525252" BorderThickness="1"/>
+          <TextBox x:Name="SheetSearchBox" Background="Transparent" Foreground="#F4F4F4"
+                   CaretBrush="#F1C21B" BorderThickness="0"
+                   VerticalContentAlignment="Center" Padding="10,0" Height="28"/>
+          <TextBlock x:Name="SheetSearchHint" Text="Search sheet number - name..."
+                     Foreground="#8D8D8D"
                      IsHitTestVisible="False" VerticalAlignment="Center" Margin="12,0,0,0"/>
         </Grid>
       </Grid>
     </Border>
 
     <!-- grid -->
-    <Border Grid.Row="2" Background="#2A2A3C" CornerRadius="8" Padding="1">
+    <Border Grid.Row="2" Background="#262626" CornerRadius="8" Padding="1">
       <DataGrid x:Name="Grid"
                 AutoGenerateColumns="False"
                 CanUserAddRows="False"
@@ -580,14 +696,18 @@ XAML = u"""
                 ColumnWidth="Auto"
                 RowHeight="26"
                 Background="Transparent"
-                RowBackground="#2A2A3C"
+                RowBackground="#262626"
                 AlternatingRowBackground="#26263A"
-                Foreground="#CDD6F4"
+                Foreground="#F4F4F4"
                 BorderThickness="0"
                 GridLinesVisibility="Horizontal"
-                HorizontalGridLinesBrush="#45475A"
+                HorizontalGridLinesBrush="#525252"
                 EnableRowVirtualization="True">
         <DataGrid.Resources>
+          <Style TargetType="ComboBox" BasedOn="{StaticResource DarkCombo}">
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="Margin" Value="2,0"/>
+          </Style>
           <Style TargetType="TextBox">
             <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
@@ -619,7 +739,7 @@ XAML = u"""
     </Grid>
 
     <TextBlock Grid.Row="4" x:Name="ResultText" Text=""
-               Foreground="#A6ADC8" TextTrimming="CharacterEllipsis"
+               Foreground="#A8A8A8" TextTrimming="CharacterEllipsis"
                TextWrapping="NoWrap" Margin="2,10,2,0"/>
   </Grid>
 </Window>
@@ -669,6 +789,8 @@ tgl_on = window.FindName("TglOn")
 tgl_off = window.FindName("TglOff")
 search_box = window.FindName("SearchBox")
 search_hint = window.FindName("SearchHint")
+sheet_search_box = window.FindName("SheetSearchBox")
+sheet_search_hint = window.FindName("SheetSearchHint")
 grid = window.FindName("Grid")
 btn_open_view = window.FindName("BtnOpenView")
 btn_open_sheet = window.FindName("BtnOpenSheet")
@@ -678,6 +800,8 @@ btn_close = window.FindName("BtnClose")
 result_text = window.FindName("ResultText")
 
 ro_cell_style = window.FindResource("ReadOnlyCell")
+group_head_first = window.FindResource("GroupHeadFirst")
+group_head_mid = window.FindResource("GroupHeadMid")
 brush_ok = window.FindResource("AccentBrush")
 brush_info = window.FindResource("SubtextBrush")
 brush_error = window.FindResource("ErrorBrush")
@@ -688,7 +812,8 @@ state = {
     "view": None,        # DataView actually bound to the grid
     "orig": {},          # {element id: {column key: original string}}
     "on_sheet": {},      # {element id: True/False}
-    "sheet_ids": {},     # {element id: [(sheet id, label), ...]}
+    "sheet_ids": {},     # {element id: [(sheet id, number, name), ...]}
+    "templates": {},     # {view type name: {template name: template id}}
     "sheet_mode": "all",
     "loading": [False],  # mutable container, no nonlocal in IronPython 2.7
     "doc_title": None,
@@ -716,26 +841,54 @@ def set_result(message, kind="info"):
 # grid columns / table
 # ---------------------------------------------------------------------------
 
-def rebuild_grid_columns():
-    grid.Columns.Clear()
-    for col in state["cols"]:
+TEMPLATE_CELL_XAML = u"""
+<DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ComboBox ItemsSource="{Binding TemplateChoices}"
+            SelectedItem="{Binding ViewTemplate, Mode=TwoWay,
+                           UpdateSourceTrigger=PropertyChanged}"/>
+</DataTemplate>
+"""
+
+
+def make_grid_column(col):
+    if col["kind"] == "template":
+        gc = DataGridTemplateColumn()
+        gc.CellTemplate = XamlReader.Parse(TEMPLATE_CELL_XAML)
+        gc.SortMemberPath = col["key"]
+    else:
         gc = DataGridTextColumn()
-        gc.Header = col["header"]
         binding = Binding(col["key"])
         binding.Mode = BindingMode.TwoWay
         gc.Binding = binding
         gc.IsReadOnly = col["ro"]
-        gc.MinWidth = col["min"]
-        gc.MaxWidth = col["max"]
         if col["ro"]:
             gc.CellStyle = ro_cell_style
-        grid.Columns.Add(gc)
+
+    gc.Header = col["header"]
+    gc.MinWidth = col["min"]
+    gc.MaxWidth = col["max"]
+
+    group = col.get("group")
+    if group == "first":
+        gc.HeaderTemplate = group_head_first
+    elif group == "mid":
+        gc.HeaderTemplate = group_head_mid
+    return gc
+
+
+def rebuild_grid_columns():
+    grid.Columns.Clear()
+    for col in state["cols"]:
+        grid.Columns.Add(make_grid_column(col))
 
 
 def build_table(doc):
     """Read the model and rebuild the backing DataTable from state['cols']."""
-    sheet_labels = build_sheet_map(doc)
-    views = collect_views(doc)
+    sheet_map = build_sheet_map(doc)
+    views, view_templates = collect_views(doc)
+    templates_by_type, template_choices = build_template_maps(view_templates)
+    ctx = {"doc": doc, "sheets": sheet_map, "templates": templates_by_type}
 
     table = DataTable("Views")
     for col in state["cols"]:
@@ -746,6 +899,7 @@ def build_table(doc):
     dc = table.Columns.Add("OnSheet", STR_TYPE)
     dc.AllowDBNull = False
     dc.DefaultValue = u"No"
+    table.Columns.Add("TemplateChoices", OBJ_TYPE)
 
     originals = {}
     on_sheet = {}
@@ -754,26 +908,30 @@ def build_table(doc):
 
     for v in views:
         vid = id_val(v.Id)
+        type_name = u"{0}".format(v.ViewType)
         row = table.NewRow()
         row_orig = {}
         for col in state["cols"]:
-            value = read_cell(v, col, sheet_labels)
+            value = read_cell(v, col, ctx)
             row[col["key"]] = value
             row_orig[col["key"]] = value
-        placements = sheet_labels.get(vid) or []
+        placements = sheet_map.get(vid) or []
         placed = bool(placements)
         row["OnSheet"] = u"Yes" if placed else u"No"
+        row["TemplateChoices"] = template_choices.get(type_name,
+                                                      template_choices[None])
         table.Rows.Add(row)
         originals[vid] = row_orig
         on_sheet[vid] = placed
         sheet_ids[vid] = placements
-        types.add(u"{0}".format(v.ViewType))
+        types.add(type_name)
 
     state["table"] = table
     state["view"] = table.DefaultView
     state["orig"] = originals
     state["on_sheet"] = on_sheet
     state["sheet_ids"] = sheet_ids
+    state["templates"] = templates_by_type
     state["doc_title"] = doc.Title
 
     table.RowChanged += DataRowChangeEventHandler(on_row_changed)
@@ -817,6 +975,10 @@ def apply_filters():
     text = (search_box.Text or u"").strip()
     if text:
         parts.append(u"ViewName LIKE '%{0}%'".format(esc_sql(text)))
+
+    sheet_text = (sheet_search_box.Text or u"").strip()
+    if sheet_text:
+        parts.append(u"SheetName LIKE '%{0}%'".format(esc_sql(sheet_text)))
 
     selected_type = type_combo.SelectedItem
     if selected_type is not None and selected_type != ALL_TYPES:
@@ -892,6 +1054,13 @@ def action_reload(uiapp):
     set_result(u"Reloaded from the model.", "info")
 
 
+def read_row_name(view):
+    try:
+        return view.Name
+    except Exception:
+        return u"{0}".format(id_val(view.Id))
+
+
 def action_apply(uiapp):
     doc = uiapp.ActiveUIDocument.Document
     if state["doc_title"] is not None and doc.Title != state["doc_title"]:
@@ -905,6 +1074,9 @@ def action_apply(uiapp):
 
     applied = [0]
     failures = []
+    sheet_edits = {}   # (sheet id, kind) -> value already written this batch
+
+    ctx = {"doc": doc, "templates": state["templates"]}
 
     t = Transaction(doc, "View Manager - apply edits")
     t.Start()
@@ -922,16 +1094,28 @@ def action_apply(uiapp):
                 else:
                     failures.append(u"[{0}] {1}: view no longer exists".format(vid, col["header"]))
                 continue
+
+            placements = state["sheet_ids"].get(vid) or []
+            ctx["placements"] = placements
+            ctx["on_sheet"] = state["on_sheet"].get(vid, False)
+
+            # two rows sitting on the same sheet must not fight over its number/name
+            if col["kind"] in ("sheet_number", "sheet_name") and len(placements) == 1:
+                marker = (placements[0][0], col["kind"])
+                if marker in sheet_edits and sheet_edits[marker] != value:
+                    failures.append(
+                        u"{0} -> {1}: conflicts with another row on the same sheet "
+                        u"('{2}' was written)".format(
+                            read_row_name(view), col["header"], sheet_edits[marker]))
+                    continue
+                sheet_edits[marker] = value
+
             try:
-                write_cell(view, col, value, state["on_sheet"].get(vid, False))
+                write_cell(view, col, value, ctx)
                 applied[0] += 1
             except Exception as ex:
-                name = u""
-                try:
-                    name = view.Name
-                except Exception:
-                    pass
-                failures.append(u"{0} -> {1}: {2}".format(name or vid, col["header"], ex))
+                failures.append(u"{0} -> {1}: {2}".format(
+                    read_row_name(view), col["header"], ex))
         t.Commit()
     except Exception as ex:
         t.RollBack()
@@ -993,8 +1177,8 @@ def action_open_sheet(uiapp):
     sheet_id = placements[0][0]
     if len(placements) > 1:
         options = {}
-        for sid, label in placements:
-            options[label] = sid
+        for sid, number, name in placements:
+            options[u"{0} - {1}".format(number, name)] = sid
         picked = forms.SelectFromList.show(sorted(options.keys()),
                                            title="This view is on several sheets",
                                            button_name="Open sheet",
@@ -1020,6 +1204,8 @@ def action_open_sheet(uiapp):
 
 def on_search_changed(sender, args):
     search_hint.Visibility = Visibility.Collapsed if search_box.Text else Visibility.Visible
+    sheet_search_hint.Visibility = \
+        Visibility.Collapsed if sheet_search_box.Text else Visibility.Visible
     if not state["loading"][0]:
         apply_filters()
 
@@ -1088,6 +1274,7 @@ def on_window_closed(sender, args):
 
 
 search_box.TextChanged += TextChangedEventHandler(on_search_changed)
+sheet_search_box.TextChanged += TextChangedEventHandler(on_search_changed)
 type_combo.SelectionChanged += SelectionChangedEventHandler(on_type_changed)
 tgl_all.Checked += RoutedEventHandler(on_tgl_all)
 tgl_on.Checked += RoutedEventHandler(on_tgl_on)

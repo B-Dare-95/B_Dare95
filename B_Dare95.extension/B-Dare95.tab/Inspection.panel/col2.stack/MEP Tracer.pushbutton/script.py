@@ -456,8 +456,8 @@ def delete_all_directshapes(ds_ids):
 
 # ── Catppuccin Mocha WPF overlay ───────────────────────────────────────────────
 #
-#   Palette  bg=#1E1E2E  card=#2A2A3C  surface=#313244  muted=#45475A
-#            text=#CDD6F4  subtext=#A6ADC8  accent=#F0A500
+#   Palette  bg=#161616  card=#262626  surface=#393939  muted=#525252
+#            text=#F4F4F4  subtext=#A8A8A8  accent=#F1C21B
 #
 
 _DIALOG_XAML = u"""
@@ -474,42 +474,42 @@ _DIALOG_XAML = u"""
     Topmost="True"
     WindowStartupLocation="Manual">
 
-    <Border Background="#1E1E2E" CornerRadius="14"
-            BorderBrush="#45475A" BorderThickness="1">
+    <Border Background="#161616" CornerRadius="14"
+            BorderBrush="#525252" BorderThickness="1">
         <StackPanel Margin="22,18,22,22">
 
             <!-- ── Title / drag strip ── -->
             <DockPanel x:Name="TitleBar" Margin="0,0,0,16" Cursor="SizeAll">
                 <Ellipse DockPanel.Dock="Left"
-                         Width="9" Height="9" Fill="#F0A500"
+                         Width="9" Height="9" Fill="#F1C21B"
                          Margin="0,0,10,0" VerticalAlignment="Center"/>
                 <TextBlock Text="MEP Branch Tracer  —  Highlight Active"
-                           Foreground="#CDD6F4" FontFamily="Segoe UI"
+                           Foreground="#F4F4F4" FontFamily="Segoe UI"
                            FontSize="13" FontWeight="SemiBold"
                            VerticalAlignment="Center"/>
             </DockPanel>
 
             <!-- ── Stats card ── -->
-            <Border Background="#2A2A3C" CornerRadius="10"
+            <Border Background="#262626" CornerRadius="10"
                     Padding="14,12,14,12" Margin="0,0,0,14">
                 <StackPanel x:Name="StatsPanel"/>
             </Border>
 
             <!-- ── Hint ── -->
             <TextBlock Text="Press ESC or click below to remove all highlights."
-                       Foreground="#45475A" FontFamily="Segoe UI" FontSize="10"
+                       Foreground="#525252" FontFamily="Segoe UI" FontSize="10"
                        HorizontalAlignment="Center" Margin="0,0,0,12"/>
 
             <!-- ── Action button ── -->
             <Button x:Name="CloseBtn" Height="38" Cursor="Hand"
-                    BorderThickness="0" Background="#F0A500">
+                    BorderThickness="0" Background="#F1C21B">
                 <Button.Template>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="BtnBorder"
                                 Background="{TemplateBinding Background}"
                                 CornerRadius="9">
                             <TextBlock Text="Remove Highlights &amp; Exit"
-                                       Foreground="#1E1E2E"
+                                       Foreground="#161616"
                                        FontFamily="Segoe UI" FontSize="11"
                                        FontWeight="SemiBold"
                                        HorizontalAlignment="Center"
@@ -561,8 +561,8 @@ def _stat_row(label, value):
         SW.Controls.Grid.SetColumn(t, col)
         return t
 
-    grid.Children.Add(tb(label,      0, "#A6ADC8"))
-    grid.Children.Add(tb(str(value), 1, "#CDD6F4", bold=True))
+    grid.Children.Add(tb(label,      0, "#A8A8A8"))
+    grid.Children.Add(tb(str(value), 1, "#F4F4F4", bold=True))
     return grid
 
 

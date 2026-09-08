@@ -61,13 +61,13 @@ ACTIVE_CHARTS = []
 # Theme
 # ---------------------------------------------------------------------------
 
-BG = "#1E1E2E"
-CARD = "#2A2A3C"
-SURFACE = "#313244"
-MUTED = "#45475A"
-TEXT = "#CDD6F4"
-SUBTEXT = "#A6ADC8"
-ACCENT = "#F0A500"
+BG = "#161616"
+CARD = "#262626"
+SURFACE = "#393939"
+MUTED = "#525252"
+TEXT = "#F4F4F4"
+SUBTEXT = "#A8A8A8"
+ACCENT = "#F1C21B"
 
 # Colour-blind friendly defaults, matching the original tool's shades.
 DEFAULT_PALETTE = ["#EDE3CC", "#E8EFF3", "#FFC800", "#C4200A", "#9E031E"]
@@ -312,8 +312,8 @@ PICKER_XAML = """
         ShowInTaskbar="False">
   <Window.Resources>
     <Style x:Key="Flat" TargetType="Button">
-      <Setter Property="Foreground" Value="#CDD6F4"/>
-      <Setter Property="Background" Value="#313244"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
+      <Setter Property="Background" Value="#393939"/>
       <Setter Property="BorderThickness" Value="0"/>
       <Setter Property="Padding" Value="18,6"/>
       <Setter Property="FontSize" Value="12"/>
@@ -334,24 +334,24 @@ PICKER_XAML = """
       </Setter>
     </Style>
   </Window.Resources>
-  <Border Background="#1E1E2E" CornerRadius="10" BorderBrush="#45475A" BorderThickness="1">
+  <Border Background="#161616" CornerRadius="10" BorderBrush="#525252" BorderThickness="1">
     <StackPanel Margin="18">
-      <TextBlock Text="Choose a color" Foreground="#CDD6F4" FontSize="16" FontWeight="SemiBold"
+      <TextBlock Text="Choose a color" Foreground="#F4F4F4" FontSize="16" FontWeight="SemiBold"
                  Margin="0,0,0,14"/>
       <WrapPanel x:Name="SwatchHost" Width="296"/>
       <StackPanel Orientation="Horizontal" Margin="0,16,0,0" VerticalAlignment="Center">
-        <TextBlock Text="Selected:" Foreground="#A6ADC8" FontSize="12" VerticalAlignment="Center"
+        <TextBlock Text="Selected:" Foreground="#A8A8A8" FontSize="12" VerticalAlignment="Center"
                    Margin="0,0,10,0"/>
         <Border x:Name="Preview" Width="110" Height="26" CornerRadius="4"
-                BorderBrush="#45475A" BorderThickness="1"/>
+                BorderBrush="#525252" BorderThickness="1"/>
         <TextBox x:Name="HexBox" Width="110" Height="26" Margin="10,0,0,0"
-                 Background="#313244" Foreground="#CDD6F4" BorderBrush="#45475A"
+                 Background="#393939" Foreground="#F4F4F4" BorderBrush="#525252"
                  BorderThickness="1" VerticalContentAlignment="Center" Padding="6,0"
                  FontSize="12"/>
       </StackPanel>
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
         <Button x:Name="OkBtn" Content="OK" Style="{StaticResource Flat}"
-                Background="#F0A500" Foreground="#1E1E2E" Margin="0,0,8,0"/>
+                Background="#F1C21B" Foreground="#161616" Margin="0,0,8,0"/>
         <Button x:Name="CancelBtn" Content="Cancel" Style="{StaticResource Flat}"/>
       </StackPanel>
     </StackPanel>
@@ -435,8 +435,8 @@ SETTINGS_XAML = """
         ShowInTaskbar="False">
   <Window.Resources>
     <Style x:Key="Flat" TargetType="Button">
-      <Setter Property="Foreground" Value="#CDD6F4"/>
-      <Setter Property="Background" Value="#313244"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
+      <Setter Property="Background" Value="#393939"/>
       <Setter Property="BorderThickness" Value="0"/>
       <Setter Property="Padding" Value="18,7"/>
       <Setter Property="FontSize" Value="12"/>
@@ -457,8 +457,8 @@ SETTINGS_XAML = """
       </Setter>
     </Style>
     <Style x:Key="Tgl" TargetType="ToggleButton">
-      <Setter Property="Foreground" Value="#CDD6F4"/>
-      <Setter Property="Background" Value="#313244"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
+      <Setter Property="Background" Value="#393939"/>
       <Setter Property="Padding" Value="16,6"/>
       <Setter Property="FontSize" Value="12"/>
       <Setter Property="Cursor" Value="Hand"/>
@@ -471,8 +471,8 @@ SETTINGS_XAML = """
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#F0A500"/>
-                <Setter Property="Foreground" Value="#1E1E2E"/>
+                <Setter TargetName="Bd" Property="Background" Value="#F1C21B"/>
+                <Setter Property="Foreground" Value="#161616"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -480,29 +480,29 @@ SETTINGS_XAML = """
       </Setter>
     </Style>
     <Style TargetType="CheckBox">
-      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
       <Setter Property="FontSize" Value="12"/>
       <Setter Property="Margin" Value="0,0,0,8"/>
     </Style>
   </Window.Resources>
-  <Border Background="#1E1E2E" CornerRadius="10" BorderBrush="#45475A" BorderThickness="1">
+  <Border Background="#161616" CornerRadius="10" BorderBrush="#525252" BorderThickness="1">
     <StackPanel Margin="22">
-      <TextBlock Text="Chart Settings" Foreground="#CDD6F4" FontSize="19" FontWeight="SemiBold"/>
+      <TextBlock Text="Chart Settings" Foreground="#F4F4F4" FontSize="19" FontWeight="SemiBold"/>
 
-      <TextBlock Text="Maximum Warning Count" Foreground="#CDD6F4" FontSize="13"
+      <TextBlock Text="Maximum Warning Count" Foreground="#F4F4F4" FontSize="13"
                  FontWeight="SemiBold" Margin="0,20,0,6"/>
-      <TextBox x:Name="MaxBox" Height="30" Background="#313244" Foreground="#CDD6F4"
-               BorderBrush="#45475A" BorderThickness="1" VerticalContentAlignment="Center"
+      <TextBox x:Name="MaxBox" Height="30" Background="#393939" Foreground="#F4F4F4"
+               BorderBrush="#525252" BorderThickness="1" VerticalContentAlignment="Center"
                Padding="8,0" FontSize="13"/>
       <TextBlock Text="Warnings beyond this number are not read (keeps huge models responsive)."
-                 Foreground="#A6ADC8" FontSize="11" Margin="0,5,0,0" TextWrapping="Wrap"/>
+                 Foreground="#A8A8A8" FontSize="11" Margin="0,5,0,0" TextWrapping="Wrap"/>
 
-      <Border Height="1" Background="#45475A" Margin="0,18,0,0"/>
+      <Border Height="1" Background="#525252" Margin="0,18,0,0"/>
 
-      <TextBlock Text="Pie Chart Color Scheme" Foreground="#CDD6F4" FontSize="13"
+      <TextBlock Text="Pie Chart Color Scheme" Foreground="#F4F4F4" FontSize="13"
                  FontWeight="SemiBold" Margin="0,18,0,2"/>
       <TextBlock Text="Colors used for different warning types (click to change)"
-                 Foreground="#A6ADC8" FontSize="11" Margin="0,0,0,10"/>
+                 Foreground="#A8A8A8" FontSize="11" Margin="0,0,0,10"/>
       <StackPanel Orientation="Horizontal">
         <Button x:Name="Sw0" Width="52" Height="34" Style="{StaticResource Flat}" Margin="0,0,8,0"/>
         <Button x:Name="Sw1" Width="52" Height="34" Style="{StaticResource Flat}" Margin="0,0,8,0"/>
@@ -513,9 +513,9 @@ SETTINGS_XAML = """
                 Height="34"/>
       </StackPanel>
 
-      <Border Height="1" Background="#45475A" Margin="0,18,0,0"/>
+      <Border Height="1" Background="#525252" Margin="0,18,0,0"/>
 
-      <TextBlock Text="Slice Size Based On" Foreground="#CDD6F4" FontSize="13"
+      <TextBlock Text="Slice Size Based On" Foreground="#F4F4F4" FontSize="13"
                  FontWeight="SemiBold" Margin="0,18,0,8"/>
       <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
         <ToggleButton x:Name="TglWarnings" Content="Warning count" Style="{StaticResource Tgl}"
@@ -528,7 +528,7 @@ SETTINGS_XAML = """
 
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
         <Button x:Name="SaveBtn" Content="Save Changes" Style="{StaticResource Flat}"
-                Background="#F0A500" Foreground="#1E1E2E" Margin="0,0,8,0"/>
+                Background="#F1C21B" Foreground="#161616" Margin="0,0,8,0"/>
         <Button x:Name="CancelBtn" Content="Cancel" Style="{StaticResource Flat}"/>
       </StackPanel>
     </StackPanel>
@@ -684,25 +684,25 @@ MAIN_XAML = """
         ResizeMode="CanResizeWithGrip">
   <Window.Resources>
     <Style x:Key="PillTgl" TargetType="ToggleButton">
-      <Setter Property="Foreground" Value="#A6ADC8"/>
-      <Setter Property="Background" Value="#2A2A3C"/>
+      <Setter Property="Foreground" Value="#A8A8A8"/>
+      <Setter Property="Background" Value="#262626"/>
       <Setter Property="Cursor" Value="Hand"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="ToggleButton">
             <Border x:Name="Bd" CornerRadius="13" Padding="11,6"
                     Background="{TemplateBinding Background}"
-                    BorderBrush="#45475A" BorderThickness="1">
+                    BorderBrush="#525252" BorderThickness="1">
               <ContentPresenter VerticalAlignment="Center"/>
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="BorderBrush" Value="#F0A500"/>
+                <Setter TargetName="Bd" Property="BorderBrush" Value="#F1C21B"/>
               </Trigger>
               <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#F0A500"/>
-                <Setter TargetName="Bd" Property="BorderBrush" Value="#F0A500"/>
-                <Setter Property="Foreground" Value="#1E1E2E"/>
+                <Setter TargetName="Bd" Property="Background" Value="#F1C21B"/>
+                <Setter TargetName="Bd" Property="BorderBrush" Value="#F1C21B"/>
+                <Setter Property="Foreground" Value="#161616"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -710,7 +710,7 @@ MAIN_XAML = """
       </Setter>
     </Style>
     <Style x:Key="IconBtn" TargetType="Button">
-      <Setter Property="Foreground" Value="#A6ADC8"/>
+      <Setter Property="Foreground" Value="#A8A8A8"/>
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="Width" Value="30"/>
       <Setter Property="Height" Value="30"/>
@@ -725,8 +725,8 @@ MAIN_XAML = """
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#45475A"/>
-                <Setter Property="Foreground" Value="#F0A500"/>
+                <Setter TargetName="Bd" Property="Background" Value="#525252"/>
+                <Setter Property="Foreground" Value="#F1C21B"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -735,7 +735,7 @@ MAIN_XAML = """
     </Style>
   </Window.Resources>
 
-  <Border x:Name="SnapRoot" Background="#1E1E2E" CornerRadius="10" BorderBrush="#45475A"
+  <Border x:Name="SnapRoot" Background="#161616" CornerRadius="10" BorderBrush="#525252"
           BorderThickness="1">
     <Grid Margin="16,12,16,16">
       <Grid.RowDefinitions>
@@ -753,14 +753,14 @@ MAIN_XAML = """
             <ColumnDefinition Width="Auto"/>
           </Grid.ColumnDefinitions>
           <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock x:Name="TotalText" Text="0" Foreground="#F0A500" FontSize="26"
+            <TextBlock x:Name="TotalText" Text="0" Foreground="#F1C21B" FontSize="26"
                        FontWeight="Bold" VerticalAlignment="Center"/>
             <StackPanel Margin="10,2,0,0" VerticalAlignment="Center">
-              <TextBlock x:Name="TotalCaption" Text="warnings" Foreground="#CDD6F4" FontSize="12"/>
-              <TextBlock x:Name="TypesText" Text="0 types" Foreground="#A6ADC8" FontSize="11"/>
+              <TextBlock x:Name="TotalCaption" Text="warnings" Foreground="#F4F4F4" FontSize="12"/>
+              <TextBlock x:Name="TypesText" Text="0 types" Foreground="#A8A8A8" FontSize="11"/>
             </StackPanel>
           </StackPanel>
-          <TextBlock Grid.Column="1" Text="WarChart" Foreground="#45475A" FontSize="13"
+          <TextBlock Grid.Column="1" Text="WarChart" Foreground="#525252" FontSize="13"
                      FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
           <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
             <Button x:Name="SettingsBtn" Content="&#xE713;" Style="{StaticResource IconBtn}"
@@ -776,9 +776,9 @@ MAIN_XAML = """
       </Border>
 
       <!-- banner -->
-      <Border x:Name="Banner" Grid.Row="1" Background="#313244" CornerRadius="6"
+      <Border x:Name="Banner" Grid.Row="1" Background="#393939" CornerRadius="6"
               Padding="10,6" Margin="0,0,0,8" Visibility="Collapsed">
-        <TextBlock x:Name="BannerText" Foreground="#F0A500" FontSize="11" TextWrapping="Wrap"/>
+        <TextBlock x:Name="BannerText" Foreground="#F1C21B" FontSize="11" TextWrapping="Wrap"/>
       </Border>
 
       <!-- body -->
@@ -791,7 +791,7 @@ MAIN_XAML = """
         <Canvas x:Name="ChartCanvas" Grid.Column="0" Background="Transparent" ClipToBounds="False"/>
 
         <TextBlock x:Name="EmptyText" Grid.Column="0" Text="No warnings in this model."
-                   Foreground="#A6ADC8" FontSize="14" HorizontalAlignment="Center"
+                   Foreground="#A8A8A8" FontSize="14" HorizontalAlignment="Center"
                    VerticalAlignment="Center" Visibility="Collapsed"/>
 
         <ToggleButton x:Name="IsolateToggle" Grid.Column="0" Style="{StaticResource PillTgl}"
@@ -811,10 +811,10 @@ MAIN_XAML = """
             <RowDefinition Height="*"/>
           </Grid.RowDefinitions>
           <Grid Grid.Row="0" Margin="0,0,0,8">
-            <TextBox x:Name="FilterBox" Height="28" Background="#2A2A3C" Foreground="#CDD6F4"
-                     BorderBrush="#45475A" BorderThickness="1" Padding="8,0" FontSize="12"
+            <TextBox x:Name="FilterBox" Height="28" Background="#262626" Foreground="#F4F4F4"
+                     BorderBrush="#525252" BorderThickness="1" Padding="8,0" FontSize="12"
                      VerticalContentAlignment="Center"/>
-            <TextBlock x:Name="FilterHint" Text="Search warnings..." Foreground="#45475A"
+            <TextBlock x:Name="FilterHint" Text="Search warnings..." Foreground="#525252"
                        FontSize="12" Margin="10,0,0,0" IsHitTestVisible="False"
                        VerticalAlignment="Center"/>
           </Grid>

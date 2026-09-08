@@ -63,13 +63,13 @@ except Exception:
 
 
 # Catppuccin Mocha
-COLOR_BG = "#1E1E2E"
-COLOR_CARD = "#2A2A3C"
-COLOR_SURFACE = "#313244"
-COLOR_MUTED = "#45475A"
-COLOR_TEXT = "#CDD6F4"
-COLOR_SUBTEXT = "#A6ADC8"
-COLOR_ACCENT = "#F0A500"
+COLOR_BG = "#161616"
+COLOR_CARD = "#262626"
+COLOR_SURFACE = "#393939"
+COLOR_MUTED = "#525252"
+COLOR_TEXT = "#F4F4F4"
+COLOR_SUBTEXT = "#A8A8A8"
+COLOR_ACCENT = "#F1C21B"
 
 _BRUSHES = BrushConverter()
 
@@ -152,11 +152,11 @@ MENU_XAML = u"""
         Title="Floor Opener - Choose Links"
         Width="540" Height="640"
         WindowStartupLocation="CenterScreen"
-        Background="#1E1E2E">
+        Background="#161616">
     <Window.Resources>
         <Style x:Key="RoundButton" TargetType="Button">
-            <Setter Property="Background" Value="#F0A500"/>
-            <Setter Property="Foreground" Value="#1E1E2E"/>
+            <Setter Property="Background" Value="#F1C21B"/>
+            <Setter Property="Foreground" Value="#161616"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Cursor" Value="Hand"/>
@@ -172,18 +172,18 @@ MENU_XAML = u"""
             </Setter>
         </Style>
         <Style x:Key="QuietButton" TargetType="Button" BasedOn="{StaticResource RoundButton}">
-            <Setter Property="Background" Value="#45475A"/>
-            <Setter Property="Foreground" Value="#CDD6F4"/>
+            <Setter Property="Background" Value="#525252"/>
+            <Setter Property="Foreground" Value="#F4F4F4"/>
             <Setter Property="FontWeight" Value="Normal"/>
         </Style>
         <Style x:Key="RoundTextBox" TargetType="TextBox">
-            <Setter Property="Background" Value="#313244"/>
-            <Setter Property="Foreground" Value="#CDD6F4"/>
-            <Setter Property="BorderBrush" Value="#45475A"/>
+            <Setter Property="Background" Value="#393939"/>
+            <Setter Property="Foreground" Value="#F4F4F4"/>
+            <Setter Property="BorderBrush" Value="#525252"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="8,6"/>
             <Setter Property="FontSize" Value="13"/>
-            <Setter Property="CaretBrush" Value="#CDD6F4"/>
+            <Setter Property="CaretBrush" Value="#F4F4F4"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TextBox">
@@ -213,10 +213,10 @@ MENU_XAML = u"""
         </Grid.RowDefinitions>
 
         <TextBlock Grid.Row="0" Text="Choose links to process"
-                   Foreground="#CDD6F4" FontSize="18" FontWeight="Bold"
+                   Foreground="#F4F4F4" FontSize="18" FontWeight="Bold"
                    Margin="0,0,0,4"/>
         <TextBlock Grid.Row="1" x:Name="SubtitleText"
-                   Foreground="#A6ADC8" FontSize="12" TextWrapping="Wrap"
+                   Foreground="#A8A8A8" FontSize="12" TextWrapping="Wrap"
                    Margin="0,0,0,12"/>
 
         <TextBox Grid.Row="2" x:Name="SearchBox"
@@ -229,14 +229,14 @@ MENU_XAML = u"""
                     Style="{StaticResource QuietButton}" FontSize="12"/>
         </StackPanel>
 
-        <Border Grid.Row="4" Background="#181825" CornerRadius="8" Padding="8">
+        <Border Grid.Row="4" Background="#0D0D0D" CornerRadius="8" Padding="8">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel x:Name="LinkList"/>
             </ScrollViewer>
         </Border>
 
         <TextBlock Grid.Row="5" x:Name="StatusText"
-                   Foreground="#A6ADC8" FontSize="12" Margin="0,10,0,0"/>
+                   Foreground="#A8A8A8" FontSize="12" Margin="0,10,0,0"/>
 
         <StackPanel Grid.Row="6" Orientation="Horizontal"
                     HorizontalAlignment="Right" Margin="0,14,0,0">

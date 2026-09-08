@@ -598,13 +598,13 @@ XAML = u"""
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Merge Shafts" Height="700" Width="900"
-        WindowStartupLocation="CenterScreen" Background="#1E1E2E">
+        WindowStartupLocation="CenterScreen" Background="#161616">
   <Window.Resources>
 
     <Style TargetType="TextBox">
-      <Setter Property="Background" Value="#313244"/>
-      <Setter Property="Foreground" Value="#CDD6F4"/>
-      <Setter Property="BorderBrush" Value="#45475A"/>
+      <Setter Property="Background" Value="#393939"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
+      <Setter Property="BorderBrush" Value="#525252"/>
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="Padding" Value="6,4"/>
       <Setter Property="FontSize" Value="12"/>
@@ -612,21 +612,21 @@ XAML = u"""
     </Style>
 
     <Style x:Key="ItemCheck" TargetType="CheckBox">
-      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
       <Setter Property="FontSize" Value="12"/>
       <Setter Property="Margin" Value="8,5,8,5"/>
       <Setter Property="VerticalContentAlignment" Value="Center"/>
     </Style>
 
     <Style x:Key="OptCheck" TargetType="CheckBox">
-      <Setter Property="Foreground" Value="#A6ADC8"/>
+      <Setter Property="Foreground" Value="#A8A8A8"/>
       <Setter Property="FontSize" Value="12"/>
       <Setter Property="Margin" Value="0,4,18,4"/>
       <Setter Property="VerticalContentAlignment" Value="Center"/>
     </Style>
 
     <Style x:Key="AccentButton" TargetType="Button">
-      <Setter Property="Foreground" Value="#1E1E2E"/>
+      <Setter Property="Foreground" Value="#161616"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
       <Setter Property="FontSize" Value="12"/>
       <Setter Property="Height" Value="32"/>
@@ -636,7 +636,7 @@ XAML = u"""
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
-            <Border x:Name="bd" Background="#F0A500" CornerRadius="6" Padding="14,4">
+            <Border x:Name="bd" Background="#F1C21B" CornerRadius="6" Padding="14,4">
               <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
             <ControlTemplate.Triggers>
@@ -650,7 +650,7 @@ XAML = u"""
     </Style>
 
     <Style x:Key="GhostButton" TargetType="Button">
-      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
       <Setter Property="FontSize" Value="12"/>
       <Setter Property="Height" Value="28"/>
       <Setter Property="MinWidth" Value="90"/>
@@ -659,13 +659,13 @@ XAML = u"""
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
-            <Border x:Name="bd" Background="#313244" BorderBrush="#45475A"
+            <Border x:Name="bd" Background="#393939" BorderBrush="#525252"
                     BorderThickness="1" CornerRadius="6" Padding="10,3">
               <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#45475A"/>
+                <Setter TargetName="bd" Property="Background" Value="#525252"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -685,8 +685,8 @@ XAML = u"""
     </Grid.RowDefinitions>
 
     <StackPanel Grid.Row="0" Margin="0,0,0,12">
-      <TextBlock Text="Merge Shafts" Foreground="#F0A500" FontSize="20" FontWeight="Bold"/>
-      <TextBlock x:Name="tbHeader" Foreground="#A6ADC8" FontSize="12" Margin="0,4,0,0"
+      <TextBlock Text="Merge Shafts" Foreground="#F1C21B" FontSize="20" FontWeight="Bold"/>
+      <TextBlock x:Name="tbHeader" Foreground="#A8A8A8" FontSize="12" Margin="0,4,0,0"
                  TextWrapping="Wrap"/>
     </StackPanel>
 
@@ -701,14 +701,14 @@ XAML = u"""
       <Button x:Name="btnNone" Grid.Column="2" Content="Select None" Style="{StaticResource GhostButton}"/>
     </Grid>
 
-    <Border Grid.Row="2" Background="#2A2A3C" BorderBrush="#45475A" BorderThickness="1"
+    <Border Grid.Row="2" Background="#262626" BorderBrush="#525252" BorderThickness="1"
             CornerRadius="8" Padding="4">
       <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel x:Name="spGroups"/>
       </ScrollViewer>
     </Border>
 
-    <Border Grid.Row="3" Background="#2A2A3C" BorderBrush="#45475A" BorderThickness="1"
+    <Border Grid.Row="3" Background="#262626" BorderBrush="#525252" BorderThickness="1"
             CornerRadius="8" Padding="12,8" Margin="0,10,0,0">
       <WrapPanel>
         <CheckBox x:Name="chkUnion" Style="{StaticResource OptCheck}" IsChecked="True"

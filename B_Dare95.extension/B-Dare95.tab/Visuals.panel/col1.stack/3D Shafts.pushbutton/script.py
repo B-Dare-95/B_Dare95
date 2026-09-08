@@ -109,13 +109,13 @@ LEVEL_FULL = 2      # re-collect everything from the document
 DC3D_SWAP_RED_BLUE = True
 
 # Catppuccin Mocha
-CLR_BG = "#1E1E2E"
-CLR_CARD = "#2A2A3C"
-CLR_SURFACE = "#313244"
-CLR_MUTED = "#45475A"
-CLR_TEXT = "#CDD6F4"
-CLR_SUBTEXT = "#A6ADC8"
-CLR_ACCENT = "#F0A500"
+CLR_BG = "#161616"
+CLR_CARD = "#262626"
+CLR_SURFACE = "#393939"
+CLR_MUTED = "#525252"
+CLR_TEXT = "#F4F4F4"
+CLR_SUBTEXT = "#A8A8A8"
+CLR_ACCENT = "#F1C21B"
 
 DEFAULT_PALETTE = [
     (137, 180, 250),
@@ -1036,13 +1036,13 @@ XAML = u"""
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="3D Shafts - Live Visualizer"
         Height="640" Width="470" MinHeight="520" MinWidth="420"
-        Background="#1E1E2E" WindowStartupLocation="CenterScreen"
+        Background="#161616" WindowStartupLocation="CenterScreen"
         ResizeMode="CanResize" ShowInTaskbar="True">
 
   <Window.Resources>
     <Style x:Key="FlatButton" TargetType="Button">
-      <Setter Property="Foreground" Value="#CDD6F4"/>
-      <Setter Property="Background" Value="#45475A"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
+      <Setter Property="Background" Value="#525252"/>
       <Setter Property="FontFamily" Value="Segoe UI"/>
       <Setter Property="FontSize" Value="11"/>
       <Setter Property="Height" Value="28"/>
@@ -1058,7 +1058,7 @@ XAML = u"""
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#585B70"/>
+                <Setter TargetName="bd" Property="Background" Value="#6F6F6F"/>
               </Trigger>
               <Trigger Property="IsEnabled" Value="False">
                 <Setter TargetName="bd" Property="Opacity" Value="0.45"/>
@@ -1071,19 +1071,19 @@ XAML = u"""
 
     <Style x:Key="AccentButton" TargetType="Button"
            BasedOn="{StaticResource FlatButton}">
-      <Setter Property="Background" Value="#F0A500"/>
-      <Setter Property="Foreground" Value="#1E1E2E"/>
+      <Setter Property="Background" Value="#F1C21B"/>
+      <Setter Property="Foreground" Value="#161616"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
     </Style>
 
     <Style x:Key="Caption" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#A6ADC8"/>
+      <Setter Property="Foreground" Value="#A8A8A8"/>
       <Setter Property="FontFamily" Value="Segoe UI"/>
       <Setter Property="FontSize" Value="11"/>
     </Style>
 
     <Style x:Key="DarkCheck" TargetType="CheckBox">
-      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
       <Setter Property="FontFamily" Value="Segoe UI"/>
       <Setter Property="FontSize" Value="11"/>
       <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -1094,17 +1094,17 @@ XAML = u"""
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="ListBoxItem">
-            <Border x:Name="bd" Background="#2A2A3C" CornerRadius="4"
-                    BorderThickness="1" BorderBrush="#2A2A3C" Padding="8,6">
+            <Border x:Name="bd" Background="#262626" CornerRadius="4"
+                    BorderThickness="1" BorderBrush="#262626" Padding="8,6">
               <ContentPresenter/>
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsSelected" Value="True">
-                <Setter TargetName="bd" Property="BorderBrush" Value="#F0A500"/>
-                <Setter TargetName="bd" Property="Background" Value="#313244"/>
+                <Setter TargetName="bd" Property="BorderBrush" Value="#F1C21B"/>
+                <Setter TargetName="bd" Property="Background" Value="#393939"/>
               </Trigger>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#313244"/>
+                <Setter TargetName="bd" Property="Background" Value="#393939"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -1125,10 +1125,10 @@ XAML = u"""
         <Border Grid.Column="1" Width="18" Height="18" CornerRadius="3"
                 Margin="0,0,10,0" Background="{Binding swatch}"/>
         <TextBlock Grid.Column="2" Text="{Binding name_text}"
-                   Foreground="#CDD6F4" FontFamily="Segoe UI" FontSize="12"
+                   Foreground="#F4F4F4" FontFamily="Segoe UI" FontSize="12"
                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
         <TextBlock Grid.Column="3" Text="{Binding count_text}"
-                   Foreground="#A6ADC8" FontFamily="Segoe UI" FontSize="10"
+                   Foreground="#A8A8A8" FontFamily="Segoe UI" FontSize="10"
                    VerticalAlignment="Center" Margin="8,0,0,0"/>
       </Grid>
     </DataTemplate>
@@ -1146,12 +1146,12 @@ XAML = u"""
       <RowDefinition Height="Auto"/>
     </Grid.RowDefinitions>
 
-    <TextBlock Grid.Row="0" Text="{Binding status_message}" Foreground="#CDD6F4"
+    <TextBlock Grid.Row="0" Text="{Binding status_message}" Foreground="#F4F4F4"
                FontFamily="Segoe UI" FontSize="12" TextWrapping="Wrap"
                Margin="0,0,0,10"/>
 
     <TextBox Grid.Row="1" x:Name="filter_box" Height="26" Margin="0,0,0,8"
-             Background="#313244" Foreground="#CDD6F4" BorderBrush="#45475A"
+             Background="#393939" Foreground="#F4F4F4" BorderBrush="#525252"
              BorderThickness="1" FontFamily="Segoe UI" FontSize="11"
              VerticalContentAlignment="Center" Padding="6,0"
              Text="{Binding filter_text, UpdateSourceTrigger=PropertyChanged}"/>
@@ -1189,7 +1189,7 @@ XAML = u"""
               VerticalAlignment="Center"
               Value="{Binding transparency, Mode=TwoWay, Delay=120}"/>
       <TextBlock Grid.Column="2" Text="{Binding transparency_label}"
-                 Foreground="#CDD6F4" FontFamily="Segoe UI" FontSize="11"
+                 Foreground="#F4F4F4" FontFamily="Segoe UI" FontSize="11"
                  FontWeight="SemiBold" VerticalAlignment="Center" Width="34"
                  TextAlignment="Right"/>
     </Grid>

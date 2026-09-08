@@ -66,12 +66,12 @@ doc = __revit__.ActiveUIDocument.Document
 # ---------------------------------------------------------------------------
 # Palette (Catppuccin Mocha)
 # ---------------------------------------------------------------------------
-C_TEXT = "#CDD6F4"
-C_SUBTEXT = "#A6ADC8"
-C_ACCENT = "#F0A500"
-C_OK = "#A6E3A1"
-C_WARN = "#F9E2AF"
-C_BAD = "#F38BA8"
+C_TEXT = "#F4F4F4"
+C_SUBTEXT = "#A8A8A8"
+C_ACCENT = "#F1C21B"
+C_OK = "#42BE65"
+C_WARN = "#F1C21B"
+C_BAD = "#FF8389"
 
 _BC = BrushConverter()
 _BRUSH_CACHE = {}
@@ -274,13 +274,13 @@ XAML = """
         Title="Link Workset Assigner"
         Width="1020" Height="720"
         WindowStartupLocation="CenterScreen"
-        Background="#1E1E2E"
+        Background="#161616"
         FontFamily="Segoe UI">
   <Window.Resources>
 
     <Style x:Key="DarkComboItem" TargetType="ComboBoxItem">
       <Setter Property="Background" Value="Transparent"/>
-      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
       <Setter Property="Padding" Value="8,5"/>
       <Setter Property="Template">
         <Setter.Value>
@@ -291,8 +291,8 @@ XAML = """
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsHighlighted" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#45475A"/>
-                <Setter Property="Foreground" Value="#F0A500"/>
+                <Setter TargetName="Bd" Property="Background" Value="#525252"/>
+                <Setter Property="Foreground" Value="#F1C21B"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -301,8 +301,8 @@ XAML = """
     </Style>
 
     <Style x:Key="DarkCombo" TargetType="ComboBox">
-      <Setter Property="Foreground" Value="#CDD6F4"/>
-      <Setter Property="Background" Value="#313244"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
+      <Setter Property="Background" Value="#393939"/>
       <Setter Property="FontSize" Value="12"/>
       <Setter Property="Height" Value="26"/>
       <Setter Property="ItemContainerStyle" Value="{StaticResource DarkComboItem}"/>
@@ -315,18 +315,18 @@ XAML = """
                                         RelativeSource={RelativeSource TemplatedParent}}">
                 <ToggleButton.Template>
                   <ControlTemplate TargetType="ToggleButton">
-                    <Border x:Name="Bd" Background="#313244" BorderBrush="#45475A"
+                    <Border x:Name="Bd" Background="#393939" BorderBrush="#525252"
                             BorderThickness="1" CornerRadius="4">
                       <Path x:Name="Arrow" HorizontalAlignment="Right" VerticalAlignment="Center"
-                            Margin="0,0,9,0" Data="M 0 0 L 4 4 L 8 0 Z" Fill="#A6ADC8"/>
+                            Margin="0,0,9,0" Data="M 0 0 L 4 4 L 8 0 Z" Fill="#A8A8A8"/>
                     </Border>
                     <ControlTemplate.Triggers>
                       <Trigger Property="IsMouseOver" Value="True">
-                        <Setter TargetName="Bd" Property="BorderBrush" Value="#F0A500"/>
+                        <Setter TargetName="Bd" Property="BorderBrush" Value="#F1C21B"/>
                       </Trigger>
                       <Trigger Property="IsEnabled" Value="False">
-                        <Setter TargetName="Bd" Property="Background" Value="#2A2A3C"/>
-                        <Setter TargetName="Arrow" Property="Fill" Value="#45475A"/>
+                        <Setter TargetName="Bd" Property="Background" Value="#262626"/>
+                        <Setter TargetName="Arrow" Property="Fill" Value="#525252"/>
                       </Trigger>
                     </ControlTemplate.Triggers>
                   </ControlTemplate>
@@ -339,7 +339,7 @@ XAML = """
               <Popup x:Name="Popup" Placement="Bottom" AllowsTransparency="True"
                      Focusable="False" PopupAnimation="Slide"
                      IsOpen="{TemplateBinding IsDropDownOpen}">
-                <Border Background="#2A2A3C" BorderBrush="#45475A" BorderThickness="1"
+                <Border Background="#262626" BorderBrush="#525252" BorderThickness="1"
                         CornerRadius="4" Margin="0,2,0,0" MaxHeight="280"
                         MinWidth="{TemplateBinding ActualWidth}">
                   <ScrollViewer SnapsToDevicePixels="True">
@@ -350,7 +350,7 @@ XAML = """
             </Grid>
             <ControlTemplate.Triggers>
               <Trigger Property="IsEnabled" Value="False">
-                <Setter Property="Foreground" Value="#45475A"/>
+                <Setter Property="Foreground" Value="#525252"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -359,8 +359,8 @@ XAML = """
     </Style>
 
     <Style x:Key="FlatBtn" TargetType="Button">
-      <Setter Property="Background" Value="#F0A500"/>
-      <Setter Property="Foreground" Value="#1E1E2E"/>
+      <Setter Property="Background" Value="#F1C21B"/>
+      <Setter Property="Foreground" Value="#161616"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
       <Setter Property="FontSize" Value="12"/>
       <Setter Property="Height" Value="30"/>
@@ -384,12 +384,12 @@ XAML = """
     </Style>
 
     <Style x:Key="GhostBtn" TargetType="Button" BasedOn="{StaticResource FlatBtn}">
-      <Setter Property="Background" Value="#45475A"/>
-      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="Background" Value="#525252"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
     </Style>
 
     <Style x:Key="HeaderCell" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#A6ADC8"/>
+      <Setter Property="Foreground" Value="#A8A8A8"/>
       <Setter Property="FontSize" Value="11"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
       <Setter Property="Margin" Value="0,0,8,0"/>
@@ -407,23 +407,23 @@ XAML = """
     </Grid.RowDefinitions>
 
     <StackPanel Grid.Row="0" Margin="0,0,0,12">
-      <TextBlock Text="LINK WORKSET ASSIGNER" Foreground="#F0A500"
+      <TextBlock Text="LINK WORKSET ASSIGNER" Foreground="#F1C21B"
                  FontSize="16" FontWeight="Bold"/>
       <TextBlock Text="Pick a workset for each RVT / DWG link, then click Assign."
-                 Foreground="#A6ADC8" FontSize="12" Margin="0,3,0,0"/>
+                 Foreground="#A8A8A8" FontSize="12" Margin="0,3,0,0"/>
     </StackPanel>
 
-    <Border Grid.Row="1" Background="#2A2A3C" CornerRadius="6" Padding="10" Margin="0,0,0,10">
+    <Border Grid.Row="1" Background="#262626" CornerRadius="6" Padding="10" Margin="0,0,0,10">
       <StackPanel Orientation="Horizontal">
-        <TextBlock Text="Search" Foreground="#A6ADC8" FontSize="12"
+        <TextBlock Text="Search" Foreground="#A8A8A8" FontSize="12"
                    VerticalAlignment="Center" Margin="0,0,8,0"/>
-        <Border Background="#313244" BorderBrush="#45475A" BorderThickness="1"
+        <Border Background="#393939" BorderBrush="#525252" BorderThickness="1"
                 CornerRadius="4" Width="300" Height="26">
           <TextBox x:Name="SearchBox" Background="Transparent" BorderThickness="0"
-                   Foreground="#CDD6F4" CaretBrush="#F0A500" FontSize="12"
+                   Foreground="#F4F4F4" CaretBrush="#F1C21B" FontSize="12"
                    VerticalContentAlignment="Center" Padding="8,0"/>
         </Border>
-        <TextBlock Text="Set all visible to" Foreground="#A6ADC8" FontSize="12"
+        <TextBlock Text="Set all visible to" Foreground="#A8A8A8" FontSize="12"
                    VerticalAlignment="Center" Margin="24,0,8,0"/>
         <ComboBox x:Name="BulkCombo" Style="{StaticResource DarkCombo}" Width="200"/>
         <Button x:Name="BulkBtn" Content="Apply" Style="{StaticResource GhostBtn}"
@@ -441,10 +441,10 @@ XAML = """
 
     <Grid Grid.Row="4" Margin="0,12,0,0">
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
-        <CheckBox x:Name="InstancesCheck" IsChecked="True" Foreground="#A6ADC8"
+        <CheckBox x:Name="InstancesCheck" IsChecked="True" Foreground="#A8A8A8"
                   FontSize="12" VerticalAlignment="Center"
                   Content="Also assign the link instances"/>
-        <TextBlock x:Name="CountText" Foreground="#A6ADC8" FontSize="12"
+        <TextBlock x:Name="CountText" Foreground="#A8A8A8" FontSize="12"
                    VerticalAlignment="Center" Margin="20,0,0,0"/>
       </StackPanel>
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
@@ -495,7 +495,7 @@ def make_header(window):
 
 def make_row(window, row, workset_list):
     border = Border()
-    border.Background = brush("#2A2A3C")
+    border.Background = brush("#262626")
     border.CornerRadius = CornerRadius(5)
     border.Padding = Thickness(10, 6, 10, 6)
     border.Margin = Thickness(0, 0, 0, 4)

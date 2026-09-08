@@ -58,14 +58,14 @@ doc   = __revit__.ActiveUIDocument.Document
 uidoc = __revit__.ActiveUIDocument
 
 # ─── THEME ────────────────────────────────────────────────────────────────────
-BG      = "#1E1E2E"
-CARD    = "#2A2A3C"
-SURFACE = "#313244"
-MUTED   = "#45475A"
-TEXT    = "#CDD6F4"
+BG      = "#161616"
+CARD    = "#262626"
+SURFACE = "#393939"
+MUTED   = "#525252"
+TEXT    = "#F4F4F4"
 SUBTEXT = "#000000"    # ComboBox popup item text (light background)
-HINT    = "#A6ADC8"    # muted hint / status text
-ACCENT  = "#F0A500"
+HINT    = "#A8A8A8"    # muted hint / status text
+ACCENT  = "#F1C21B"
 HOVER   = "#3D3D5C"    # row hover highlight in results window
 
 def _brush(hex_str):

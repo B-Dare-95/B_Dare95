@@ -91,15 +91,15 @@ WPC_PREFIX = "WPC_"
 
 # -- Catppuccin Mocha palette -------------------------------------------------
 
-HEX_BG      = "#1E1E2E"
-HEX_CARD    = "#2A2A3C"
-HEX_SURFACE = "#313244"
-HEX_MUTED   = "#45475A"
-HEX_TEXT    = "#CDD6F4"
-HEX_SUBTEXT = "#A6ADC8"
-HEX_ACCENT  = "#F0A500"
-HEX_GREEN   = "#A6E3A1"
-HEX_RED     = "#F38BA8"
+HEX_BG      = "#161616"
+HEX_CARD    = "#262626"
+HEX_SURFACE = "#393939"
+HEX_MUTED   = "#525252"
+HEX_TEXT    = "#F4F4F4"
+HEX_SUBTEXT = "#A8A8A8"
+HEX_ACCENT  = "#F1C21B"
+HEX_GREEN   = "#42BE65"
+HEX_RED     = "#FF8389"
 
 PALETTE = [
     (243, 139, 168), (250, 179, 135), (249, 226, 175), (166, 227, 161),
@@ -319,14 +319,14 @@ def template_controls_filters(tpl):
 
 STYLES = u"""
   <Window.Resources>
-    <SolidColorBrush x:Key="BgBrush"      Color="#1E1E2E"/>
-    <SolidColorBrush x:Key="CardBrush"    Color="#2A2A3C"/>
-    <SolidColorBrush x:Key="SurfaceBrush" Color="#313244"/>
-    <SolidColorBrush x:Key="MutedBrush"   Color="#45475A"/>
-    <SolidColorBrush x:Key="TextBrush"    Color="#CDD6F4"/>
-    <SolidColorBrush x:Key="SubTextBrush" Color="#A6ADC8"/>
-    <SolidColorBrush x:Key="AccentBrush"  Color="#F0A500"/>
-    <SolidColorBrush x:Key="GreenBrush"   Color="#A6E3A1"/>
+    <SolidColorBrush x:Key="BgBrush"      Color="#161616"/>
+    <SolidColorBrush x:Key="CardBrush"    Color="#262626"/>
+    <SolidColorBrush x:Key="SurfaceBrush" Color="#393939"/>
+    <SolidColorBrush x:Key="MutedBrush"   Color="#525252"/>
+    <SolidColorBrush x:Key="TextBrush"    Color="#F4F4F4"/>
+    <SolidColorBrush x:Key="SubTextBrush" Color="#A8A8A8"/>
+    <SolidColorBrush x:Key="AccentBrush"  Color="#F1C21B"/>
+    <SolidColorBrush x:Key="GreenBrush"   Color="#42BE65"/>
 
     <Style x:Key="Hdr" TargetType="TextBlock">
       <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
@@ -379,7 +379,7 @@ STYLES = u"""
     <Style x:Key="BtnAccent" TargetType="Button" BasedOn="{StaticResource Btn}">
       <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
       <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
-      <Setter Property="Foreground" Value="#1E1E2E"/>
+      <Setter Property="Foreground" Value="#161616"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
     </Style>
 
@@ -437,7 +437,7 @@ STYLES = u"""
               <Trigger Property="IsChecked" Value="True">
                 <Setter TargetName="bd" Property="Background" Value="{StaticResource AccentBrush}"/>
                 <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
-                <Setter Property="Foreground" Value="#1E1E2E"/>
+                <Setter Property="Foreground" Value="#161616"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
               </Trigger>
             </ControlTemplate.Triggers>
@@ -465,7 +465,7 @@ STYLES = u"""
               <Trigger Property="IsChecked" Value="True">
                 <Setter TargetName="bd" Property="Background" Value="{StaticResource GreenBrush}"/>
                 <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource GreenBrush}"/>
-                <Setter Property="Foreground" Value="#1E1E2E"/>
+                <Setter Property="Foreground" Value="#161616"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -487,7 +487,7 @@ STYLES = u"""
                       BorderBrush="{StaticResource MutedBrush}"
                       BorderThickness="1" VerticalAlignment="Center">
                 <Path x:Name="mark" Data="M 3,7 L 6,10.5 L 12,3.5"
-                      Stroke="#1E1E2E" StrokeThickness="2"
+                      Stroke="#161616" StrokeThickness="2"
                       StrokeStartLineCap="Round" StrokeEndLineCap="Round"
                       Visibility="Collapsed"/>
               </Border>
@@ -562,7 +562,7 @@ STYLES = u"""
               </Trigger>
               <Trigger Property="IsSelected" Value="True">
                 <Setter TargetName="bd" Property="Background" Value="{StaticResource AccentBrush}"/>
-                <Setter Property="Foreground" Value="#1E1E2E"/>
+                <Setter Property="Foreground" Value="#161616"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
               </Trigger>
             </ControlTemplate.Triggers>
@@ -583,7 +583,7 @@ STYLES = u"""
                   <Thumb>
                     <Thumb.Template>
                       <ControlTemplate TargetType="Thumb">
-                        <Border Background="#45475A" CornerRadius="4" Margin="2,0,2,0"/>
+                        <Border Background="#525252" CornerRadius="4" Margin="2,0,2,0"/>
                       </ControlTemplate>
                     </Thumb.Template>
                   </Thumb>
@@ -610,18 +610,18 @@ DIALOG_HEAD = u"""<Window
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="Colorizer" SizeToContent="Height" Width="470"
     WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
-    ShowInTaskbar="False" Background="#1E1E2E"
+    ShowInTaskbar="False" Background="#161616"
     FontFamily="Segoe UI" FontSize="12">"""
 
 DIALOG_BODY = u"""
-  <Border Background="#2A2A3C" CornerRadius="8" Margin="12">
+  <Border Background="#262626" CornerRadius="8" Margin="12">
     <DockPanel>
-      <Border x:Name="bar_accent" Width="4" Background="#F0A500"
+      <Border x:Name="bar_accent" Width="4" Background="#F1C21B"
               DockPanel.Dock="Left" CornerRadius="8,0,0,8"/>
       <StackPanel Margin="18,16,18,14">
-        <TextBlock x:Name="txt_title" Foreground="#CDD6F4" FontSize="14"
+        <TextBlock x:Name="txt_title" Foreground="#F4F4F4" FontSize="14"
                    FontWeight="Bold" TextWrapping="Wrap" Margin="0,0,0,10"/>
-        <TextBlock x:Name="txt_msg" Foreground="#A6ADC8" FontSize="12"
+        <TextBlock x:Name="txt_msg" Foreground="#A8A8A8" FontSize="12"
                    TextWrapping="Wrap" LineHeight="18"/>
         <StackPanel x:Name="btn_holder" Orientation="Horizontal"
                     HorizontalAlignment="Right" Margin="0,18,0,0"/>
@@ -688,7 +688,7 @@ MAIN_HEAD = u"""<Window
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="Universal Element Colorizer"
     Height="820" Width="1180" MinHeight="660" MinWidth="980"
-    WindowStartupLocation="CenterScreen" Background="#1E1E2E"
+    WindowStartupLocation="CenterScreen" Background="#161616"
     FontFamily="Segoe UI" FontSize="12">"""
 
 MAIN_BODY = u"""
@@ -700,15 +700,15 @@ MAIN_BODY = u"""
     </Grid.RowDefinitions>
 
     <!-- HEADER / MODE -->
-    <Border Grid.Row="0" Background="#2A2A3C" CornerRadius="8" Margin="0,0,0,12">
+    <Border Grid.Row="0" Background="#262626" CornerRadius="8" Margin="0,0,0,12">
       <DockPanel>
-        <Border Width="4" Background="#F0A500" DockPanel.Dock="Left" CornerRadius="8,0,0,8"/>
+        <Border Width="4" Background="#F1C21B" DockPanel.Dock="Left" CornerRadius="8,0,0,8"/>
         <Grid Margin="16,10,16,10">
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
-            <TextBlock Text="UNIVERSAL ELEMENT COLORIZER" Foreground="#CDD6F4"
+            <TextBlock Text="UNIVERSAL ELEMENT COLORIZER" Foreground="#F4F4F4"
                        FontSize="13" FontWeight="Bold" VerticalAlignment="Center"/>
-            <Border Width="1" Background="#45475A" Margin="16,4,16,4"/>
-            <TextBlock Text="MODE" Foreground="#F0A500" FontSize="10" FontWeight="Bold"
+            <Border Width="1" Background="#525252" Margin="16,4,16,4"/>
+            <TextBlock Text="MODE" Foreground="#F1C21B" FontSize="10" FontWeight="Bold"
                        VerticalAlignment="Center" Margin="0,0,10,0"/>
             <ToggleButton x:Name="tg_filter" Content="By View Filter"
                           Style="{StaticResource Tgl}" IsChecked="True" Margin="0,0,6,0"/>
@@ -719,9 +719,9 @@ MAIN_BODY = u"""
                       VerticalAlignment="Center">
             <TextBlock x:Name="txt_view" Style="{StaticResource Sub}"
                        VerticalAlignment="Center"/>
-            <Border x:Name="badge_tpl" Background="#313244" CornerRadius="10"
+            <Border x:Name="badge_tpl" Background="#393939" CornerRadius="10"
                     Padding="10,3,10,3" Margin="10,0,0,0" Visibility="Collapsed">
-              <TextBlock x:Name="txt_badge" Foreground="#F0A500" FontSize="10"
+              <TextBlock x:Name="txt_badge" Foreground="#F1C21B" FontSize="10"
                          FontWeight="Bold"/>
             </Border>
           </StackPanel>
@@ -738,7 +738,7 @@ MAIN_BODY = u"""
       </Grid.ColumnDefinitions>
 
       <!-- LEFT: category + parameter -->
-      <Border Grid.Column="0" Background="#2A2A3C" CornerRadius="8" Padding="12">
+      <Border Grid.Column="0" Background="#262626" CornerRadius="8" Padding="12">
         <Grid>
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -753,16 +753,16 @@ MAIN_BODY = u"""
           <TextBlock Grid.Row="0" Text="CATEGORY" Style="{StaticResource Hdr}"/>
           <Grid Grid.Row="1" Margin="0,0,0,6">
             <TextBox x:Name="tb_cat_search"/>
-            <TextBlock x:Name="ph_cat" Text="Search categories..." Foreground="#6C7086"
+            <TextBlock x:Name="ph_cat" Text="Search categories..." Foreground="#8D8D8D"
                        FontSize="11" Margin="10,0,0,0" VerticalAlignment="Center"
                        IsHitTestVisible="False"/>
           </Grid>
-          <Border Grid.Row="2" Background="#1E1E2E" CornerRadius="6"
-                  BorderBrush="#45475A" BorderThickness="1" Padding="2">
+          <Border Grid.Row="2" Background="#161616" CornerRadius="6"
+                  BorderBrush="#525252" BorderThickness="1" Padding="2">
             <ListBox x:Name="lb_cat"/>
           </Border>
 
-          <Border Grid.Row="3" Height="1" Background="#45475A" Margin="0,14,0,12"/>
+          <Border Grid.Row="3" Height="1" Background="#525252" Margin="0,14,0,12"/>
 
           <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,0,0,8">
             <TextBlock Text="PARAMETER" Style="{StaticResource Hdr}" Margin="2,3,14,0"/>
@@ -774,12 +774,12 @@ MAIN_BODY = u"""
 
           <Grid Grid.Row="5" Margin="0,0,0,6">
             <TextBox x:Name="tb_param_search"/>
-            <TextBlock x:Name="ph_param" Text="Search parameters..." Foreground="#6C7086"
+            <TextBlock x:Name="ph_param" Text="Search parameters..." Foreground="#8D8D8D"
                        FontSize="11" Margin="10,0,0,0" VerticalAlignment="Center"
                        IsHitTestVisible="False"/>
           </Grid>
-          <Border Grid.Row="6" Background="#1E1E2E" CornerRadius="6"
-                  BorderBrush="#45475A" BorderThickness="1" Padding="2">
+          <Border Grid.Row="6" Background="#161616" CornerRadius="6"
+                  BorderBrush="#525252" BorderThickness="1" Padding="2">
             <ListBox x:Name="lb_param"/>
           </Border>
         </Grid>
@@ -795,7 +795,7 @@ MAIN_BODY = u"""
           <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Background="#2A2A3C" CornerRadius="8" Padding="12">
+        <Border Grid.Row="0" Background="#262626" CornerRadius="8" Padding="12">
           <Grid>
             <Grid.RowDefinitions>
               <RowDefinition Height="Auto"/>
@@ -819,8 +819,8 @@ MAIN_BODY = u"""
               </StackPanel>
             </Grid>
 
-            <Border Grid.Row="1" Background="#1E1E2E" CornerRadius="6"
-                    BorderBrush="#45475A" BorderThickness="1" Padding="8">
+            <Border Grid.Row="1" Background="#161616" CornerRadius="6"
+                    BorderBrush="#525252" BorderThickness="1" Padding="8">
               <Grid>
                 <Grid.RowDefinitions>
                   <RowDefinition Height="Auto"/>
@@ -832,7 +832,7 @@ MAIN_BODY = u"""
                   <StackPanel x:Name="pnl_values"/>
                 </ScrollViewer>
                 <TextBlock x:Name="txt_hint" Grid.Row="0" Grid.RowSpan="2"
-                           Foreground="#6C7086" FontSize="12"
+                           Foreground="#8D8D8D" FontSize="12"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
                            TextAlignment="Center" TextWrapping="Wrap"
                            Text="Select a category and a parameter to populate."/>
@@ -841,7 +841,7 @@ MAIN_BODY = u"""
           </Grid>
         </Border>
 
-        <Border Grid.Row="1" Background="#2A2A3C" CornerRadius="8"
+        <Border Grid.Row="1" Background="#262626" CornerRadius="8"
                 Padding="12" Margin="0,12,0,0">
           <StackPanel>
             <TextBlock Text="OVERRIDE TARGETS" Style="{StaticResource Hdr}"/>
@@ -856,7 +856,7 @@ MAIN_BODY = u"""
                 <RowDefinition Height="Auto"/>
               </Grid.RowDefinitions>
 
-              <TextBlock Grid.Row="0" Grid.Column="0" Text="SURFACE" Foreground="#A6ADC8"
+              <TextBlock Grid.Row="0" Grid.Column="0" Text="SURFACE" Foreground="#A8A8A8"
                          FontSize="10" FontWeight="Bold" Width="70" Margin="2,1,12,0"/>
               <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal">
                 <CheckBox x:Name="chk_surf_fg" Content="Foreground pattern"
@@ -865,7 +865,7 @@ MAIN_BODY = u"""
                           Style="{StaticResource Chk}"/>
               </StackPanel>
 
-              <TextBlock Grid.Row="1" Grid.Column="0" Text="CUT" Foreground="#A6ADC8"
+              <TextBlock Grid.Row="1" Grid.Column="0" Text="CUT" Foreground="#A8A8A8"
                          FontSize="10" FontWeight="Bold" Width="70" Margin="2,1,12,0"/>
               <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal">
                 <CheckBox x:Name="chk_cut_fg" Content="Foreground pattern"
@@ -874,18 +874,18 @@ MAIN_BODY = u"""
                           Style="{StaticResource Chk}"/>
               </StackPanel>
 
-              <TextBlock Grid.Row="2" Grid.Column="0" Text="LINES" Foreground="#A6ADC8"
+              <TextBlock Grid.Row="2" Grid.Column="0" Text="LINES" Foreground="#A8A8A8"
                          FontSize="10" FontWeight="Bold" Width="70" Margin="2,1,12,0"/>
               <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal">
                 <CheckBox x:Name="chk_proj_line" Content="Projection lines"
                           Style="{StaticResource Chk}"/>
                 <CheckBox x:Name="chk_cut_line" Content="Cut lines"
                           Style="{StaticResource Chk}"/>
-                <TextBlock Text="Weight" Foreground="#A6ADC8" FontSize="11"
+                <TextBlock Text="Weight" Foreground="#A8A8A8" FontSize="11"
                            VerticalAlignment="Center" Margin="0,0,8,6"/>
                 <TextBox x:Name="tb_weight" Width="46" Height="24" Margin="0,0,8,6"
                          TextAlignment="Center"/>
-                <TextBlock Text="blank = keep current (1-16)" Foreground="#6C7086"
+                <TextBlock Text="blank = keep current (1-16)" Foreground="#8D8D8D"
                            FontSize="10" VerticalAlignment="Center" Margin="0,0,0,6"/>
               </StackPanel>
             </Grid>
@@ -895,7 +895,7 @@ MAIN_BODY = u"""
     </Grid>
 
     <!-- FOOTER -->
-    <Border Grid.Row="2" Background="#2A2A3C" CornerRadius="8"
+    <Border Grid.Row="2" Background="#262626" CornerRadius="8"
             Padding="14,10,14,10" Margin="0,12,0,0">
       <DockPanel>
         <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">

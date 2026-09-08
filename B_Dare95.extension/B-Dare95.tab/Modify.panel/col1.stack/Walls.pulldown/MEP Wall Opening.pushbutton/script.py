@@ -842,40 +842,40 @@ XAML = u"""
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="MEP Wall Openings" Height="720" Width="1040"
-        WindowStartupLocation="CenterScreen" Background="#1E1E2E"
+        WindowStartupLocation="CenterScreen" Background="#161616"
         FontFamily="Segoe UI" ResizeMode="CanResize">
   <Window.Resources>
 
     <Style x:Key="H1" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
       <Setter Property="FontSize" Value="18"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
     </Style>
     <Style x:Key="Lbl" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
       <Setter Property="FontSize" Value="12"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
       <Setter Property="Margin" Value="0,0,0,4"/>
     </Style>
     <Style x:Key="Sub" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#A6ADC8"/>
+      <Setter Property="Foreground" Value="#A8A8A8"/>
       <Setter Property="FontSize" Value="11"/>
       <Setter Property="TextWrapping" Value="Wrap"/>
     </Style>
 
     <Style TargetType="TextBox">
-      <Setter Property="Background" Value="#313244"/>
-      <Setter Property="Foreground" Value="#CDD6F4"/>
-      <Setter Property="BorderBrush" Value="#45475A"/>
+      <Setter Property="Background" Value="#393939"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
+      <Setter Property="BorderBrush" Value="#525252"/>
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="Padding" Value="6,4"/>
       <Setter Property="FontSize" Value="12"/>
-      <Setter Property="CaretBrush" Value="#F0A500"/>
-      <Setter Property="SelectionBrush" Value="#F0A500"/>
+      <Setter Property="CaretBrush" Value="#F1C21B"/>
+      <Setter Property="SelectionBrush" Value="#F1C21B"/>
     </Style>
 
     <Style TargetType="CheckBox">
-      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
       <Setter Property="FontSize" Value="12"/>
       <Setter Property="Margin" Value="4,3,4,3"/>
     </Style>
@@ -907,16 +907,16 @@ XAML = u"""
     </Style>
 
     <Style x:Key="Accent" TargetType="Button" BasedOn="{StaticResource BtnBase}">
-      <Setter Property="Background" Value="#F0A500"/>
-      <Setter Property="Foreground" Value="#1E1E2E"/>
+      <Setter Property="Background" Value="#F1C21B"/>
+      <Setter Property="Foreground" Value="#161616"/>
     </Style>
     <Style x:Key="Ghost" TargetType="Button" BasedOn="{StaticResource BtnBase}">
-      <Setter Property="Background" Value="#45475A"/>
-      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="Background" Value="#525252"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
     </Style>
     <Style x:Key="Mini" TargetType="Button" BasedOn="{StaticResource BtnBase}">
-      <Setter Property="Background" Value="#313244"/>
-      <Setter Property="Foreground" Value="#A6ADC8"/>
+      <Setter Property="Background" Value="#393939"/>
+      <Setter Property="Foreground" Value="#A8A8A8"/>
       <Setter Property="Height" Value="24"/>
       <Setter Property="FontSize" Value="11"/>
     </Style>
@@ -941,8 +941,8 @@ XAML = u"""
                  Text="Cuts a hosted rectangular opening into a Basic Wall wherever a Pipe, Duct or Cable Tray (host model or link) passes through it."/>
     </StackPanel>
 
-    <Border Grid.Row="1" Grid.Column="0" Background="#2A2A3C"
-            BorderBrush="#45475A" BorderThickness="1" CornerRadius="8"
+    <Border Grid.Row="1" Grid.Column="0" Background="#262626"
+            BorderBrush="#525252" BorderThickness="1" CornerRadius="8"
             Padding="12">
       <Grid>
         <Grid.RowDefinitions>
@@ -967,7 +967,7 @@ XAML = u"""
                   Content="Clear"/>
         </StackPanel>
 
-        <Border Grid.Row="2" Background="#1E1E2E" BorderBrush="#45475A"
+        <Border Grid.Row="2" Background="#161616" BorderBrush="#525252"
                 BorderThickness="1" CornerRadius="6">
           <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="6">
             <StackPanel x:Name="TypeList"/>
@@ -1014,8 +1014,8 @@ XAML = u"""
       </Grid>
     </Border>
 
-    <Border Grid.Row="1" Grid.Column="2" Background="#2A2A3C"
-            BorderBrush="#45475A" BorderThickness="1" CornerRadius="8"
+    <Border Grid.Row="1" Grid.Column="2" Background="#262626"
+            BorderBrush="#525252" BorderThickness="1" CornerRadius="8"
             Padding="12">
       <Grid>
         <Grid.RowDefinitions>
@@ -1025,11 +1025,11 @@ XAML = u"""
         </Grid.RowDefinitions>
         <TextBlock Grid.Row="0" Style="{StaticResource Lbl}" Text="Report"/>
         <TextBox Grid.Row="1" x:Name="Report" IsReadOnly="True"
-                 FontFamily="Consolas" FontSize="11" Background="#1E1E2E"
+                 FontFamily="Consolas" FontSize="11" Background="#161616"
                  TextWrapping="NoWrap" VerticalScrollBarVisibility="Auto"
                  HorizontalScrollBarVisibility="Auto"/>
         <ProgressBar Grid.Row="2" x:Name="Progress" Height="4" Margin="0,10,0,0"
-                     Background="#313244" Foreground="#F0A500"
+                     Background="#393939" Foreground="#F1C21B"
                      BorderThickness="0" Minimum="0" Maximum="100" Value="0"/>
       </Grid>
     </Border>

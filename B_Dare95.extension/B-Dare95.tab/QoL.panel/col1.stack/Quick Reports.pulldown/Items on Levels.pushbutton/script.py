@@ -223,9 +223,9 @@ def block(header_txt, all_ids, cat_dict, note=None):
 
     head = (
         '<div onclick="{js}" style="cursor:pointer;padding:7px 10px;'
-        'background:#2A2A3C;color:#CDD6F4;border-radius:5px 5px 0 0;'
+        'background:#262626;color:#F4F4F4;border-radius:5px 5px 0 0;'
         'font-size:14px;font-weight:bold;">'
-        '<span class="epl-arrow" id="{aid}" style="color:#F0A500;">{arrow}</span>'
+        '<span class="epl-arrow" id="{aid}" style="color:#F1C21B;">{arrow}</span>'
         '&nbsp;{head}</div>'
     ).format(js=TOGGLE_JS % (bid, aid), aid=aid, arrow=arrow, head=header_txt)
 
@@ -243,7 +243,7 @@ def block(header_txt, all_ids, cat_dict, note=None):
             .format(cat_rows(cat_dict)))
     body_bits.append('</div>')
 
-    return ('<div style="border:1px solid #45475A;border-radius:6px;margin:6px 0;'
+    return ('<div style="border:1px solid #525252;border-radius:6px;margin:6px 0;'
             'overflow:hidden;">{}{}</div>'.format(head, ''.join(body_bits)))
 
 
@@ -276,12 +276,12 @@ for lint in ordered:
 
     if lvl:
         mm = lvl.Elevation * 304.8
-        header = ('{}&nbsp; <span style="font-weight:normal;color:#A6ADC8;">'
+        header = ('{}&nbsp; <span style="font-weight:normal;color:#A8A8A8;">'
                   '(elev {:.0f} mm)</span>&nbsp; &mdash;&nbsp; '
-                  '<span style="color:#F0A500;">{:,} elements</span>'
+                  '<span style="color:#F1C21B;">{:,} elements</span>'
                   .format(esc(lname), mm, tot))
     else:
-        header = ('{}&nbsp; &mdash;&nbsp; <span style="color:#F0A500;">'
+        header = ('{}&nbsp; &mdash;&nbsp; <span style="color:#F1C21B;">'
                   '{:,} elements</span>'.format(esc(lname), tot))
 
     output.print_html(block(header, all_ids, cats,
@@ -294,14 +294,14 @@ if UNASSIGNED in totals:
     for cname in cats:
         all_ids.extend(cats[cname])
     header = ('No Level / Unassigned&nbsp; &mdash;&nbsp; '
-              '<span style="color:#F0A500;">{:,} elements</span>'
+              '<span style="color:#F1C21B;">{:,} elements</span>'
               .format(totals[UNASSIGNED]))
     output.print_html(block(header, all_ids, cats))
 
 # totals across the whole model
 total_all = sum(totals.values())
 grand_header = ('Totals by Category (all levels)&nbsp; &mdash;&nbsp; '
-                '<span style="color:#F0A500;">{:,} elements</span>'.format(total_all))
+                '<span style="color:#F1C21B;">{:,} elements</span>'.format(total_all))
 output.print_html(block(grand_header, None, cat_grand))
 
 output.print_md('---')
