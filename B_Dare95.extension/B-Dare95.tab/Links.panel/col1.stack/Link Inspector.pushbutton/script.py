@@ -6,6 +6,7 @@ Read-only health report for every Revit link in the active document:
   * DWG links / imports living inside the link
   * Warning count stored in the link, grouped by warning type
   * Levels and Grids sitting on the wrong workset
+  * Items left on Workset1, grouped by category
   * Unused families and types, per category
 
 The report exports as a self-contained interactive HTML page.
@@ -39,8 +40,10 @@ from System.Windows.Media import Color, SolidColorBrush
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 
 from Autodesk.Revit.DB import (BuiltInCategory, CADLinkType, CategoryType,
-                               Element, ElementId, FilteredElementCollector,
-                               ImportInstance, RevitLinkInstance)
+                               Element, ElementId, ElementWorksetFilter,
+                               FilteredElementCollector,
+                               FilteredWorksetCollector, ImportInstance,
+                               RevitLinkInstance, WorksetKind)
 from Autodesk.Revit.UI import TaskDialog
 
 try:
@@ -55,6 +58,11 @@ doc = __revit__.ActiveUIDocument.Document
 VALID_LG_WORKSETS = [
     "shared levels and grids",
     "shared views, levels, grids",
+]
+
+# Worksets whose contents are flagged as "left on the default workset".
+DEFAULT_WORKSET_NAMES = [
+    "workset1",
 ]
 
 DASH = u"\u2014"        # em dash, shown when a check does not apply
@@ -271,7 +279,61 @@ def scan_levels_grids(target_doc):
 
 
 # ---------------------------------------------------------------------------
-# inspection 4 - unused families and types
+# inspection 4 - items left on the default workset
+# ---------------------------------------------------------------------------
+
+def scan_default_workset(target_doc):
+    """Count elements sitting on Workset1, grouped by category.
+
+    Returns (total, [Entry, ...]). total is None when the check does not
+    apply, which is shown as n/a rather than a misleading zero.
+
+    Elements with no category (sketch geometry and other internals) are left
+    out so the number matches what a user sees in a workset filter.
+    """
+    if not target_doc.IsWorkshared:
+        return None, [Entry("Model is not workshared - no user worksets.")]
+
+    try:
+        worksets = [ws for ws
+                    in FilteredWorksetCollector(target_doc).OfKind(
+                        WorksetKind.UserWorkset)
+                    if (ws.Name or "").strip().lower() in DEFAULT_WORKSET_NAMES]
+    except Exception as err:
+        return None, [Entry(u"Worksets could not be read: {0}".format(err))]
+
+    if not worksets:
+        return 0, [Entry("No workset named 'Workset1' in this model.")]
+
+    counts = {}
+    total = 0
+    for workset in worksets:
+        collector = (FilteredElementCollector(target_doc)
+                     .WherePasses(ElementWorksetFilter(workset.Id))
+                     .WhereElementIsNotElementType())
+        for element in collector:
+            category = element.Category
+            if category is None:
+                continue
+            cat_name = category.Name
+            counts[cat_name] = counts.get(cat_name, 0) + 1
+            total += 1
+
+    if not total:
+        return 0, [Entry("Workset1 exists but holds no categorised elements.")]
+
+    entries = []
+    for cat_name in counts:
+        count = counts[cat_name]
+        entries.append(Entry(u"{0}   -   {1} item(s)".format(cat_name, count),
+                             (-count, cat_name.lower()),
+                             (cat_name, u"{0}".format(count))))
+    entries.sort(key=lambda e: e.SortKey)
+    return total, entries
+
+
+# ---------------------------------------------------------------------------
+# inspection 5 - unused families and types
 # ---------------------------------------------------------------------------
 
 class CategoryStat(object):
@@ -394,17 +456,19 @@ class LinkRow(object):
         self.BadLevels = None
         self.BadGrids = None
         self.Workshared = False
+        self.Workset1 = None          # item count on Workset1, None = n/a
         self.Unused = None            # UnusedResult, filled on demand
 
         self.CadEntries = []
         self.WarningEntries = []
         self.WorksetEntries = []
+        self.Workset1Entries = []
 
         self.ColDwgLinks = DASH
         self.ColDwgImports = DASH
         self.ColWarnings = DASH
-        self.ColLevels = DASH
-        self.ColGrids = DASH
+        self.ColLevelGrid = DASH
+        self.ColWorkset1 = DASH
         self.ColUnused = DASH
 
     def inspect(self, target_doc):
@@ -416,17 +480,19 @@ class LinkRow(object):
         self.Warnings, self.WarningEntries = scan_warnings(target_doc)
         (self.BadLevels, self.BadGrids, self.Workshared,
          self.WorksetEntries) = scan_levels_grids(target_doc)
+        self.Workset1, self.Workset1Entries = scan_default_workset(target_doc)
 
         self.ColDwgLinks = str(self.DwgLinks)
         self.ColDwgImports = str(self.DwgImports)
         self.ColWarnings = str(self.Warnings)
         self.ColUnused = "?"
         if self.Workshared:
-            self.ColLevels = str(self.BadLevels)
-            self.ColGrids = str(self.BadGrids)
+            self.ColLevelGrid = "{0} / {1}".format(self.BadLevels,
+                                                   self.BadGrids)
         else:
-            self.ColLevels = "n/a"
-            self.ColGrids = "n/a"
+            self.ColLevelGrid = "n/a"
+        self.ColWorkset1 = ("n/a" if self.Workset1 is None
+                            else str(self.Workset1))
 
     def inspect_unused(self):
         """Run the unused-item scan once and cache it."""
@@ -538,9 +604,9 @@ def table(headers, rows_data, empty_note="Nothing found."):
 
 REPORT_CSS = u"""
 :root{
-  --bg:#161616; --card:#262626; --surface:#393939; --muted:#525252;
-  --text:#f4f4f4; --sub:#a8a8a8; --accent:#f1c21b;
-  --ok:#42be65; --bad:#ff8389;
+  --bg:#1e1e2e; --card:#2a2a3c; --surface:#313244; --muted:#45475a;
+  --text:#cdd6f4; --sub:#a6adc8; --accent:#f0a500;
+  --ok:#a6e3a1; --bad:#f38ba8;
 }
 *{box-sizing:border-box;}
 body{margin:0;padding:28px 32px;background:var(--bg);color:var(--text);
@@ -661,9 +727,9 @@ def html_doc_section(index, row):
     """One collapsible document block."""
     out = []
     anchor = "doc-{0}".format(index)
-    pills = u'<span class="pills">{0}{1}{2}{3}</span>'.format(
+    pills = u'<span class="pills">{0}{1}{2}{3}{4}</span>'.format(
         badge(row.ColDwgLinks), badge(row.ColWarnings),
-        badge(row.ColGrids),
+        badge(row.ColLevelGrid), badge(row.ColWorkset1),
         badge(row.ColUnused if row.Unused is not None else "not scanned"))
 
     out.append(u'<details class="doc" id="{0}" data-name="{1}">'.format(
@@ -706,6 +772,21 @@ def html_doc_section(index, row):
         out.append(table(["Element", "Name", "Current workset"], lg_rows))
     else:
         for entry in row.WorksetEntries:
+            out.append(u'<p class="note">{0}</p>'.format(esc(entry.Display)))
+    out.append(u"</details>")
+
+    # Workset1
+    ws1_rows = [e.Fields for e in row.Workset1Entries if e.Fields]
+    if row.Workset1 is None:
+        ws1_label = u"Items on Workset1 (n/a)"
+    else:
+        ws1_label = u"Items on Workset1 ({0})".format(row.Workset1)
+    out.append(u'<details class="sub"><summary>{0}</summary>'.format(
+        esc(ws1_label)))
+    if ws1_rows:
+        out.append(table(["Category", "Items"], ws1_rows))
+    else:
+        for entry in row.Workset1Entries:
             out.append(u'<p class="note">{0}</p>'.format(esc(entry.Display)))
     out.append(u"</details>")
 
@@ -753,6 +834,7 @@ def build_report_html(rows):
     scanned = [r for r in rows if r.Scanned]
     workshared = [r for r in scanned if r.Workshared]
     unused_done = [r for r in scanned if r.Unused is not None]
+    ws1_done = [r for r in scanned if r.Workset1 is not None]
 
     totals = {
         "docs": len(scanned),
@@ -763,6 +845,7 @@ def build_report_html(rows):
         "grids": sum([r.BadGrids for r in workshared]),
         "un_fams": sum([r.Unused.TotalUnusedFamilies for r in unused_done]),
         "un_types": sum([r.Unused.TotalUnusedTypes for r in unused_done]),
+        "ws1": sum([r.Workset1 for r in ws1_done]),
     }
 
     out = []
@@ -788,6 +871,7 @@ def build_report_html(rows):
              ("Warnings", totals["warnings"]),
              ("Levels off workset", totals["levels"]),
              ("Grids off workset", totals["grids"]),
+             ("Items on Workset1", totals["ws1"]),
              ("Unused families", totals["un_fams"]),
              ("Unused types", totals["un_types"])]
     out.append(u'<div class="cards">')
@@ -808,8 +892,9 @@ def build_report_html(rows):
     # overview table
     out.append(u'<table id="overview"><thead><tr>')
     headers = [("Document", False), ("Status", False), ("DWG links", True),
-               ("DWG imports", True), ("Warnings", True), ("Bad levels", True),
-               ("Bad grids", True), ("Unused fam / type", True)]
+               ("DWG imports", True), ("Warnings", True),
+               ("Bad lvl / grid", True), ("On Workset1", True),
+               ("Unused fam / type", True)]
     for idx, pair in enumerate(headers):
         label, numeric = pair
         out.append(u'<th onclick="sortTable({0},{1})">{2}</th>'.format(
@@ -835,10 +920,18 @@ def build_report_html(rows):
         out.append(u'<td class="doc" onclick="goDoc(\'doc-{0}\')">{1}</td>'
                    .format(index, esc(row.RawName)))
         out.append(u"<td>{0}</td>".format(esc(row.Status)))
-        for text in (row.ColDwgLinks, row.ColDwgImports, row.ColWarnings,
-                     row.ColLevels, row.ColGrids):
+        for text in (row.ColDwgLinks, row.ColDwgImports, row.ColWarnings):
             out.append(u'<td data-sort="{0}">{1}</td>'.format(
                 sort_val(text), badge(text)))
+
+        lvl_sort = -1
+        if row.Workshared and row.Scanned:
+            lvl_sort = row.BadLevels + row.BadGrids
+        out.append(u'<td data-sort="{0}">{1}</td>'.format(
+            lvl_sort, badge(row.ColLevelGrid)))
+        out.append(u'<td data-sort="{0}">{1}</td>'.format(
+            -1 if row.Workset1 is None else row.Workset1,
+            badge(row.ColWorkset1)))
         out.append(u'<td data-sort="{0}">{1}</td>'.format(
             unused_sort, badge(unused_text)))
         out.append(u"</tr>")
@@ -854,7 +947,9 @@ def build_report_html(rows):
                u'mullions inside a curtain wall type, profiles, nested '
                u'sub-families - are reported as unused even though Revit '
                u'cannot purge them. Treat the result as triage, not a purge '
-               u'list.<br>Warning counts come from the link file as it was '
+               u'list.<br>Workset1 counts cover categorised model elements '
+               u'only; sketch geometry and other uncategorised internals are '
+               u'left out.<br>Warning counts come from the link file as it was '
                u'loaded; reload the link after someone cleans warnings in it.'
                u'</div>')
 
@@ -910,17 +1005,17 @@ XAML = u"""
         Title="Link Inspector"
         Height="720" Width="1300"
         WindowStartupLocation="CenterScreen"
-        Background="#161616">
+        Background="#1E1E2E">
 
   <Window.Resources>
     <Style TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
+      <Setter Property="Foreground" Value="#CDD6F4"/>
       <Setter Property="FontFamily" Value="Segoe UI"/>
     </Style>
 
     <Style x:Key="AccentButton" TargetType="Button">
-      <Setter Property="Foreground" Value="#161616"/>
-      <Setter Property="Background" Value="#F1C21B"/>
+      <Setter Property="Foreground" Value="#1E1E2E"/>
+      <Setter Property="Background" Value="#F0A500"/>
       <Setter Property="FontFamily" Value="Segoe UI"/>
       <Setter Property="FontSize" Value="12"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
@@ -939,8 +1034,8 @@ XAML = u"""
     </Style>
 
     <Style x:Key="GhostButton" TargetType="Button">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Background" Value="#525252"/>
+      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="Background" Value="#45475A"/>
       <Setter Property="FontFamily" Value="Segoe UI"/>
       <Setter Property="FontSize" Value="12"/>
       <Setter Property="Padding" Value="16,7"/>
@@ -958,8 +1053,8 @@ XAML = u"""
     </Style>
 
     <Style x:Key="TabToggle" TargetType="ToggleButton">
-      <Setter Property="Foreground" Value="#A8A8A8"/>
-      <Setter Property="Background" Value="#393939"/>
+      <Setter Property="Foreground" Value="#A6ADC8"/>
+      <Setter Property="Background" Value="#313244"/>
       <Setter Property="FontFamily" Value="Segoe UI"/>
       <Setter Property="FontSize" Value="11"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
@@ -976,11 +1071,11 @@ XAML = u"""
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#F1C21B"/>
-                <Setter Property="Foreground" Value="#161616"/>
+                <Setter TargetName="Bd" Property="Background" Value="#F0A500"/>
+                <Setter Property="Foreground" Value="#1E1E2E"/>
               </Trigger>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#525252"/>
+                <Setter TargetName="Bd" Property="Background" Value="#45475A"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -989,8 +1084,8 @@ XAML = u"""
     </Style>
 
     <Style TargetType="GridViewColumnHeader">
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Foreground" Value="#A8A8A8"/>
+      <Setter Property="Background" Value="#313244"/>
+      <Setter Property="Foreground" Value="#A6ADC8"/>
       <Setter Property="FontFamily" Value="Segoe UI"/>
       <Setter Property="FontSize" Value="11"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
@@ -1001,7 +1096,7 @@ XAML = u"""
     </Style>
 
     <Style TargetType="ListViewItem">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
+      <Setter Property="Foreground" Value="#CDD6F4"/>
       <Setter Property="FontFamily" Value="Segoe UI"/>
       <Setter Property="FontSize" Value="12"/>
       <Setter Property="Height" Value="26"/>
@@ -1016,11 +1111,11 @@ XAML = u"""
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#393939"/>
+                <Setter TargetName="Bd" Property="Background" Value="#313244"/>
               </Trigger>
               <Trigger Property="IsSelected" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#525252"/>
-                <Setter Property="Foreground" Value="#F1C21B"/>
+                <Setter TargetName="Bd" Property="Background" Value="#45475A"/>
+                <Setter Property="Foreground" Value="#F0A500"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -1052,7 +1147,7 @@ XAML = u"""
                         <Border Background="Transparent"
                                 Width="16" Height="16">
                           <TextBlock x:Name="Sign" Text="+"
-                                     Foreground="#F1C21B" FontSize="12"
+                                     Foreground="#F0A500" FontSize="12"
                                      FontWeight="Bold"
                                      HorizontalAlignment="Center"
                                      VerticalAlignment="Center"/>
@@ -1102,10 +1197,10 @@ XAML = u"""
     <StackPanel Grid.Row="0" Margin="0,0,0,10">
       <TextBlock Text="Link Inspector" FontSize="19" FontWeight="Bold"/>
       <TextBlock x:Name="SummaryText" Margin="0,4,0,0"
-                 FontSize="12" Foreground="#A8A8A8"/>
+                 FontSize="12" Foreground="#A6ADC8"/>
     </StackPanel>
 
-    <Border Grid.Row="1" Background="#262626" CornerRadius="6"
+    <Border Grid.Row="1" Background="#2A2A3C" CornerRadius="6"
             Padding="10,6" Margin="0,0,0,10">
       <Grid>
         <Grid.ColumnDefinitions>
@@ -1113,10 +1208,10 @@ XAML = u"""
           <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
         <TextBlock Grid.Column="0" Text="Search" VerticalAlignment="Center"
-                   Foreground="#A8A8A8" FontSize="12" Margin="0,0,10,0"/>
+                   Foreground="#A6ADC8" FontSize="12" Margin="0,0,10,0"/>
         <TextBox x:Name="SearchBox" Grid.Column="1"
-                 Background="#393939" Foreground="#F4F4F4"
-                 CaretBrush="#F1C21B" BorderThickness="0"
+                 Background="#313244" Foreground="#CDD6F4"
+                 CaretBrush="#F0A500" BorderThickness="0"
                  FontFamily="Segoe UI" FontSize="12" Padding="6,4"/>
       </Grid>
     </Border>
@@ -1128,9 +1223,9 @@ XAML = u"""
         <ColumnDefinition Width="1*"/>
       </Grid.ColumnDefinitions>
 
-      <Border Grid.Column="0" Background="#262626" CornerRadius="8" Padding="8">
+      <Border Grid.Column="0" Background="#2A2A3C" CornerRadius="8" Padding="8">
         <ListView x:Name="LinkList" Background="Transparent"
-                  BorderThickness="0" Foreground="#F4F4F4"
+                  BorderThickness="0" Foreground="#CDD6F4"
                   ScrollViewer.HorizontalScrollBarVisibility="Disabled">
           <ListView.View>
             <GridView>
@@ -1144,10 +1239,10 @@ XAML = u"""
                               DisplayMemberBinding="{Binding ColDwgImports}"/>
               <GridViewColumn Header="Warnings" Width="68"
                               DisplayMemberBinding="{Binding ColWarnings}"/>
-              <GridViewColumn Header="Bad Levels" Width="72"
-                              DisplayMemberBinding="{Binding ColLevels}"/>
-              <GridViewColumn Header="Bad Grids" Width="68"
-                              DisplayMemberBinding="{Binding ColGrids}"/>
+              <GridViewColumn Header="Bad Lvl / Grid" Width="92"
+                              DisplayMemberBinding="{Binding ColLevelGrid}"/>
+              <GridViewColumn Header="On Workset1" Width="86"
+                              DisplayMemberBinding="{Binding ColWorkset1}"/>
               <GridViewColumn Header="Unused Fam / Type" Width="112"
                               DisplayMemberBinding="{Binding ColUnused}"/>
             </GridView>
@@ -1155,7 +1250,7 @@ XAML = u"""
         </ListView>
       </Border>
 
-      <Border Grid.Column="2" Background="#262626" CornerRadius="8" Padding="10">
+      <Border Grid.Column="2" Background="#2A2A3C" CornerRadius="8" Padding="10">
         <Grid>
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -1170,22 +1265,24 @@ XAML = u"""
                           Style="{StaticResource TabToggle}"/>
             <ToggleButton x:Name="TabWorkset" Content="Levels + Grids"
                           Style="{StaticResource TabToggle}"/>
+            <ToggleButton x:Name="TabWorkset1" Content="Workset1"
+                          Style="{StaticResource TabToggle}"/>
             <ToggleButton x:Name="TabUnused" Content="Unused Items"
                           Style="{StaticResource TabToggle}"/>
           </WrapPanel>
 
           <TextBlock x:Name="DetailHeader" Grid.Row="1"
                      Text="Select a document" FontSize="12"
-                     FontWeight="SemiBold" Foreground="#A8A8A8"
+                     FontWeight="SemiBold" Foreground="#A6ADC8"
                      Margin="0,0,0,8" TextWrapping="Wrap"/>
 
-          <ListBox x:Name="DetailList" Grid.Row="2" Background="#393939"
-                   Foreground="#F4F4F4" BorderThickness="0"
+          <ListBox x:Name="DetailList" Grid.Row="2" Background="#313244"
+                   Foreground="#CDD6F4" BorderThickness="0"
                    FontFamily="Segoe UI" FontSize="11"
                    DisplayMemberPath="Display"
                    ScrollViewer.HorizontalScrollBarVisibility="Auto"/>
 
-          <TreeView x:Name="CategoryTree" Grid.Row="2" Background="#393939"
+          <TreeView x:Name="CategoryTree" Grid.Row="2" Background="#313244"
                     BorderThickness="0" Padding="4"
                     Visibility="Collapsed"
                     ScrollViewer.HorizontalScrollBarVisibility="Auto"/>
@@ -1266,6 +1363,7 @@ def show_window(rows):
     tab_cad = window.FindName("TabCad")
     tab_warn = window.FindName("TabWarn")
     tab_workset = window.FindName("TabWorkset")
+    tab_workset1 = window.FindName("TabWorkset1")
     tab_unused = window.FindName("TabUnused")
     detail_header = window.FindName("DetailHeader")
     detail_list = window.FindName("DetailList")
@@ -1279,13 +1377,16 @@ def show_window(rows):
     unreadable = len(rows) - len(scanned)
 
     summary = ("{0} documents  |  {1} DWG links  |  {2} DWG imports  |  "
-               "{3} warnings  |  {4} levels + {5} grids on a wrong workset"
+               "{3} warnings  |  {4} levels + {5} grids on a wrong workset  |  "
+               "{6} items on Workset1"
                ).format(len(scanned),
                         sum([r.DwgLinks for r in scanned]),
                         sum([r.DwgImports for r in scanned]),
                         sum([r.Warnings for r in scanned]),
                         sum([r.BadLevels for r in workshared]),
-                        sum([r.BadGrids for r in workshared]))
+                        sum([r.BadGrids for r in workshared]),
+                        sum([r.Workset1 for r in scanned
+                             if r.Workset1 is not None]))
     if unreadable:
         summary += "  |  {0} not readable".format(unreadable)
     summary_text.Text = summary
@@ -1356,6 +1457,12 @@ def show_window(rows):
         elif mode[0] == "warn":
             entries = row.WarningEntries
             label = u"{0} warning(s)".format(row.Warnings)
+        elif mode[0] == "ws1":
+            entries = row.Workset1Entries
+            if row.Workset1 is None:
+                label = "Workset1 check does not apply"
+            else:
+                label = u"{0} item(s) on Workset1".format(row.Workset1)
         else:
             entries = row.WorksetEntries
             if row.Workshared:
@@ -1372,6 +1479,7 @@ def show_window(rows):
         tab_cad.IsChecked = (key == "cad")
         tab_warn.IsChecked = (key == "warn")
         tab_workset.IsChecked = (key == "workset")
+        tab_workset1.IsChecked = (key == "ws1")
         tab_unused.IsChecked = (key == "unused")
         refresh_detail()
 
@@ -1389,6 +1497,9 @@ def show_window(rows):
 
     def on_tab_workset(sender, args):
         set_mode("workset")
+
+    def on_tab_workset1(sender, args):
+        set_mode("ws1")
 
     def on_tab_unused(sender, args):
         set_mode("unused")
@@ -1435,6 +1546,7 @@ def show_window(rows):
     tab_cad.Click += RoutedEventHandler(on_tab_cad)
     tab_warn.Click += RoutedEventHandler(on_tab_warn)
     tab_workset.Click += RoutedEventHandler(on_tab_workset)
+    tab_workset1.Click += RoutedEventHandler(on_tab_workset1)
     tab_unused.Click += RoutedEventHandler(on_tab_unused)
     scan_all_button.Click += RoutedEventHandler(on_scan_all)
     export_button.Click += RoutedEventHandler(on_export)
@@ -1462,10 +1574,10 @@ def main():
             "  DWG links   : {0}\n"
             "  DWG imports : {1}\n"
             "  Warnings    : {2}\n"
-            "  Bad levels  : {3}\n"
-            "  Bad grids   : {4}".format(
+            "  Bad lvl/grid: {3}\n"
+            "  On Workset1 : {4}".format(
                 host.DwgLinks, host.DwgImports, host.Warnings,
-                host.ColLevels, host.ColGrids))
+                host.ColLevelGrid, host.ColWorkset1))
         return
     show_window(rows)
 
