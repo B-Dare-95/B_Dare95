@@ -1,19 +1,19 @@
 # -*- coding: utf-8 -*-
 __title__ = "Corner Guard Placer"
-__doc__ = """Version = 1.1
+__doc__ = """Version = 2.0
 _____________________________________________________________________
 Description:
-Places a non-hosted Corner Guard family at every free convex corner of
-the picked columns (active document or linked model).
+Places a non-hosted Corner Guard family at every convex corner of the
+picked columns (active document or linked model).
+
+Runs in 2D plan views only. Every guard is placed on the level of the
+ACTIVE VIEW, not the level the column happens to be associated with -
+so to guard a column on Level 3, open the Level 3 plan and run.
 
 Corner detection runs off the real column footprint, so rotated and
 non-rectangular columns are handled. Rotation is derived from each
 corner's outward bisector, calibrated against the family's home
 orientation (top-left corner at 0 degrees).
-
-Corners obstructed by walls are detected and skipped - a corner buried
-in a wall, or with a wall abutting either of its two faces, cannot take
-a guard.
 
 Corners are numbered in the column's own frame:
     1 = top-left, 2 = bottom-left, 3 = bottom-right, 4 = top-right
@@ -22,10 +22,10 @@ is rotated.
 
 How to use:
 
-1-Choose Active document or Linked model
-2-Pick the guard family type and set the offsets
-3-Pick one or more columns
-4-Read the report in the pyRevit output window
+1-Open the plan view of the level you want the guards on
+2-Choose Active document or Linked model
+3-Pick the guard family type
+4-Pick one or more columns
 _____________________________________________________________________
 Author: Mohamed Bedair"""
 
@@ -40,14 +40,11 @@ clr.AddReference('PresentationFramework')
 clr.AddReference('WindowsBase')
 clr.AddReference('System.Xml')
 
-from Autodesk.Revit.DB import (Element, Level, FamilySymbol,
+from Autodesk.Revit.DB import (Element, FamilySymbol, ViewPlan,
                                FilteredElementCollector, BuiltInCategory,
                                Options, ViewDetailLevel, GeometryInstance,
-                               Solid, PlanarFace, Line, CurveLoop, Plane,
-                               ExtrusionAnalyzer, SolidUtils, Outline,
-                               BoundingBoxIntersectsFilter,
-                               GeometryCreationUtilities,
-                               BooleanOperationsUtils, BooleanOperationsType,
+                               Solid, PlanarFace, Line, Plane,
+                               ExtrusionAnalyzer, SolidUtils,
                                Transaction, SubTransaction, XYZ,
                                ElementTransformUtils, RevitLinkInstance)
 from Autodesk.Revit.DB.Structure import StructuralType
@@ -56,7 +53,6 @@ from Autodesk.Revit.UI import (TaskDialog, TaskDialogCommandLinkId,
 from Autodesk.Revit.UI.Selection import ISelectionFilter, ObjectType
 
 from System import EventHandler
-from System.Collections.Generic import List
 from System.Windows.Markup import XamlReader
 from System.Windows import RoutedEventHandler
 from System.Windows.Controls import TextChangedEventHandler
@@ -67,24 +63,17 @@ uidoc = __revit__.ActiveUIDocument
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
-MM_TO_FT = 1.0 / 304.8
-
 # Calibrated from a manual placement: at rotation 0 the guard occupies the
 # top-left corner, so its outward bisector points up-left (135 degrees).
 HOME_BISECTOR = XYZ(-1.0, 1.0, 0.0).Normalize()
 
 DEFAULT_ANGLE_TOL_DEG = 5.0
-DEFAULT_CLEARANCE_MM = 50.0
-DEFAULT_PROBE_HEIGHT_MM = 1000.0
 
 VEC_TOL = 1.0e-9
-VERIFY_TOL_DEG = 5.0
 MIN_VOLUME = 1.0e-6
 
 COLUMN_BICS = [BuiltInCategory.OST_Columns,
                BuiltInCategory.OST_StructuralColumns]
-
-OBSTRUCTION_BICS = [BuiltInCategory.OST_Walls]
 
 DEFAULT_SYMBOL_BICS = [BuiltInCategory.OST_SpecialityEquipment,
                        BuiltInCategory.OST_GenericModel]
@@ -278,13 +267,6 @@ def footprint_segments(solid):
     return None, None
 
 
-def solid_base_z(solid):
-    try:
-        return solid.GetBoundingBox().Min.Z
-    except Exception:
-        return solid.ComputeCentroid().Z
-
-
 # ─── Corner detection ─────────────────────────────────────────────────────────
 
 
@@ -293,8 +275,8 @@ def find_corners(segments, angle_tol_deg):
     Classify every vertex of a CCW footprint loop.
 
     Returns the convex, near-90-degree corners in loop order, each carrying
-    the corner point, its outward bisector, and both edge frames (needed
-    later for the obstruction probes).
+    the corner point and its outward bisector - the bisector is what drives
+    both the numbering and the placement rotation.
     """
     corners = []
     count = len(segments)
@@ -329,8 +311,6 @@ def find_corners(segments, angle_tol_deg):
 
         corners.append({"point": point,
                         "bisector": bisector,
-                        "t_in": t_in, "t_out": t_out,
-                        "n_in": n_in, "n_out": n_out,
                         "interior": interior_deg})
 
     return corners
@@ -392,135 +372,6 @@ def number_corners(corners, ex, ey):
     count = len(corners)
     for step in range(count):
         corners[(best_i + step) % count]["index"] = step + 1
-
-
-# ─── Obstruction detection ────────────────────────────────────────────────────
-
-
-def outline_from_points(points, pad):
-    """Axis-aligned Outline covering the points, expanded by pad."""
-    xs = [p.X for p in points]
-    ys = [p.Y for p in points]
-    zs = [p.Z for p in points]
-    lo = XYZ(min(xs) - pad, min(ys) - pad, min(zs) - pad)
-    hi = XYZ(max(xs) + pad, max(ys) + pad, max(zs) + pad)
-    return Outline(lo, hi)
-
-
-def outline_corners(outline):
-    lo, hi = outline.MinimumPoint, outline.MaximumPoint
-    return [XYZ(x, y, z)
-            for x in (lo.X, hi.X)
-            for y in (lo.Y, hi.Y)
-            for z in (lo.Z, hi.Z)]
-
-
-def collect_obstruction_solids(probe_points, pad_ft):
-    """
-    Wall solids from the active document and every loaded link, in host
-    coordinates, restricted to the neighbourhood of the probe points.
-
-    Returns a list of (solid, bounding box) pairs.
-    """
-    if not probe_points:
-        return []
-
-    world_outline = outline_from_points(probe_points, pad_ft)
-
-    sources = [(doc, None)]
-    for link in FilteredElementCollector(doc).OfClass(RevitLinkInstance).ToElements():
-        link_doc = link.GetLinkDocument()
-        if link_doc is not None:
-            sources.append((link_doc, link.GetTotalTransform()))
-
-    results = []
-
-    for source_doc, transform in sources:
-        # Express the search box in the source document's own coordinates.
-        if transform is None or transform.IsIdentity:
-            local_outline = world_outline
-        else:
-            inverse = transform.Inverse
-            local_pts = [inverse.OfPoint(p) for p in outline_corners(world_outline)]
-            local_outline = outline_from_points(local_pts, 0.0)
-
-        for bic in OBSTRUCTION_BICS:
-            try:
-                collector = FilteredElementCollector(source_doc) \
-                    .OfCategory(bic) \
-                    .WhereElementIsNotElementType() \
-                    .WherePasses(BoundingBoxIntersectsFilter(local_outline))
-            except Exception:
-                continue
-
-            for element in collector.ToElements():
-                try:
-                    for solid in element_solids(element, transform):
-                        results.append((solid, solid.GetBoundingBox()))
-                except Exception:
-                    continue
-
-    return results
-
-
-def probe_cube(center, half):
-    """Small axis-aligned cube used as the point-containment probe."""
-    z0 = center.Z - half
-    pts = [XYZ(center.X - half, center.Y - half, z0),
-           XYZ(center.X + half, center.Y - half, z0),
-           XYZ(center.X + half, center.Y + half, z0),
-           XYZ(center.X - half, center.Y + half, z0)]
-
-    loop = CurveLoop()
-    for i in range(4):
-        loop.Append(Line.CreateBound(pts[i], pts[(i + 1) % 4]))
-
-    loops = List[CurveLoop]()
-    loops.Add(loop)
-    return GeometryCreationUtilities.CreateExtrusionGeometry(loops, XYZ.BasisZ,
-                                                             2.0 * half)
-
-
-def point_is_solid(point, obstruction_solids, half):
-    """True if the probe cube around the point overlaps any obstruction solid."""
-    try:
-        cube = probe_cube(point, half)
-    except Exception:
-        return False
-
-    for solid, bbox in obstruction_solids:
-        # Cheap reject before the boolean.
-        if bbox is not None:
-            lo, hi = bbox.Min, bbox.Max
-            if (point.X < lo.X - half or point.X > hi.X + half or
-                    point.Y < lo.Y - half or point.Y > hi.Y + half or
-                    point.Z < lo.Z - half or point.Z > hi.Z + half):
-                continue
-        try:
-            hit = BooleanOperationsUtils.ExecuteBooleanOperation(
-                cube, solid, BooleanOperationsType.Intersect)
-            if hit is not None and hit.Volume > MIN_VOLUME:
-                return True
-        except Exception:
-            continue
-
-    return False
-
-
-def corner_probe_points(corner, base_z, clearance_ft, probe_height_ft):
-    """
-    Three points that must all be clear for the guard to fit:
-    one on the diagonal, one in front of each leg.
-    """
-    p = corner["point"]
-    z = base_z + probe_height_ft
-    origin = XYZ(p.X, p.Y, z)
-
-    return [origin + corner["bisector"].Multiply(clearance_ft),
-            origin + corner["t_out"].Multiply(clearance_ft)
-                   + corner["n_out"].Multiply(clearance_ft),
-            origin - corner["t_in"].Multiply(clearance_ft)
-                   + corner["n_in"].Multiply(clearance_ft)]
 
 
 # ─── Column gathering ─────────────────────────────────────────────────────────
@@ -624,25 +475,63 @@ def pick_linked_columns():
     return picked
 
 
-# ─── Level lookup ─────────────────────────────────────────────────────────────
+# ─── Active view / level ──────────────────────────────────────────────────────
 
 
-def build_level_table():
-    levels = list(FilteredElementCollector(doc).OfClass(Level).ToElements())
-    levels.sort(key=lambda lv: lv.Elevation)
-    return levels
+def view_level(view):
+    """
+    The level a plan view is generated from.
+
+    GenLevel is the authoritative source for every ViewPlan flavour
+    (floor, ceiling, structural, area); LevelId is the fallback.
+    """
+    level = None
+
+    try:
+        level = view.GenLevel
+    except Exception:
+        level = None
+
+    if level is None:
+        try:
+            level = doc.GetElement(view.LevelId)
+        except Exception:
+            level = None
+
+    return level
 
 
-def nearest_level_below(levels, z):
-    if not levels:
-        return None
-    chosen = levels[0]
-    for level in levels:
-        if level.Elevation <= z + 1.0e-6:
-            chosen = level
-        else:
-            break
-    return chosen
+def validate_active_view():
+    """
+    Enforce the 2D plan-view restriction.
+
+    Returns (view, level) on success, or (None, message) on refusal.
+    """
+    view = doc.ActiveView
+
+    if view is None:
+        return None, "There is no active view."
+
+    if view.IsTemplate:
+        return None, ("The active view is a view template.\n\n"
+                      "Open a real 2D plan view and run again.")
+
+    if not isinstance(view, ViewPlan):
+        return None, ("Corner Guard Placer only runs in a 2D plan view "
+                      "(floor, ceiling, structural or area plan).\n\n"
+                      "Active view: {} ({})\n\n"
+                      "Guards are placed on the active view's level, so the "
+                      "view has to have one. Open the plan of the level you "
+                      "want the guards on, then run again."
+                      .format(element_name(view), view.ViewType))
+
+    level = view_level(view)
+    if level is None:
+        return None, ("The active plan view '{}' has no associated level, "
+                      "so there is nothing to place the guards on."
+                      .format(element_name(view)))
+
+    return (view, level), None
 
 
 # ─── Placement ────────────────────────────────────────────────────────────────
@@ -684,26 +573,13 @@ def rotate_instance(instance_id, point, angle_deg):
                                         math.radians(angle_deg))
 
 
-def instance_axis(instance):
-    """
-    Plan direction of the instance's own X axis, in world coordinates.
-
-    Measuring the instance transform makes verification independent of where
-    the family's material sits relative to its insertion point.
-    """
-    try:
-        return flatten(instance.GetTransform().BasisX)
-    except Exception:
-        return None
-
-
 # ─── UI ───────────────────────────────────────────────────────────────────────
 
 XAML = u"""
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Corner Guard Placer"
-        Width="520" Height="700"
+        Width="520" Height="560"
         WindowStartupLocation="CenterScreen"
         Background="#161616"
         ResizeMode="CanResize">
@@ -803,51 +679,17 @@ XAML = u"""
                  FontFamily="Segoe UI" FontSize="20"/>
       <TextBlock x:Name="TxtSource" Text="" Foreground="#F1C21B"
                  FontFamily="Segoe UI" FontSize="11" Margin="0,4,0,0"/>
+      <TextBlock x:Name="TxtTarget" Text="" Foreground="#A8A8A8"
+                 FontFamily="Segoe UI" FontSize="11" Margin="0,2,0,0"
+                 TextWrapping="Wrap"/>
     </StackPanel>
 
     <StackPanel Grid.Row="1">
 
       <TextBlock Text="GUARD FAMILY TYPE" Style="{StaticResource LabelText}"/>
       <TextBox x:Name="TxtSearch" Margin="0,0,0,6"/>
-      <ListBox x:Name="LstTypes" Height="230"/>
+      <ListBox x:Name="LstTypes" Height="300"/>
       <CheckBox x:Name="ChkAllCats" Content="Show all categories"/>
-
-      <Grid Margin="0,4,0,0">
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="*"/>
-          <ColumnDefinition Width="12"/>
-          <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
-        <StackPanel Grid.Column="0">
-          <TextBlock Text="OUTWARD OFFSET (MM)" Style="{StaticResource LabelText}"/>
-          <TextBox x:Name="TxtOffset" Text="0"/>
-        </StackPanel>
-        <StackPanel Grid.Column="2">
-          <TextBlock Text="HEIGHT ABOVE LEVEL (MM)" Style="{StaticResource LabelText}"/>
-          <TextBox x:Name="TxtBaseZ" Text="0"/>
-        </StackPanel>
-      </Grid>
-
-      <Grid Margin="0,4,0,0">
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="*"/>
-          <ColumnDefinition Width="12"/>
-          <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
-        <StackPanel Grid.Column="0">
-          <TextBlock Text="CLEARANCE NEEDED (MM)" Style="{StaticResource LabelText}"/>
-          <TextBox x:Name="TxtClearance" Text="50"/>
-        </StackPanel>
-        <StackPanel Grid.Column="2">
-          <TextBlock Text="CHECK AT HEIGHT (MM)" Style="{StaticResource LabelText}"/>
-          <TextBox x:Name="TxtProbeH" Text="1000"/>
-        </StackPanel>
-      </Grid>
-
-      <CheckBox x:Name="ChkObstruct" Content="Skip corners obstructed by walls"
-                IsChecked="True"/>
-      <CheckBox x:Name="ChkVerify" Content="Verify rotation after placing"
-                IsChecked="True"/>
 
     </StackPanel>
 
@@ -913,25 +755,22 @@ def ask_source():
     return None
 
 
-def show_ui(from_link):
+def show_ui(from_link, view, level):
     """Carbon-themed modeless window. Returns a settings dict, or None."""
     window = XamlReader.Parse(XAML)
 
     txt_source = window.FindName("TxtSource")
+    txt_target = window.FindName("TxtTarget")
     txt_search = window.FindName("TxtSearch")
     lst_types = window.FindName("LstTypes")
     chk_all_cats = window.FindName("ChkAllCats")
-    txt_offset = window.FindName("TxtOffset")
-    txt_base_z = window.FindName("TxtBaseZ")
-    txt_clearance = window.FindName("TxtClearance")
-    txt_probe_h = window.FindName("TxtProbeH")
-    chk_obstruct = window.FindName("ChkObstruct")
-    chk_verify = window.FindName("ChkVerify")
     btn_run = window.FindName("BtnRun")
     btn_cancel = window.FindName("BtnCancel")
 
     txt_source.Text = ("Source: linked model" if from_link
                        else "Source: active document")
+    txt_target.Text = "Placing on {} (from view {})".format(
+        element_name(level), element_name(view))
 
     state = {"result": None, "pairs": [], "frame": None}
 
@@ -956,12 +795,6 @@ def show_ui(from_link):
                 return symbol
         return None
 
-    def parse_float(text, fallback):
-        try:
-            return float((text or "").strip())
-        except Exception:
-            return fallback
-
     def on_search(sender, args):
         apply_filter()
 
@@ -974,17 +807,7 @@ def show_ui(from_link):
             txt_source.Text = "Pick a family type before running."
             return
 
-        state["result"] = {
-            "symbol": symbol,
-            "linked": from_link,
-            "offset_mm": parse_float(txt_offset.Text, 0.0),
-            "base_z_mm": parse_float(txt_base_z.Text, 0.0),
-            "clearance_mm": parse_float(txt_clearance.Text,
-                                        DEFAULT_CLEARANCE_MM),
-            "probe_h_mm": parse_float(txt_probe_h.Text,
-                                      DEFAULT_PROBE_HEIGHT_MM),
-            "obstruct": bool(chk_obstruct.IsChecked),
-            "verify": bool(chk_verify.IsChecked)}
+        state["result"] = {"symbol": symbol, "linked": from_link}
         window.Close()
 
     def on_cancel(sender, args):
@@ -1013,20 +836,26 @@ def show_ui(from_link):
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
+# The active view decides the target level, so it is checked before anything
+# else - no point picking columns in a view that cannot host the guards.
+view_info, refusal = validate_active_view()
+if view_info is None:
+    notify("Corner Guard Placer", refusal)
+    sys.exit()
+
+active_view, target_level = view_info
+
 from_link = ask_source()
 if from_link is None:
     sys.exit()
 
-settings = show_ui(from_link)
+settings = show_ui(from_link, active_view, target_level)
 if settings is None:
     sys.exit()
 
 symbol = settings["symbol"]
-offset_ft = settings["offset_mm"] * MM_TO_FT
-base_z_ft = settings["base_z_mm"] * MM_TO_FT
-clearance_ft = settings["clearance_mm"] * MM_TO_FT
-probe_h_ft = settings["probe_h_mm"] * MM_TO_FT
 angle_tol = DEFAULT_ANGLE_TOL_DEG
+target_z = target_level.Elevation
 
 # Pick the columns after the window is gone so the pick prompt is visible.
 try:
@@ -1036,11 +865,6 @@ except Exception:
 
 if not columns:
     notify("Corner Guard Placer", "No columns picked. Script cancelled.")
-    sys.exit()
-
-levels = build_level_table()
-if not levels:
-    notify("Corner Guard Placer", "This project has no levels.")
     sys.exit()
 
 # ─── Detection ────────────────────────────────────────────────────────────────
@@ -1072,9 +896,6 @@ for element, transform, label in columns:
     ex, ey = column_local_frame(element, transform)
     number_corners(corners, ex, ey)
 
-    base_z = solid_base_z(solid)
-    level = nearest_level_below(levels, base_z)
-
     for corner in corners:
         records.append({"label": label,
                         "method": method,
@@ -1082,13 +903,11 @@ for element, transform, label in columns:
                         "local_deg": corner["local_deg"],
                         "interior": corner["interior"],
                         "corner": corner,
-                        "base_z": base_z,
-                        "level": level,
+                        "level": target_level,
                         "bisector": corner["bisector"],
                         "angle": signed_angle_deg(HOME_BISECTOR,
                                                   corner["bisector"]),
                         "instance": None,
-                        "axis0": None,
                         "status": "pending",
                         "note": ""})
 
@@ -1099,46 +918,14 @@ if not records:
            "No placeable corners found.\n\n{}".format(reasons))
     sys.exit()
 
-# ─── Obstruction filter ───────────────────────────────────────────────────────
-
-if settings["obstruct"]:
-    all_probes = []
-    for record in records:
-        record["probes"] = corner_probe_points(record["corner"],
-                                               record["base_z"],
-                                               clearance_ft, probe_h_ft)
-        all_probes.extend(record["probes"])
-
-    obstruction_solids = collect_obstruction_solids(all_probes,
-                                                    clearance_ft * 4.0)
-
-    for record in records:
-        blocked = False
-        for probe in record["probes"]:
-            if point_is_solid(probe, obstruction_solids, clearance_ft * 0.5):
-                blocked = True
-                break
-        if blocked:
-            record["status"] = "obstructed"
-            record["note"] = "wall within clearance"
-
-# The insertion point is the corner, lifted to the level (not the structural
-# base of the column, which often sits below the floor).
+# The insertion point is the corner in plan, dropped onto the elevation of the
+# ACTIVE VIEW's level - deliberately ignoring the column's own base, which may
+# sit on a different level entirely.
 for record in records:
     corner_pt = record["corner"]["point"]
-    z = record["level"].Elevation + base_z_ft
-    point = XYZ(corner_pt.X, corner_pt.Y, z)
-    if offset_ft != 0.0:
-        point = point + record["bisector"].Multiply(offset_ft)
-    record["point"] = point
+    record["point"] = XYZ(corner_pt.X, corner_pt.Y, target_z)
 
-placeable = [r for r in records if r["status"] == "pending"]
-
-if not placeable:
-    notify("Corner Guard Placer",
-           "Every candidate corner was obstructed.\n\n"
-           "Lower the clearance value, or uncheck the obstruction filter.")
-    sys.exit()
+placeable = records
 
 # ─── Transaction ──────────────────────────────────────────────────────────────
 
@@ -1180,8 +967,9 @@ try:
     # One regeneration for the whole run, not one per element.
     doc.Regenerate()
 
-    # Pass 2 - snap onto the exact insertion point and record the starting
-    # orientation, so verification measures the rotation itself.
+    # Pass 2 - snap onto the exact insertion point. The level overload does not
+    # always honour the supplied Z, so this is what actually pins the guard to
+    # the active view's elevation.
     for record in placeable:
         if record["instance"] is None:
             continue
@@ -1189,7 +977,6 @@ try:
             snap_to_point(record["instance"], record["point"])
         except Exception as ex:
             record["note"] = "snap: {}".format(ex)
-        record["axis0"] = instance_axis(record["instance"])
 
     doc.Regenerate()
 
@@ -1207,21 +994,6 @@ try:
 
     doc.Regenerate()
 
-    # Pass 4 - verify the applied rotation against the requested one.
-    if settings["verify"]:
-        for record in placeable:
-            if record["instance"] is None or record["status"] == "failed":
-                continue
-            axis1 = instance_axis(record["instance"])
-            if record["axis0"] is None or axis1 is None:
-                record["status"] = "unverified"
-                record["note"] = "no transform to measure"
-                continue
-            applied = signed_angle_deg(record["axis0"], axis1)
-            drift = angular_distance_deg(applied, record["angle"])
-            record["note"] = "applied {:.1f} deg".format(applied)
-            record["status"] = "ok" if drift <= VERIFY_TOL_DEG else "MISALIGNED"
-
     t.Commit()
 
 except Exception as ex:
@@ -1233,15 +1005,14 @@ except Exception as ex:
 # ─── Summary ──────────────────────────────────────────────────────────────────
 
 placed = len([r for r in records if r["instance"] is not None])
-obstructed = len([r for r in records if r["status"] == "obstructed"])
-bad = len([r for r in records if r["status"] in ("failed", "MISALIGNED")])
+bad = len([r for r in records if r["status"] == "failed"])
 
-lines = ["{} guards placed on {} columns.".format(placed, len(by_column))]
-if obstructed:
-    lines.append("{} corners skipped as obstructed.".format(obstructed))
+lines = ["{} guards placed on {} columns.".format(placed, len(by_column)),
+         "Level: {} (from view {}).".format(element_name(target_level),
+                                            element_name(active_view))]
 if skipped_columns:
     lines.append("{} columns skipped entirely.".format(len(skipped_columns)))
 if bad:
-    lines.append("{} guards failed or landed misaligned.".format(bad))
+    lines.append("{} guards failed.".format(bad))
 
 notify("Corner Guard Placer", "\n".join(lines))
