@@ -1,142 +1,232 @@
 # -*- coding: utf-8 -*-
+"""Convert Units - toggles the active document between Metric and Imperial.
 
-#Imports
-import json, os, codecs
-from Autodesk.Revit.DB import *
-from Autodesk.Revit.UI import *
-from Autodesk.Revit.UI.Selection import *
-from System.Collections.Generic import List
-from pyrevit import forms, revit,script
-from pyrevit import EXEC_PARAMS
+Full-system conversion. A fresh Units object is built from the Revit
+UnitSystem default, which covers every spec in every discipline (Common,
+Structural, HVAC, Electrical, Piping, Energy, Infrastructure) in one shot.
+A small override table is then layered on top for the specs where the office
+standard differs from Revit's stock default.
+
+The current state is read from the document itself, not from a stored toggle
+file, so the button icon can never disagree with the model, and two open
+models each report their own true state.
+
+Revit 2024+ / IronPython 2.7. No version guards - this will not run on older
+releases and is not intended to.
+"""
+
+import os
+
+from Autodesk.Revit.DB import (RoundingMethod, SpecTypeId, Transaction,
+                               UnitSystem, UnitTypeId, UnitUtils, Units)
+from pyrevit import forms, script
 from pyrevit.script import toggle_icon
 
-#Revit Variables
-uidoc       = __revit__.ActiveUIDocument
-doc         = __revit__.ActiveUIDocument.Document
-selection   = uidoc.Selection
-app         = __revit__.Application
-active_view = doc.ActiveView
-output      = script.get_output()
 
-PATH_SCRIPT = os.path.dirname(__file__)
+# ---------------------------------------------------------------------------
+# CONFIGURATION
+# ---------------------------------------------------------------------------
 
-def read_toggle_config():
-    """Function to read toggle_state.json config located in the script's folder.
-    If file is not found it will be created with False value."""
-    json_toggle_state = os.path.join(PATH_SCRIPT, 'toggle_state.json')
+# Office overrides applied on top of the UnitSystem defaults.
+# Every spec NOT listed here is still converted - it simply takes the stock
+# Revit default for the target system. Only list a spec here when you want
+# something other than that default.
+#
+#   spec name: {"metric": (unit name, accuracy), "imperial": (unit name, accuracy)}
+#
+# accuracy = None keeps whatever accuracy the UnitSystem default supplied.
+# That is the correct choice for imperial fractional units, where accuracy is
+# expressed as a fraction of a foot and is easy to get wrong by hand.
+#
+# Names are plain strings and are resolved with getattr() at runtime, so a
+# member that does not exist in a given Revit release is reported and skipped
+# instead of raising AttributeError and killing the whole script.
 
-    # READ/CREATE file
-    if os.path.exists(json_toggle_state):
-        with open(json_toggle_state) as f:
-            json_data = json.load(f)
-            TOGGLE = json_data['toggle_state']
-    else:
-        TOGGLE = False
-    # REVERSE VALUE
-    with open(json_toggle_state, "w") as f:
-        x = not TOGGLE
-        new_data = {"toggle_state": x}
-        json.dump(new_data, f)
-    return TOGGLE
+OVERRIDES = {
+    "Length":        {"metric": ("Millimeters", 1.0),
+                      "imperial": ("FeetFractionalInches", None)},
 
-TOGGLE = read_toggle_config()
+    "Distance":      {"metric": ("Meters", 0.001),
+                      "imperial": ("FeetFractionalInches", None)},
 
-# ACTIVATE/DEACTIVATE ICON
-icon_on = os.path.join(PATH_SCRIPT, 'on.png')
-icon_off = os.path.join(PATH_SCRIPT, 'off.png')
-toggle_icon(TOGGLE, icon_on, icon_off)  # Change icon
+    "Area":          {"metric": ("SquareMeters", 0.01),
+                      "imperial": ("SquareFeet", None)},
 
-if app.VersionNumber < 2022:
+    "Volume":        {"metric": ("CubicMeters", 0.01),
+                      "imperial": ("CubicFeet", None)},
 
-    t = Transaction(doc, "Change Project Units to Metric")
-    t.Start()
+    "Angle":         {"metric": ("Degrees", 0.01),
+                      "imperial": ("Degrees", 0.01)},
 
-    # Get the current document units
-    units = doc.GetUnits()
+    "RotationAngle": {"metric": ("Degrees", 0.01),
+                      "imperial": ("Degrees", 0.01)},
 
-    # Set the new unit system to Metric
-    units.SetFormatOptions(UnitType.UT_Length, FormatOptions(DisplayUnitType.DUT_MILLIMETERS, 1))
-    units.SetFormatOptions(UnitType.UT_Area, FormatOptions(DisplayUnitType.DUT_SQUARE_METERS, 0.01))
-    units.SetFormatOptions(UnitType.UT_Volume, FormatOptions(DisplayUnitType.DUT_CUBIC_METERS, 0.01))
-    units.SetFormatOptions(UnitType.UT_Slope, FormatOptions(DisplayUnitType.DUT_PERCENTAGE, 0.1))
-    units.SetFormatOptions(UnitType.UT_Angle, FormatOptions(DisplayUnitType.DUT_DECIMAL_DEGREES, 0.1))
+    "Slope":         {"metric": ("SlopeDegrees", 0.01),
+                      "imperial": ("RiseDividedBy12Inches", None)},
 
-    # Apply the modified units to the document
-    doc.SetUnits(units)
+    "Speed":         {"metric": ("MetersPerSecond", 0.1),
+                      "imperial": ("FeetPerSecond", None)},
 
-    # Commit the transaction
-    t.Commit()
+    "Time":          {"metric": ("Seconds", 1.0),
+                      "imperial": ("Seconds", 1.0)},
 
-    if not TOGGLE:
-        t = Transaction(doc, "Change to Imperial")
-        t.Start()
+    "MassDensity":   {"metric": ("KilogramsPerCubicMeter", 0.01),
+                      "imperial": ("PoundsMassPerCubicFoot", None)},
 
-        # Get the current document units
-        units = doc.GetUnits()
+    "CostPerArea":   {"metric": ("CurrencyPerSquareMeter", 0.01),
+                      "imperial": ("CurrencyPerSquareFoot", None)},
 
-        # Set the new unit system to Imperial
-        units.SetFormatOptions(UnitType.UT_Length, FormatOptions(DisplayUnitType.DUT_FEET_FRACTIONAL_INCHES, 0.1))
-        units.SetFormatOptions(UnitType.UT_Area, FormatOptions(DisplayUnitType.DUT_SQUARE_FEET, 0.1))
-        units.SetFormatOptions(UnitType.UT_Volume, FormatOptions(DisplayUnitType.DUT_CUBIC_FEET, 0.1))
-        units.SetFormatOptions(UnitType.UT_Slope, FormatOptions(DisplayUnitType.DUT_PERCENTAGE, 0.1))
-        units.SetFormatOptions(UnitType.UT_Angle, FormatOptions(DisplayUnitType.DUT_DECIMAL_DEGREES, 0.1))
+    "Currency":      {"metric": ("Currency", 0.01),
+                      "imperial": ("Currency", 0.01)},
+}
 
-        # Apply the modified units to the document
-        doc.SetUnits(units)
+# Length units that identify a document as Imperial. Anything else is Metric.
+IMPERIAL_LENGTH_UNITS = ("Feet",
+                         "FeetFractionalInches",
+                         "Inches",
+                         "FractionalInches",
+                         "UsSurveyFeet")
 
-        # Commit the transaction
-        t.Commit()
+# Which system the "on" icon represents. Flip to False if you want on.png to
+# mean Imperial instead.
+ICON_ON_MEANS_METRIC = True
 
+
+# ---------------------------------------------------------------------------
+# HELPERS
+# ---------------------------------------------------------------------------
+
+def resolve(container, name):
+    """Return a ForgeTypeId member by name, or None if this build lacks it."""
+    return getattr(container, name, None)
+
+
+def get_current_system(document):
+    """Read the document's own Length unit and derive the active system.
+
+    ForgeTypeId instances are compared by their .TypeId string rather than by
+    the == operator, which is the reliable route under IronPython.
+    """
+    fmt = document.GetUnits().GetFormatOptions(SpecTypeId.Length)
+    current_id = fmt.GetUnitTypeId().TypeId
+
+    for unit_name in IMPERIAL_LENGTH_UNITS:
+        unit = resolve(UnitTypeId, unit_name)
+        if unit is not None and unit.TypeId == current_id:
+            return UnitSystem.Imperial
+
+    return UnitSystem.Metric
+
+
+def build_units(target_system, skipped):
+    """Build a complete Units object for target_system, then apply overrides.
+
+    Anything that cannot be applied is appended to 'skipped' and reported
+    afterwards rather than being swallowed.
+    """
+    units = Units(target_system)
+    key = "metric" if target_system == UnitSystem.Metric else "imperial"
+
+    for spec_name in sorted(OVERRIDES.keys()):
+        unit_name, accuracy = OVERRIDES[spec_name][key]
+
+        spec = resolve(SpecTypeId, spec_name)
+        if spec is None:
+            skipped.append("{0}: SpecTypeId.{0} does not exist in this Revit "
+                           "version".format(spec_name))
+            continue
+
+        if not UnitUtils.IsMeasurableSpec(spec):
+            skipped.append("{0}: not a measurable spec in this Revit "
+                           "version".format(spec_name))
+            continue
+
+        unit = resolve(UnitTypeId, unit_name)
+        if unit is None:
+            skipped.append("{0}: UnitTypeId.{1} does not exist in this Revit "
+                           "version".format(spec_name, unit_name))
+            continue
+
+        if not UnitUtils.IsValidUnit(spec, unit):
+            skipped.append("{0}: {1} is not a valid unit for this spec"
+                           .format(spec_name, unit_name))
+            continue
+
+        try:
+            fmt = units.GetFormatOptions(spec)
+            fmt.UseDefault = False
+            fmt.SetUnitTypeId(unit)
+            if accuracy is not None:
+                fmt.Accuracy = accuracy
+            fmt.RoundingMethod = RoundingMethod.Nearest
+            units.SetFormatOptions(spec, fmt)
+        except Exception as e:
+            skipped.append("{0}: override rejected by Revit - {1}"
+                           .format(spec_name, e))
+
+    return units
+
+
+# ---------------------------------------------------------------------------
+# MAIN
+# ---------------------------------------------------------------------------
+
+uidoc = __revit__.ActiveUIDocument
+
+if uidoc is None:
+    forms.alert("No active document. Open a model before running this tool.",
+                title="Convert Units",
+                exitscript=True)
+
+doc = uidoc.Document
+
+if doc.IsReadOnly:
+    forms.alert("This document is read-only. Project Units cannot be changed.",
+                title="Convert Units",
+                exitscript=True)
+
+current_system = get_current_system(doc)
+
+if current_system == UnitSystem.Metric:
+    target_system = UnitSystem.Imperial
+    target_label = "Imperial"
 else:
-    t = Transaction(doc, "Change to Metric")
-    t.Start()
+    target_system = UnitSystem.Metric
+    target_label = "Metric"
 
-    # Get the current document units
-    units = doc.GetUnits()
+# Built outside the transaction - nothing here touches the document.
+skipped = []
+new_units = build_units(target_system, skipped)
 
-    # Define new FormatOptions using correct UnitTypeId values
-    length_format = FormatOptions(UnitTypeId.Millimeters)  # Length in Meters
-    area_format = FormatOptions(UnitTypeId.SquareMeters)  # Area in Square Meters
-    volume_format = FormatOptions(UnitTypeId.CubicMeters)  # Volume in Cubic Meters
-    slope_format = FormatOptions(UnitTypeId.SlopeDegrees)  # Slope in Degrees (Percentage alternative)
-    angle_format = FormatOptions(UnitTypeId.Degrees)  # Angle in Decimal Degrees
+t = Transaction(doc, "Convert Project Units to {0}".format(target_label))
+t.Start()
 
-    # Apply the new format options
-    units.SetFormatOptions(SpecTypeId.Length, length_format)
-    units.SetFormatOptions(SpecTypeId.Area, area_format)
-    units.SetFormatOptions(SpecTypeId.Volume, volume_format)
-    units.SetFormatOptions(SpecTypeId.Slope, slope_format)
-    units.SetFormatOptions(SpecTypeId.Angle, angle_format)
-
-    # Apply the modified units to the document
-    doc.SetUnits(units)
-
-    # Commit the transaction
+try:
+    doc.SetUnits(new_units)
     t.Commit()
+except Exception as e:
+    t.RollBack()
+    forms.alert("Unit conversion failed and was rolled back.\n\n{0}".format(e),
+                title="Convert Units",
+                exitscript=True)
 
-    if not TOGGLE:
-        t = Transaction(doc, "Change to Imperial")
-        t.Start()
+# Icon is set from the committed result, never from a stored flag.
+PATH_SCRIPT = os.path.dirname(__file__)
+icon_on = os.path.join(PATH_SCRIPT, "on.png")
+icon_off = os.path.join(PATH_SCRIPT, "off.png")
 
-        # Get the current document units
-        units = doc.GetUnits()
+if os.path.exists(icon_on) and os.path.exists(icon_off):
+    is_metric_now = (target_system == UnitSystem.Metric)
+    icon_state = is_metric_now if ICON_ON_MEANS_METRIC else not is_metric_now
+    toggle_icon(icon_state, icon_on, icon_off)
 
-        # Define new FormatOptions using correct UnitTypeId values
-        length_format = FormatOptions(UnitTypeId.FeetFractionalInches)  # Length in Feet & Fractional Inches
-        area_format = FormatOptions(UnitTypeId.SquareFeet)  # Area in Square Feet
-        volume_format = FormatOptions(UnitTypeId.CubicFeet)  # Volume in Cubic Feet
-        slope_format = FormatOptions(UnitTypeId.SlopeDegrees)  # Slope in Degrees (Percentage alternative)
-        angle_format = FormatOptions(UnitTypeId.Degrees)  # Angle in Decimal Degrees
-
-        # Apply the new format options
-        units.SetFormatOptions(SpecTypeId.Length, length_format)
-        units.SetFormatOptions(SpecTypeId.Area, area_format)
-        units.SetFormatOptions(SpecTypeId.Volume, volume_format)
-        units.SetFormatOptions(SpecTypeId.Slope, slope_format)
-        units.SetFormatOptions(SpecTypeId.Angle, angle_format)
-
-        # Apply the modified units to the document
-        doc.SetUnits(units)
-
-        # Commit the transaction
-        t.Commit()
+# Silent on a clean run - the icon is the feedback. The output window opens
+# only when something in the override table could not be applied.
+if skipped:
+    output = script.get_output()
+    output.print_md("### Convert Units - now {0}".format(target_label))
+    output.print_md("Conversion committed. These overrides were skipped, so "
+                    "those specs kept the Revit {0} default:"
+                    .format(target_label))
+    for item in skipped:
+        output.print_md("- {0}".format(item))
