@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 __title__     = "Linked Element"
 __author__    = "Mohamed Bedair"
-__version__   = 'Version = 1.1'
-__doc__       = """Version = 1.1
+__version__   = 'Version = 1.2'
+__doc__       = """Version = 1.2
 Date    = 21.12.2023
 _____________________________________________________________________
 Description:
@@ -16,6 +16,7 @@ How-to:
 -> copy and paste the resulting IDs
 _____________________________________________________________________
 Last update:
+- [27.09.2026] - 1.2 Report grouped per link, each link with its own ID list
 - [16.08.2026] - 1.1 Added comma separated ID list at the end of the report
 - [21.12.2023] - 1.0 RELEASE
 _____________________________________________________________________
@@ -61,9 +62,9 @@ try:
 except:
     script.exit()
 
-report_lines = []
-id_values    = []
 link_cache   = {}   # RevitLinkInstance id value -> linked Document
+link_order   = []   # link titles in the order they were first picked
+link_groups  = {}   # link title -> {"lines": [...], "ids": [...]}
 
 for lnk_elem in ref_selected_elements:
     ref_lnk_id = lnk_elem.LinkedElementId
@@ -81,19 +82,28 @@ for lnk_elem in ref_selected_elements:
     if lnkd_selected_element is None:
         continue
 
-    id_value = get_id_value(ref_lnk_id)
-    id_values.append(str(id_value))
+    link_title = linked_doc.Title
+    if link_title not in link_groups:
+        link_groups[link_title] = {"lines": [], "ids": []}
+        link_order.append(link_title)
 
-    report_lines.append("Element Name : {} >> Link : {} >> ID: {}".format(
+    id_value = get_id_value(ref_lnk_id)
+    group    = link_groups[link_title]
+    group["ids"].append(str(id_value))
+    group["lines"].append("-Element Name : {} >> ID: {}".format(
         get_element_name(lnkd_selected_element),
-        linked_doc.Title,
         id_value))
 
 #OUTPUT
 
-for line in report_lines:
-    print(line)
+for i, link_title in enumerate(link_order):
+    group = link_groups[link_title]
 
-if id_values:
+    if i > 0:
+        print("")
+
+    print("Link : {}:".format(link_title))
+    for line in group["lines"]:
+        print(line)
     print("_" * 60)
-    print(",".join(id_values))
+    print(",".join(group["ids"]))
