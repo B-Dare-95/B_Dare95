@@ -1,7 +1,21 @@
 # -*- coding: utf-8 -*-
-"""Injects the B_Dare95 logo into the ribbon tab header.
+"""B_Dare95 extension startup: auto-update + ribbon tab logo.
 
-Runs automatically when pyRevit loads the extension. No user interaction.
+Runs automatically every time pyRevit loads the extension (Revit start and
+every pyRevit Reload). No user interaction.
+
+1. Auto-update
+    Starts a background `git pull --ff-only` on the install clone created by
+    B_Dare95_Installer.bat (%LOCALAPPDATA%\\B_Dare95_dist). It never blocks the
+    load: offline, no git, or a refused pull just means no update this time.
+    Changes to existing tools' scripts apply as soon as the pull finishes;
+    new/renamed buttons, icons and bundle.yaml edits show on the next load.
+
+    Only runs on that install clone, never on a development working copy.
+    git is the portable copy the installer drops in
+    %LOCALAPPDATA%\\B_Dare95_git, else whatever git is on PATH.
+
+2. Tab logo
 
 Placement:
     B_Dare95.extension/startup.py
@@ -26,12 +40,14 @@ import os
 
 import clr
 
+clr.AddReference('System')
 clr.AddReference('AdWindows')
 clr.AddReference('PresentationCore')
 clr.AddReference('PresentationFramework')
 clr.AddReference('WindowsBase')
 
 from System import Action, EventHandler, Object, TimeSpan
+from System.Diagnostics import Process, ProcessStartInfo, ProcessWindowStyle
 from System.Windows import (HorizontalAlignment, PresentationSource,
                             RoutedEventHandler, SizeChangedEventHandler,
                             Thickness, VerticalAlignment)
@@ -66,6 +82,16 @@ _HERE = os.path.dirname(__file__)
 LIGHT_ICON = os.path.join(_HERE, 'resources', 'logo.png')
 DARK_ICON = os.path.join(_HERE, 'resources', 'logo_dark.png')
 
+# --- auto-update ---
+_LOCALAPPDATA = os.environ.get('LOCALAPPDATA', '')
+
+# startup.py sits in B_Dare95.extension/; the git repo root is one level up.
+REPO_ROOT = os.path.dirname(os.path.abspath(_HERE))
+
+# Must match DEST and BD_GIT_HOME in B_Dare95_Installer.bat.
+INSTALL_ROOT = os.path.join(_LOCALAPPDATA, 'B_Dare95_dist')
+PORTABLE_GIT = os.path.join(_LOCALAPPDATA, 'B_Dare95_git', 'cmd', 'git.exe')
+
 # Script engines are torn down after a run, so the icon reference, the event
 # handlers and the retry timer are parked in envvars (AppDomain-backed) to keep
 # them alive for the whole Revit session.
@@ -80,6 +106,47 @@ def _state():
         bag = {'retry_pending': False, 'watched_ribbon': None}
         envvars.set_pyrevit_env_var(ENV_STATE, bag)
     return bag
+
+
+# ---------------------------------------------------------------------------
+# auto-update
+# ---------------------------------------------------------------------------
+
+def _same_path(a, b):
+    return os.path.normcase(os.path.normpath(a)) == \
+        os.path.normcase(os.path.normpath(b))
+
+
+def _git_exe():
+    """Portable copy if the installer made one, else git on PATH."""
+    if os.path.isfile(PORTABLE_GIT):
+        return PORTABLE_GIT
+    return 'git'
+
+
+def _auto_update():
+    """Fire-and-forget `git pull --ff-only` on the installed clone."""
+    if not _LOCALAPPDATA or not _same_path(REPO_ROOT, INSTALL_ROOT):
+        # Loaded from somewhere else, e.g. the author's development folder.
+        logger.debug('auto-update: %s is not the install clone, skipping',
+                     REPO_ROOT)
+        return
+    if not os.path.isdir(os.path.join(REPO_ROOT, '.git')):
+        # ZIP install - only the installer can refresh it.
+        logger.debug('auto-update: %s has no .git folder, skipping', REPO_ROOT)
+        return
+
+    psi = ProcessStartInfo(_git_exe())
+    psi.Arguments = '-C "{0}" pull --ff-only --quiet'.format(REPO_ROOT)
+    psi.WorkingDirectory = REPO_ROOT
+    psi.UseShellExecute = False          # required for EnvironmentVariables
+    psi.CreateNoWindow = True
+    psi.WindowStyle = ProcessWindowStyle.Hidden
+    psi.EnvironmentVariables['GIT_TERMINAL_PROMPT'] = '0'   # never wait on a prompt
+    try:
+        Process.Start(psi)               # not awaited - Revit keeps loading
+    except Exception as err:             # git missing -> Win32Exception
+        logger.debug('auto-update: could not start git: %s', err)
 
 
 # ---------------------------------------------------------------------------
@@ -377,6 +444,12 @@ def _try_apply(attempt):
 # ---------------------------------------------------------------------------
 # entry point
 # ---------------------------------------------------------------------------
+
+# Kept in separate try blocks so a failure in one never stops the other.
+try:
+    _auto_update()
+except Exception as err:
+    logger.debug('auto-update: failed: %s', err)
 
 try:
     if os.path.isfile(LIGHT_ICON):
