@@ -1,263 +1,398 @@
 # -*- coding: utf-8 -*-
-"""Bubble Numbering
+"""Number stair treads up to the active view's cut plane.
 
-Places a numbered (or lettered) TextNote inside a detail-line circle at every
-point you pick, incrementing the label after each placement.
+Pick a stair run (active model or linked) in a plan view. Treads are walked
+up from the run's base elevation, one riser at a time; every tread is numbered
+until the first tread whose top is above the view cut plane - that tread is
+the last one numbered. Each number is a TextNote centred inside one
+full-circle detail curve. Keep picking runs until Esc.
 
-Pick points one after another; press ESC to stop.
+Numbers follow the stairs' "Tread/Riser Start Number" parameter and continue
+through the runs of the same stairs (runs below the picked run are counted).
+Bubbles sit on the left or right side of the run (as seen walking up), with
+a user offset between the run edge and the bubble edge.
+The landing at the top of the picked run counts as a tread and is numbered
+too, as long as the walk up hasn't already stopped at the cut plane.
 """
+__title__ = "Stair Tread\nNumbering"
 
-__title__ = "Bubble\nNumbering"
-__author__ = "Mohamed Bedair"
+import clr
+clr.AddReference("PresentationFramework")
+clr.AddReference("PresentationCore")
+clr.AddReference("WindowsBase")
 
 import math
 
-import clr
-
-clr.AddReference("PresentationCore")
-clr.AddReference("PresentationFramework")
-clr.AddReference("WindowsBase")
-
 from System import EventHandler
-from System.Windows import RoutedEventHandler
-from System.Windows.Controls import ListBoxItem, TextChangedEventHandler
+from System.Windows import RoutedEventHandler, Visibility
+from System.Windows.Controls import (
+    TextChangedEventHandler, SelectionChangedEventHandler
+)
+from System.Windows.Interop import WindowInteropHelper
 from System.Windows.Markup import XamlReader
-from System.Windows.Media import ColorConverter, SolidColorBrush
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 
-from Autodesk.Revit import DB
-from Autodesk.Revit import Exceptions as RvtEx
+from Autodesk.Revit.DB import (
+    Arc, BuiltInCategory, BuiltInParameter, ElementId,
+    FilteredElementCollector, GraphicsStyleType, HorizontalTextAlignment,
+    Level, PlanViewPlane, RevitLinkInstance, TextNote, TextNoteOptions,
+    TextNoteType, Transaction, Transform, UnitTypeId, UnitUtils,
+    VerticalTextAlignment, ViewPlan, XYZ
+)
+from Autodesk.Revit.DB.Architecture import StairsLanding, StairsRun
+from Autodesk.Revit.Exceptions import OperationCanceledException
+from Autodesk.Revit.UI import TaskDialog
+from Autodesk.Revit.UI.Selection import ISelectionFilter, ObjectType
 
-from pyrevit import forms, revit
-
-doc = revit.doc
-uidoc = revit.uidoc
-
-MM_PER_FT = 304.8
-LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
-CLR_SUBTEXT = "#A8A8A8"
-CLR_ACCENT = "#F1C21B"
-CLR_ERROR = "#FA4D56"
-
-ANCHOR_WORDS = {
-    "top": "top quadrant",
-    "left": "left quadrant",
-    "center": "center",
-    "right": "right quadrant",
-    "bottom": "bottom quadrant",
-}
-
-PLACEABLE_VIEW_TYPES = [
-    DB.ViewType.FloorPlan,
-    DB.ViewType.CeilingPlan,
-    DB.ViewType.EngineeringPlan,
-    DB.ViewType.AreaPlan,
-    DB.ViewType.Section,
-    DB.ViewType.Elevation,
-    DB.ViewType.Detail,
-    DB.ViewType.DraftingView,
-    DB.ViewType.Legend,
-]
+from pyrevit import script
 
 
-# ---------------------------------------------------------------- helpers ---
-def brush(hex_color):
-    return SolidColorBrush(ColorConverter.ConvertFromString(hex_color))
+uidoc = __revit__.ActiveUIDocument
+doc = uidoc.Document
+view = doc.ActiveView
+cfg = script.get_config()
+
+TITLE = "Stair Tread Numbering"
+TOL = 1e-6
+START_NUMBER_PARAM = "Tread/Riser Start Number"
+SIDE_LEFT, SIDE_CENTER, SIDE_RIGHT = 1, 0, -1
+
+# System line styles that a detail line cannot use
+EXCLUDED_LINE_STYLES = set([
+    "<Area Boundary>", "<Room Separation>", "<Space Separation>",
+    "<Sketch>", "<Insulation Batting Lines>", "<Path of Travel Lines>",
+])
 
 
-def elem_name(element):
+# --------------------------------------------------------------------------
+# Helpers
+# --------------------------------------------------------------------------
+def eid_int(eid):
     try:
-        return DB.Element.Name.GetValue(element)
-    except Exception:
-        return element.Name
+        return eid.Value
+    except AttributeError:
+        return eid.IntegerValue
 
 
-def letters_to_index(text):
-    """A -> 1, Z -> 26, AA -> 27."""
-    index = 0
-    for char in text:
-        index = index * 26 + (LETTERS.index(char) + 1)
-    return index
+def mm_to_ft(v):
+    return UnitUtils.ConvertToInternalUnits(v, UnitTypeId.Millimeters)
 
 
-def index_to_letters(index):
-    """1 -> A, 26 -> Z, 27 -> AA."""
-    out = ""
-    left = index
-    while left > 0:
-        left, rem = divmod(left - 1, 26)
-        out = LETTERS[rem] + out
-    return out or "A"
+def ft_to_mm(v):
+    return UnitUtils.ConvertFromInternalUnits(v, UnitTypeId.Millimeters)
 
 
-def parse_start(raw_text):
-    """Return (kind, index, pad, error). kind is 'number' or 'letter'."""
-    raw = (raw_text or "").strip()
-    if not raw:
-        return None, 0, 0, "Start value cannot be empty."
-
-    digits = raw[1:] if raw[:1] in ("+", "-") else raw
-    if digits.isdigit():
-        value = int(raw)
-        if value < 1:
-            return None, 0, 0, "Start value must be 1 or greater."
-        pad = len(digits) if digits.startswith("0") and len(digits) > 1 else 0
-        return "number", value, pad, None
-
-    upper = raw.upper()
-    for char in upper:
-        if char not in LETTERS:
-            return None, 0, 0, "Start value must be digits or letters only (1, 07, A, AA...)."
-    return "letter", letters_to_index(upper), 0, None
+def type_name(el):
+    for bip in (BuiltInParameter.SYMBOL_NAME_PARAM,
+                BuiltInParameter.ALL_MODEL_TYPE_NAME):
+        p = el.get_Parameter(bip)
+        if p is not None and p.AsString():
+            return p.AsString()
+    return str(eid_int(el.Id))
 
 
-def make_label(kind, index, pad, prefix, suffix):
-    if kind == "number":
-        core = str(index).zfill(pad) if pad else str(index)
-    else:
-        core = index_to_letters(index)
-    return "{}{}{}".format(prefix, core, suffix)
+def cfg_get(name, default):
+    value = cfg.get_option(name, default)
+    return default if value is None else value
 
 
 def collect_text_types():
-    """[(display, TextNoteType), ...] sorted by name."""
-    rows = []
-    collector = DB.FilteredElementCollector(doc).OfClass(DB.TextNoteType)
-    for text_type in collector.ToElements():
-        size_param = text_type.get_Parameter(DB.BuiltInParameter.TEXT_SIZE)
-        size_mm = size_param.AsDouble() * MM_PER_FT if size_param else 0.0
-        rows.append((elem_name(text_type), size_mm, text_type))
-    rows.sort(key=lambda row: row[0].lower())
-    return [("{}   -   {:.1f} mm".format(r[0], r[1]), r[2]) for r in rows]
+    types = {}
+    for t in FilteredElementCollector(doc).OfClass(TextNoteType):
+        types[type_name(t)] = t.Id
+    return types
 
 
 def collect_line_styles():
-    """[(display, GraphicsStyle), ...] sorted by name."""
-    rows = []
-    lines_cat = doc.Settings.Categories.get_Item(DB.BuiltInCategory.OST_Lines)
-    for sub_cat in lines_cat.SubCategories:
-        name = sub_cat.Name
-        if name.startswith("<"):
+    styles = {}
+    lines_cat = doc.Settings.Categories.get_Item(BuiltInCategory.OST_Lines)
+    for sub in lines_cat.SubCategories:
+        if sub.Name in EXCLUDED_LINE_STYLES:
             continue
-        style = sub_cat.GetGraphicsStyle(DB.GraphicsStyleType.Projection)
-        if style is None:
-            continue
-        rows.append((name, style))
-    rows.sort(key=lambda row: row[0].lower())
-    return rows
+        gs = sub.GetGraphicsStyle(GraphicsStyleType.Projection)
+        if gs is not None:
+            styles[sub.Name] = gs
+    return styles
 
 
-# ------------------------------------------------------------------- xaml ---
-XAML = u"""
+def loaded_links():
+    return [li for li in FilteredElementCollector(doc).OfClass(RevitLinkInstance)
+            if li.GetLinkDocument() is not None]
+
+
+def sort_names(names):
+    return sorted(names, key=lambda s: s.lower())
+
+
+def cut_plane_info(v):
+    """Level, offset and absolute Z (host internal coords) of the cut plane."""
+    vr = v.GetViewRange()
+    lid = vr.GetLevelId(PlanViewPlane.CutPlane)
+    lvl = doc.GetElement(lid) if lid != ElementId.InvalidElementId else None
+    if not isinstance(lvl, Level):
+        lvl = v.GenLevel
+    off = vr.GetOffset(PlanViewPlane.CutPlane)
+    return lvl, off, lvl.ProjectElevation + off
+
+
+# --------------------------------------------------------------------------
+# Selection
+# --------------------------------------------------------------------------
+class HostRunFilter(ISelectionFilter):
+    def AllowElement(self, el):
+        return isinstance(el, StairsRun)
+
+    def AllowReference(self, ref, pt):
+        return True
+
+
+class LinkedRunFilter(ISelectionFilter):
+    def __init__(self, host_doc):
+        self.host_doc = host_doc
+
+    def AllowElement(self, el):
+        return isinstance(el, RevitLinkInstance)
+
+    def AllowReference(self, ref, pt):
+        link = self.host_doc.GetElement(ref.ElementId)
+        if not isinstance(link, RevitLinkInstance):
+            return False
+        ldoc = link.GetLinkDocument()
+        if ldoc is None:
+            return False
+        return isinstance(ldoc.GetElement(ref.LinkedElementId), StairsRun)
+
+
+def pick_run(use_link):
+    """Returns (run, transform link->host, run's document)."""
+    if use_link:
+        ref = uidoc.Selection.PickObject(
+            ObjectType.LinkedElement, LinkedRunFilter(doc),
+            "Pick a LINKED stair run (Tab to cycle, Esc to finish)")
+        link = doc.GetElement(ref.ElementId)
+        ldoc = link.GetLinkDocument()
+        return ldoc.GetElement(ref.LinkedElementId), link.GetTotalTransform(), ldoc
+    ref = uidoc.Selection.PickObject(
+        ObjectType.Element, HostRunFilter(),
+        "Pick a stair run (Tab to cycle, Esc to finish)")
+    return doc.GetElement(ref.ElementId), Transform.Identity, doc
+
+
+# --------------------------------------------------------------------------
+# Stair geometry
+# --------------------------------------------------------------------------
+def stairs_base_z(stairs, sdoc):
+    """Absolute base Z of the stairs, in its own document's internal coords."""
+    try:
+        p_lvl = stairs.get_Parameter(BuiltInParameter.STAIRS_BASE_LEVEL_PARAM)
+        p_off = stairs.get_Parameter(BuiltInParameter.STAIRS_BASE_OFFSET)
+    except AttributeError:
+        p_lvl = p_off = None
+    if p_lvl is not None:
+        lvl = sdoc.GetElement(p_lvl.AsElementId())
+        if isinstance(lvl, Level):
+            off = p_off.AsDouble() if p_off is not None else 0.0
+            return lvl.ProjectElevation + off
+    return stairs.BaseElevation
+
+
+def path_curves(run):
+    curves = [c for c in run.GetStairsPath() if c.Length > TOL]
+    if not curves:
+        raise ValueError("The run has no stairs path.")
+    return curves
+
+
+def frame_along(curves, dist):
+    """Point and horizontal unit tangent at a distance along the path."""
+    acc = 0.0
+    last = len(curves) - 1
+    for i, c in enumerate(curves):
+        length = c.Length
+        if dist <= acc + length or i == last:
+            t = max(0.0, min(1.0, (dist - acc) / length))
+            d = c.ComputeDerivatives(t, True)
+            tangent = XYZ(d.BasisX.X, d.BasisX.Y, 0.0).Normalize()
+            return d.Origin, tangent
+        acc += length
+
+
+def stairs_start_number(stairs):
+    """Value of 'Tread/Riser Start Number', or None if not found."""
+    p = stairs.LookupParameter(START_NUMBER_PARAM)
+    if p is None or not p.HasValue:
+        return None
+    return p.AsInteger()
+
+
+def lowest_tread_rel(stairs, sdoc):
+    """Height of the stairs' first tread, relative to the stairs base.
+
+    Every run is checked, so the result doesn't depend on run order.
+    """
+    lowest = None
+    for rid in stairs.GetStairsRuns():
+        r = sdoc.GetElement(rid)
+        if not isinstance(r, StairsRun) or r.ActualRisersNumber < 1:
+            continue
+        r_riser = (r.TopElevation - r.BaseElevation) / float(r.ActualRisersNumber)
+        z = r.BaseElevation + (r_riser if r.BeginsWithRiser else 0.0)
+        if lowest is None or z < lowest:
+            lowest = z
+    return lowest
+
+
+def treads_to_number(run, transform, sdoc, cut_z, layout):
+    """Walk up the run tread by tread; stop after the first tread above cut_z.
+
+    Returns (items, radius, start_found) where items = [(number, host_point)].
+    """
+    n = run.ActualTreadsNumber
+    risers = run.ActualRisersNumber
+    if n < 1 or risers < 1:
+        raise ValueError("The run reports no treads or risers.")
+
+    stairs = run.GetStairs()
+    curves = path_curves(run)
+    depth = sum(c.Length for c in curves) / float(n)
+    radius = layout["radius"] if layout["radius"] else depth / 2.0
+
+    # Numbering is by risers climbed, so landings consume a number too:
+    # number = start + (tread height - first tread height) / riser height
+    start = stairs_start_number(stairs)
+    start_found = start is not None
+    if not start_found:
+        start = 1
+    stairs_riser = stairs.ActualRiserHeight
+    lowest_rel = lowest_tread_rel(stairs, sdoc)
+    if stairs_riser <= TOL or lowest_rel is None:
+        raise ValueError("Could not read the riser height of the stairs.")
+
+    # Sideways shift from the walk line (run centre) to the bubble centre
+    lateral = 0.0
+    if layout["side"] != SIDE_CENTER:
+        lateral = run.ActualRunWidth / 2.0 - layout["offset"] - radius
+
+    # Run base = stairs base + run's relative base height
+    stairs_base = stairs_base_z(stairs, sdoc)
+    riser = (run.TopElevation - run.BaseElevation) / float(risers)
+    first = 1 if run.BeginsWithRiser else 0
+
+    def number_at(rel_z):
+        return start + int(round((rel_z - lowest_rel) / stairs_riser))
+
+    items = []
+    reached_cut = False
+    for k in range(1, n + 1):
+        p, tan = frame_along(curves, (k - 0.5) * depth)
+        left = XYZ(-tan.Y, tan.X, 0.0)
+        p = p + left * (layout["side"] * lateral)
+        tread_rel = run.BaseElevation + (k - 1 + first) * riser
+        hp = transform.OfPoint(XYZ(p.X, p.Y, stairs_base + tread_rel))
+        items.append((number_at(tread_rel), hp))
+        if hp.Z > cut_z + TOL:
+            reached_cut = True
+            break
+
+    # The landing at the top of the run is the next "tread" in the walk up
+    if not reached_cut:
+        run_len = sum(c.Length for c in curves)
+        end_pt, tan = frame_along(curves, run_len)
+        landing = top_landing(run, stairs, sdoc, stairs_riser, end_pt)
+        if landing is not None:
+            number = number_at(landing.BaseElevation)
+            # A run that ends without a riser is flush with its landing:
+            # the last tread already holds that number
+            if not items or number > items[-1][0]:
+                left = XYZ(-tan.Y, tan.X, 0.0)
+                # One tread depth past the last tread, same row as the treads
+                p = end_pt + tan * (depth / 2.0) + left * (layout["side"] * lateral)
+                hp = transform.OfPoint(
+                    XYZ(p.X, p.Y, stairs_base + landing.BaseElevation))
+                items.append((number, hp))
+    return items, radius, start_found
+
+
+def footprint_distance(landing, pt):
+    """Plan distance from pt to the landing's footprint boundary."""
+    best = None
+    for c in landing.GetFootprintBoundary():
+        z = c.GetEndPoint(0).Z
+        res = c.Project(XYZ(pt.X, pt.Y, z))
+        if res is not None and (best is None or res.Distance < best):
+            best = res.Distance
+    return best if best is not None else float("inf")
+
+
+def top_landing(run, stairs, sdoc, stairs_riser, end_pt):
+    """Landing of the same stairs sitting at the top of this run, or None.
+
+    Matched by height (landing top = run top); if several landings share
+    that height, the one nearest the run's end point wins.
+    """
+    candidates = []
+    for lid in stairs.GetStairsLandings():
+        lnd = sdoc.GetElement(lid)
+        if not isinstance(lnd, StairsLanding):
+            continue
+        if abs(lnd.BaseElevation - run.TopElevation) < stairs_riser / 2.0:
+            candidates.append(lnd)
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+    return min(candidates, key=lambda l: footprint_distance(l, end_pt))
+
+
+def place_numbers(items, radius, plane_z, style, opts):
+    for k, hp in items:
+        c = XYZ(hp.X, hp.Y, plane_z)
+        # One closed arc = one full circle element (not two halves)
+        circle = Arc.Create(c, radius, 0.0, 2.0 * math.pi,
+                            XYZ.BasisX, XYZ.BasisY)
+        dc = doc.Create.NewDetailCurve(view, circle)
+        dc.LineStyle = style
+        TextNote.Create(doc, view.Id, c, str(k), opts)
+
+
+# --------------------------------------------------------------------------
+# UI
+# --------------------------------------------------------------------------
+XAML = """
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Bubble Numbering"
-        Width="790" Height="750" MinWidth="720" MinHeight="690"
-        WindowStartupLocation="CenterScreen"
-        Background="#161616"
-        Foreground="#F4F4F4"
-        FontFamily="IBM Plex Sans, Segoe UI"
-        UseLayoutRounding="True">
-
+        Title="Stair Tread Numbering" Width="400" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        Background="#161616" Foreground="#F4F4F4"
+        FontFamily="Segoe UI" FontSize="12">
   <Window.Resources>
-
-    <Style x:Key="H1" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="FontSize" Value="19"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-    </Style>
-
-    <Style x:Key="Sub" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#A8A8A8"/>
-      <Setter Property="FontSize" Value="12"/>
-    </Style>
-
-    <Style x:Key="Lbl" TargetType="TextBlock">
+    <Style x:Key="Label" TargetType="TextBlock">
       <Setter Property="Foreground" Value="#A8A8A8"/>
       <Setter Property="FontSize" Value="11"/>
-      <Setter Property="Margin" Value="0,0,0,5"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Margin" Value="0,14,0,5"/>
     </Style>
 
-    <Style x:Key="Fld" TargetType="TextBox">
+    <Style x:Key="Radio" TargetType="ToggleButton">
+      <Setter Property="Foreground" Value="#F4F4F4"/>
       <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="BorderBrush" Value="#525252"/>
-      <Setter Property="BorderThickness" Value="0,0,0,1"/>
-      <Setter Property="Padding" Value="8,6"/>
-      <Setter Property="FontSize" Value="13"/>
-      <Setter Property="CaretBrush" Value="#F1C21B"/>
-      <Style.Triggers>
-        <Trigger Property="IsFocused" Value="True">
-          <Setter Property="BorderBrush" Value="#F1C21B"/>
-        </Trigger>
-      </Style.Triggers>
-    </Style>
-
-    <Style x:Key="Lst" TargetType="ListBox">
-      <Setter Property="Background" Value="#262626"/>
-      <Setter Property="BorderBrush" Value="#393939"/>
-      <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="FontSize" Value="12"/>
-      <Setter Property="Padding" Value="0,4"/>
-      <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
-    </Style>
-
-    <Style TargetType="ListBoxItem">
-      <Setter Property="Padding" Value="10,6"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ListBoxItem">
-            <Border x:Name="Bd"
-                    Background="Transparent"
-                    BorderBrush="Transparent"
-                    BorderThickness="3,0,0,0"
-                    Padding="{TemplateBinding Padding}">
-              <ContentPresenter/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#333333"/>
-              </Trigger>
-              <Trigger Property="IsSelected" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#393939"/>
-                <Setter TargetName="Bd" Property="BorderBrush" Value="#F1C21B"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-    <Style x:Key="Chip" TargetType="ToggleButton">
-      <Setter Property="Foreground" Value="#A8A8A8"/>
-      <Setter Property="FontSize" Value="12"/>
-      <Setter Property="Height" Value="32"/>
-      <Setter Property="Padding" Value="14,0"/>
+      <Setter Property="Height" Value="30"/>
       <Setter Property="Cursor" Value="Hand"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="ToggleButton">
-            <Border x:Name="Bd"
-                    CornerRadius="3"
-                    Background="#262626"
-                    BorderBrush="#525252"
-                    BorderThickness="1">
-              <ContentPresenter HorizontalAlignment="Center"
-                                VerticalAlignment="Center"
-                                Margin="{TemplateBinding Padding}"/>
+            <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                    BorderBrush="#525252" BorderThickness="1" CornerRadius="4">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
             <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#333333"/>
-              </Trigger>
               <Trigger Property="IsChecked" Value="True">
                 <Setter TargetName="Bd" Property="Background" Value="#F1C21B"/>
                 <Setter TargetName="Bd" Property="BorderBrush" Value="#F1C21B"/>
                 <Setter Property="Foreground" Value="#161616"/>
-                <Setter Property="FontWeight" Value="SemiBold"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.4"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -265,27 +400,20 @@ XAML = u"""
       </Setter>
     </Style>
 
-    <Style x:Key="BtnGhost" TargetType="Button">
+    <Style x:Key="Btn" TargetType="Button">
       <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="FontSize" Value="13"/>
-      <Setter Property="Height" Value="34"/>
-      <Setter Property="Padding" Value="18,0"/>
+      <Setter Property="Background" Value="#393939"/>
+      <Setter Property="Height" Value="32"/>
       <Setter Property="Cursor" Value="Hand"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
-            <Border x:Name="Bd"
-                    CornerRadius="3"
-                    Background="#393939"
-                    BorderBrush="#525252"
-                    BorderThickness="1">
-              <ContentPresenter HorizontalAlignment="Center"
-                                VerticalAlignment="Center"
-                                Margin="{TemplateBinding Padding}"/>
+            <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="4">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#525252"/>
+                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -293,488 +421,323 @@ XAML = u"""
       </Setter>
     </Style>
 
-    <Style x:Key="BtnPrimary" TargetType="Button">
-      <Setter Property="Foreground" Value="#161616"/>
-      <Setter Property="FontSize" Value="13"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="Height" Value="34"/>
-      <Setter Property="Padding" Value="20,0"/>
-      <Setter Property="Cursor" Value="Hand"/>
+    <Style TargetType="TextBox">
+      <Setter Property="Background" Value="#393939"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
+      <Setter Property="BorderBrush" Value="#525252"/>
+      <Setter Property="CaretBrush" Value="#F4F4F4"/>
+      <Setter Property="Padding" Value="6,5"/>
+    </Style>
+
+    <Style TargetType="ListBox">
+      <Setter Property="Background" Value="#262626"/>
+      <Setter Property="Foreground" Value="#F4F4F4"/>
+      <Setter Property="BorderBrush" Value="#525252"/>
+      <Setter Property="Height" Value="140"/>
+      <Setter Property="Margin" Value="0,4,0,0"/>
+    </Style>
+
+    <Style TargetType="ListBoxItem">
+      <Setter Property="Foreground" Value="#F4F4F4"/>
       <Setter Property="Template">
         <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="Bd"
-                    CornerRadius="3"
-                    Background="#F1C21B"
-                    BorderBrush="#F1C21B"
-                    BorderThickness="1">
-              <ContentPresenter HorizontalAlignment="Center"
-                                VerticalAlignment="Center"
-                                Margin="{TemplateBinding Padding}"/>
+          <ControlTemplate TargetType="ListBoxItem">
+            <Border x:Name="Bd" Background="Transparent" Padding="8,4">
+              <ContentPresenter/>
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#DDB01A"/>
-                <Setter TargetName="Bd" Property="BorderBrush" Value="#DDB01A"/>
+                <Setter TargetName="Bd" Property="Background" Value="#393939"/>
+              </Trigger>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#F1C21B"/>
+                <Setter Property="Foreground" Value="#161616"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
         </Setter.Value>
       </Setter>
     </Style>
-
   </Window.Resources>
 
-  <Grid>
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="*"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-    </Grid.RowDefinitions>
+  <StackPanel Margin="16">
+    <TextBlock x:Name="txtInfo" Foreground="#A8A8A8" TextWrapping="Wrap"/>
 
-    <Border Grid.Row="0" Background="#262626" BorderBrush="#393939"
-            BorderThickness="0,0,0,1" Padding="20,14">
-      <StackPanel>
-        <TextBlock Text="Bubble Numbering" Style="{StaticResource H1}"/>
-        <TextBlock Text="A numbered text note inside a detail circle, placed point by point."
-                   Style="{StaticResource Sub}" Margin="0,4,0,0"/>
-      </StackPanel>
-    </Border>
-
-    <Grid Grid.Row="1" Margin="20,16,20,0">
+    <TextBlock Text="STAIR SOURCE" Style="{StaticResource Label}"/>
+    <Grid>
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="16"/>
         <ColumnDefinition Width="*"/>
       </Grid.ColumnDefinitions>
-
-      <DockPanel Grid.Column="0">
-        <TextBlock DockPanel.Dock="Top" Text="TEXT NOTE TYPE" Style="{StaticResource Lbl}"/>
-        <TextBox DockPanel.Dock="Top" x:Name="TxtTypeSearch"
-                 Style="{StaticResource Fld}" Margin="0,0,0,8"/>
-        <ListBox x:Name="LstTypes" Style="{StaticResource Lst}"/>
-      </DockPanel>
-
-      <DockPanel Grid.Column="2">
-        <TextBlock DockPanel.Dock="Top" Text="CIRCLE LINE STYLE" Style="{StaticResource Lbl}"/>
-        <TextBox DockPanel.Dock="Top" x:Name="TxtStyleSearch"
-                 Style="{StaticResource Fld}" Margin="0,0,0,8"/>
-        <ListBox x:Name="LstStyles" Style="{StaticResource Lst}"/>
-      </DockPanel>
+      <ToggleButton x:Name="tgHost" Grid.Column="0" Content="Active Model"
+                    Style="{StaticResource Radio}" Margin="0,0,4,0"/>
+      <ToggleButton x:Name="tgLink" Grid.Column="1" Content="Linked Model"
+                    Style="{StaticResource Radio}" Margin="4,0,0,0"/>
     </Grid>
 
-    <Border Grid.Row="2" Margin="20,16,20,0" Background="#262626"
-            BorderBrush="#393939" BorderThickness="1" Padding="16">
-      <StackPanel>
-        <Grid>
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="12"/>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="12"/>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="12"/>
-            <ColumnDefinition Width="*"/>
-          </Grid.ColumnDefinitions>
+    <TextBlock Text="TEXT NOTE TYPE" Style="{StaticResource Label}"/>
+    <Grid>
+      <TextBox x:Name="tbTextFilter"/>
+      <TextBlock x:Name="phText" Text="Search..." Foreground="#6F6F6F"
+                 IsHitTestVisible="False" Margin="9,0,0,0" VerticalAlignment="Center"/>
+    </Grid>
+    <ListBox x:Name="lbText"/>
 
-          <StackPanel Grid.Column="0">
-            <TextBlock Text="CIRCLE DIAMETER (MM)" Style="{StaticResource Lbl}"/>
-            <TextBox x:Name="TxtDiameter" Text="280" Style="{StaticResource Fld}"/>
-          </StackPanel>
+    <TextBlock Text="CIRCLE LINE STYLE" Style="{StaticResource Label}"/>
+    <Grid>
+      <TextBox x:Name="tbStyleFilter"/>
+      <TextBlock x:Name="phStyle" Text="Search..." Foreground="#6F6F6F"
+                 IsHitTestVisible="False" Margin="9,0,0,0" VerticalAlignment="Center"/>
+    </Grid>
+    <ListBox x:Name="lbStyle"/>
 
-          <StackPanel Grid.Column="2">
-            <TextBlock Text="START VALUE" Style="{StaticResource Lbl}"/>
-            <TextBox x:Name="TxtStart" Text="1" Style="{StaticResource Fld}"/>
-          </StackPanel>
+    <TextBlock Text="CIRCLE DIAMETER (MM)" Style="{StaticResource Label}"/>
+    <TextBox x:Name="tbDia"/>
+    <TextBlock Text="0 = match the tread depth" Foreground="#A8A8A8"
+               FontSize="11" Margin="0,4,0,0"/>
 
-          <StackPanel Grid.Column="4">
-            <TextBlock Text="PREFIX" Style="{StaticResource Lbl}"/>
-            <TextBox x:Name="TxtPrefix" Style="{StaticResource Fld}"/>
-          </StackPanel>
+    <TextBlock Text="BUBBLE POSITION (WALKING UP THE RUN)" Style="{StaticResource Label}"/>
+    <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="*"/>
+      </Grid.ColumnDefinitions>
+      <ToggleButton x:Name="tgLeft" Grid.Column="0" Content="Left"
+                    Style="{StaticResource Radio}" Margin="0,0,4,0"/>
+      <ToggleButton x:Name="tgCenter" Grid.Column="1" Content="Center"
+                    Style="{StaticResource Radio}" Margin="4,0,4,0"/>
+      <ToggleButton x:Name="tgRight" Grid.Column="2" Content="Right"
+                    Style="{StaticResource Radio}" Margin="4,0,0,0"/>
+    </Grid>
 
-          <StackPanel Grid.Column="6">
-            <TextBlock Text="SUFFIX" Style="{StaticResource Lbl}"/>
-            <TextBox x:Name="TxtSuffix" Style="{StaticResource Fld}"/>
-          </StackPanel>
-        </Grid>
+    <TextBlock Text="OFFSET FROM STAIR EDGE (MM)" Style="{StaticResource Label}"/>
+    <TextBox x:Name="tbOffset"/>
+    <TextBlock Text="Gap between the run edge and the bubble edge. Negative = outside the run."
+               Foreground="#A8A8A8" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"/>
 
-        <Grid Margin="0,16,0,0">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="*"/>
-          </Grid.ColumnDefinitions>
+    <TextBlock x:Name="txtError" Foreground="#FA4D56" TextWrapping="Wrap"
+               Visibility="Collapsed" Margin="0,12,0,0"/>
 
-          <StackPanel Grid.Column="0">
-            <TextBlock Text="PICKED POINT IS THE" Style="{StaticResource Lbl}"/>
-            <Grid>
-              <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-              </Grid.RowDefinitions>
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
-              </Grid.ColumnDefinitions>
-
-              <ToggleButton x:Name="TglTop" Grid.Row="0" Grid.Column="1"
-                            Content="Top" Width="104" Margin="3"
-                            Style="{StaticResource Chip}"/>
-              <ToggleButton x:Name="TglLeft" Grid.Row="1" Grid.Column="0"
-                            Content="Left" Width="104" Margin="3"
-                            Style="{StaticResource Chip}"/>
-              <ToggleButton x:Name="TglCenter" Grid.Row="1" Grid.Column="1"
-                            Content="Center" Width="104" Margin="3"
-                            Style="{StaticResource Chip}"/>
-              <ToggleButton x:Name="TglRight" Grid.Row="1" Grid.Column="2"
-                            Content="Right" Width="104" Margin="3"
-                            Style="{StaticResource Chip}"/>
-              <ToggleButton x:Name="TglBottom" Grid.Row="2" Grid.Column="1"
-                            Content="Bottom" Width="104" Margin="3"
-                            Style="{StaticResource Chip}" IsChecked="True"/>
-            </Grid>
-          </StackPanel>
-
-          <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Bottom">
-            <TextBlock Text="DIRECTION" Style="{StaticResource Lbl}"
-                       HorizontalAlignment="Right"/>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
-                        Margin="0,0,0,12">
-              <ToggleButton x:Name="TglUp" Content="Count up" Width="104"
-                            Margin="3" Style="{StaticResource Chip}" IsChecked="True"/>
-              <ToggleButton x:Name="TglDown" Content="Count down" Width="104"
-                            Margin="3" Style="{StaticResource Chip}"/>
-            </StackPanel>
-            <TextBlock Text="SEQUENCE PREVIEW" Style="{StaticResource Lbl}"
-                       HorizontalAlignment="Right"/>
-            <TextBlock x:Name="TxtPreview" Text="-" Foreground="#F1C21B"
-                       FontSize="14" HorizontalAlignment="Right"/>
-          </StackPanel>
-        </Grid>
-      </StackPanel>
-    </Border>
-
-    <TextBlock Grid.Row="3" x:Name="TxtStatus" Margin="20,12,20,0"
-               Foreground="#A8A8A8" FontSize="12" TextWrapping="Wrap"
-               Text="Pick points in the active view one by one. Press ESC to finish."/>
-
-    <Border Grid.Row="4" Margin="0,14,0,0" Background="#262626" BorderBrush="#393939"
-            BorderThickness="0,1,0,0" Padding="20,12">
-      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-        <Button x:Name="BtnCancel" Content="Cancel" Style="{StaticResource BtnGhost}"/>
-        <Button x:Name="BtnStart" Content="Start placing"
-                Style="{StaticResource BtnPrimary}" Margin="10,0,0,0"/>
-      </StackPanel>
-    </Border>
-
-  </Grid>
+    <Grid Margin="0,18,0,0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="*"/>
+      </Grid.ColumnDefinitions>
+      <Button x:Name="btnCancel" Grid.Column="0" Content="Cancel"
+              Style="{StaticResource Btn}" Margin="0,0,4,0"/>
+      <Button x:Name="btnStart" Grid.Column="1" Content="Start Numbering"
+              Style="{StaticResource Btn}" Background="#F1C21B"
+              Foreground="#161616" FontWeight="SemiBold" Margin="4,0,0,0"/>
+    </Grid>
+  </StackPanel>
 </Window>
 """
 
 
-# ------------------------------------------------------------------- form ---
-def show_dialog(type_rows, style_rows):
-    """Return a settings dict, or None if cancelled."""
-    window = XamlReader.Parse(XAML)
+def bind_list(tb, placeholder, lb, names, preselect):
+    """Live-filtered list. Returns a getter for the chosen name."""
+    chosen = [preselect if preselect in names else None]
 
-    txt_type_search = window.FindName("TxtTypeSearch")
-    txt_style_search = window.FindName("TxtStyleSearch")
-    lst_types = window.FindName("LstTypes")
-    lst_styles = window.FindName("LstStyles")
-    txt_diameter = window.FindName("TxtDiameter")
-    txt_start = window.FindName("TxtStart")
-    txt_prefix = window.FindName("TxtPrefix")
-    txt_suffix = window.FindName("TxtSuffix")
-    txt_preview = window.FindName("TxtPreview")
-    txt_status = window.FindName("TxtStatus")
-    btn_cancel = window.FindName("BtnCancel")
-    btn_start = window.FindName("BtnStart")
+    def on_select(sender, args):
+        if lb.SelectedItem is not None:
+            chosen[0] = lb.SelectedItem
 
-    anchors = [
-        (window.FindName("TglTop"), "top"),
-        (window.FindName("TglLeft"), "left"),
-        (window.FindName("TglCenter"), "center"),
-        (window.FindName("TglRight"), "right"),
-        (window.FindName("TglBottom"), "bottom"),
-    ]
+    def refresh(sender=None, args=None):
+        q = tb.Text.strip().lower()
+        lb.Items.Clear()
+        for n in names:
+            if not q or q in n.lower():
+                lb.Items.Add(n)
+        placeholder.Visibility = (Visibility.Collapsed if tb.Text
+                                  else Visibility.Visible)
+        if chosen[0] is not None and lb.Items.Contains(chosen[0]):
+            lb.SelectedItem = chosen[0]
+            lb.ScrollIntoView(chosen[0])
 
-    directions = [
-        (window.FindName("TglUp"), False),
-        (window.FindName("TglDown"), True),
-    ]
+    lb.SelectionChanged += SelectionChangedEventHandler(on_select)
+    tb.TextChanged += TextChangedEventHandler(refresh)
+    refresh()
+    return lambda: chosen[0]
 
-    result = {}
 
-    def selected_tag(listbox):
-        item = listbox.SelectedItem
-        return item.Tag if item is not None else None
+def show_ui(text_names, style_names, has_links, info):
+    win = XamlReader.Parse(XAML)
+    WindowInteropHelper(win).Owner = __revit__.MainWindowHandle
 
-    def fill_list(listbox, rows, needle):
-        keep = selected_tag(listbox)
-        listbox.Items.Clear()
-        low = (needle or "").strip().lower()
-        restore = None
-        for display, tag in rows:
-            if low and low not in display.lower():
-                continue
-            item = ListBoxItem()
-            item.Content = display
-            item.Tag = tag
-            listbox.Items.Add(item)
-            if keep is not None and tag is keep:
-                restore = item
-        if restore is not None:
-            listbox.SelectedItem = restore
-        elif listbox.Items.Count > 0:
-            listbox.SelectedIndex = 0
+    tg_host = win.FindName("tgHost")
+    tg_link = win.FindName("tgLink")
+    tb_dia = win.FindName("tbDia")
+    txt_err = win.FindName("txtError")
+    win.FindName("txtInfo").Text = info
 
-    def set_status(message, is_error):
-        txt_status.Text = message
-        txt_status.Foreground = brush(CLR_ERROR if is_error else CLR_SUBTEXT)
+    result = [None]
+    source = [False]  # True = linked
 
-    def update_preview():
-        kind, index, pad, error = parse_start(txt_start.Text)
-        if kind is None:
-            txt_preview.Text = "-"
-            return
-        descending = group_value(directions, False)
-        prefix = txt_prefix.Text or ""
-        suffix = txt_suffix.Text or ""
-        labels = []
-        value = index
-        finished = False
-        while len(labels) < 4:
-            labels.append(make_label(kind, value, pad, prefix, suffix))
-            if descending:
-                if value <= 1:
-                    finished = True
-                    break
-                value -= 1
-            else:
-                value += 1
-        txt_preview.Text = "  ".join(labels) + ("" if finished else "  ...")
+    def set_source(is_link):
+        source[0] = is_link
+        tg_host.IsChecked = not is_link
+        tg_link.IsChecked = is_link
 
-    def on_type_search(sender, args):
-        fill_list(lst_types, type_rows, txt_type_search.Text)
+    tg_host.Click += RoutedEventHandler(lambda s, e: set_source(False))
+    tg_link.Click += RoutedEventHandler(lambda s, e: set_source(True))
+    if not has_links:
+        tg_link.IsEnabled = False
+        tg_link.ToolTip = "No loaded Revit links in this model"
+    set_source(has_links and cfg_get("source", "host") == "link")
 
-    def on_style_search(sender, args):
-        fill_list(lst_styles, style_rows, txt_style_search.Text)
+    get_text = bind_list(win.FindName("tbTextFilter"), win.FindName("phText"),
+                         win.FindName("lbText"), text_names,
+                         cfg_get("text_type", ""))
+    get_style = bind_list(win.FindName("tbStyleFilter"), win.FindName("phStyle"),
+                          win.FindName("lbStyle"), style_names,
+                          cfg_get("line_style", ""))
+    tb_dia.Text = cfg_get("diameter", "0")
 
-    def on_sequence_changed(sender, args):
-        update_preview()
+    # Side toggles (Left / Center / Right)
+    tb_off = win.FindName("tbOffset")
+    side_btns = {SIDE_LEFT: win.FindName("tgLeft"),
+                 SIDE_CENTER: win.FindName("tgCenter"),
+                 SIDE_RIGHT: win.FindName("tgRight")}
+    side = [SIDE_LEFT]
 
-    def bind_toggle_group(items):
-        """Radio behaviour for a list of (ToggleButton, value) pairs."""
-        guard = [False]
+    def set_side(value):
+        side[0] = value
+        for key, btn in side_btns.items():
+            btn.IsChecked = (key == value)
+        tb_off.IsEnabled = (value != SIDE_CENTER)
 
-        def on_checked(sender, args):
-            if guard[0]:
-                return
-            guard[0] = True
-            for toggle, _value in items:
-                if toggle is not sender:
-                    toggle.IsChecked = False
-            guard[0] = False
+    def side_handler(value):
+        return RoutedEventHandler(lambda s, e: set_side(value))
 
-        def on_unchecked(sender, args):
-            if guard[0]:
-                return
-            if not [t for t, _v in items if t.IsChecked]:
-                guard[0] = True
-                sender.IsChecked = True
-                guard[0] = False
+    for key, btn in side_btns.items():
+        btn.Click += side_handler(key)
+    try:
+        saved_side = int(cfg_get("side", str(SIDE_LEFT)))
+    except ValueError:
+        saved_side = SIDE_LEFT
+    set_side(saved_side if saved_side in side_btns else SIDE_LEFT)
+    tb_off.Text = cfg_get("offset", "50")
 
-        for toggle, _value in items:
-            toggle.Checked += RoutedEventHandler(on_checked)
-            toggle.Unchecked += RoutedEventHandler(on_unchecked)
-
-    def group_value(items, fallback):
-        for toggle, value in items:
-            if toggle.IsChecked:
-                return value
-        return fallback
-
-    def on_cancel(sender, args):
-        window.Close()
+    def parse_mm(tb, allow_negative):
+        value = float(tb.Text.strip().replace(",", ".") or "0")
+        if value < 0 and not allow_negative:
+            raise ValueError()
+        return value
 
     def on_start(sender, args):
-        text_item = lst_types.SelectedItem
-        if text_item is None:
-            set_status("Select a text note type.", True)
-            return
-
-        style_item = lst_styles.SelectedItem
-
+        errors = []
+        text, style = get_text(), get_style()
+        if not text:
+            errors.append("Choose a text note type.")
+        if not style:
+            errors.append("Choose a line style for the circle.")
+        dia = offset = None
         try:
-            diameter_mm = float((txt_diameter.Text or "").strip())
+            dia = parse_mm(tb_dia, False)
         except ValueError:
-            set_status("Circle diameter must be a number.", True)
+            errors.append("Circle diameter must be a number, 0 or larger.")
+        try:
+            offset = parse_mm(tb_off, True)
+        except ValueError:
+            errors.append("Offset must be a number (mm).")
+        if errors:
+            txt_err.Text = "\n".join(errors)
+            txt_err.Visibility = Visibility.Visible
             return
-        if diameter_mm <= 0:
-            set_status("Circle diameter must be greater than zero.", True)
-            return
+        result[0] = {"link": source[0], "text": text, "style": style,
+                     "dia": dia, "side": side[0], "offset": offset}
+        win.Close()
 
-        kind, index, pad, error = parse_start(txt_start.Text)
-        if kind is None:
-            set_status(error, True)
-            return
-
-        descending = group_value(directions, False)
-        anchor = group_value(anchors, "bottom")
-
-        result["text_type"] = text_item.Tag
-        result["line_style"] = style_item.Tag if style_item is not None else None
-        result["diameter_mm"] = diameter_mm
-        result["kind"] = kind
-        result["index"] = index
-        result["pad"] = pad
-        result["descending"] = descending
-        result["prefix"] = txt_prefix.Text or ""
-        result["suffix"] = txt_suffix.Text or ""
-        result["anchor"] = anchor
-        window.Close()
-
-    txt_type_search.TextChanged += TextChangedEventHandler(on_type_search)
-    txt_style_search.TextChanged += TextChangedEventHandler(on_style_search)
-    txt_start.TextChanged += TextChangedEventHandler(on_sequence_changed)
-    txt_prefix.TextChanged += TextChangedEventHandler(on_sequence_changed)
-    txt_suffix.TextChanged += TextChangedEventHandler(on_sequence_changed)
-
-    bind_toggle_group(anchors)
-    bind_toggle_group(directions)
-
-    for toggle, _value in directions:
-        toggle.Checked += RoutedEventHandler(on_sequence_changed)
-
-    btn_cancel.Click += RoutedEventHandler(on_cancel)
-    btn_start.Click += RoutedEventHandler(on_start)
-
-    fill_list(lst_types, type_rows, "")
-    fill_list(lst_styles, style_rows, "")
-    update_preview()
+    win.FindName("btnStart").Click += RoutedEventHandler(on_start)
+    win.FindName("btnCancel").Click += RoutedEventHandler(lambda s, e: win.Close())
 
     frame = DispatcherFrame()
 
     def on_closed(sender, args):
         frame.Continue = False
 
-    window.Closed += EventHandler(on_closed)
-    window.Show()
+    win.Closed += EventHandler(on_closed)
+    win.Show()
     Dispatcher.PushFrame(frame)
+    return result[0]
 
-    return result if result else None
 
+# --------------------------------------------------------------------------
+# Main
+# --------------------------------------------------------------------------
+def main():
+    if not isinstance(view, ViewPlan):
+        TaskDialog.Show(TITLE, "Open a plan view first - the numbering "
+                               "stops at that view's cut plane.")
+        return
 
-# -------------------------------------------------------------- placement ---
-def place_bubbles(view, settings):
-    x_axis = view.RightDirection
-    y_axis = view.UpDirection
-    radius = (settings["diameter_mm"] / MM_PER_FT) / 2.0
-    anchor = settings["anchor"]
-    line_style = settings["line_style"]
+    text_types = collect_text_types()
+    line_styles = collect_line_styles()
+    if not text_types or not line_styles:
+        TaskDialog.Show(TITLE, "No text note types or line styles found.")
+        return
 
-    options = DB.TextNoteOptions()
-    options.TypeId = settings["text_type"].Id
-    options.HorizontalAlignment = DB.HorizontalTextAlignment.Center
-    options.VerticalAlignment = DB.VerticalTextAlignment.Middle
+    cut_lvl, cut_off, cut_z = cut_plane_info(view)
+    info = "View: {0}\nCut plane: {1} {2:+.0f} mm".format(
+        view.Name, cut_lvl.Name, ft_to_mm(cut_off))
 
-    anchor_word = ANCHOR_WORDS[anchor]
-    index = settings["index"]
-    placed = 0
-    hit_floor = False
+    settings = show_ui(sort_names(text_types.keys()),
+                       sort_names(line_styles.keys()),
+                       bool(loaded_links()), info)
+    if settings is None:
+        return
+
+    cfg.source = "link" if settings["link"] else "host"
+    cfg.text_type = settings["text"]
+    cfg.line_style = settings["style"]
+    cfg.diameter = "{0:g}".format(settings["dia"])
+    cfg.side = str(settings["side"])
+    cfg.offset = "{0:g}".format(settings["offset"])
+    script.save_config()
+
+    opts = TextNoteOptions(text_types[settings["text"]])
+    opts.HorizontalAlignment = HorizontalTextAlignment.Center
+    opts.VerticalAlignment = VerticalTextAlignment.Middle
+    style = line_styles[settings["style"]]
+    layout = {
+        "radius": (mm_to_ft(settings["dia"]) / 2.0
+                   if settings["dia"] > 0 else None),
+        "side": settings["side"],
+        "offset": mm_to_ft(settings["offset"]),
+    }
+    plane_lvl = view.GenLevel if view.GenLevel is not None else cut_lvl
+    plane_z = plane_lvl.ProjectElevation
+    warned_start = [False]
 
     while True:
-        prompt = "Pick the {} of bubble '{}'   -   ESC to finish".format(
-            anchor_word,
-            make_label(settings["kind"], index, settings["pad"],
-                       settings["prefix"], settings["suffix"])
-        )
         try:
-            picked = uidoc.Selection.PickPoint(prompt)
-        except RvtEx.OperationCanceledException:
-            break
-        except RvtEx.InvalidOperationException:
-            forms.alert("This view does not allow picking points.", title="Bubble Numbering")
+            run, transform, sdoc = pick_run(settings["link"])
+        except OperationCanceledException:
             break
 
-        if anchor == "bottom":
-            center = picked.Add(y_axis.Multiply(radius))
-        elif anchor == "top":
-            center = picked.Subtract(y_axis.Multiply(radius))
-        elif anchor == "left":
-            center = picked.Add(x_axis.Multiply(radius))
-        elif anchor == "right":
-            center = picked.Subtract(x_axis.Multiply(radius))
-        else:
-            center = picked
+        try:
+            items, radius, start_found = treads_to_number(
+                run, transform, sdoc, cut_z, layout)
+        except Exception as ex:
+            TaskDialog.Show(TITLE, "Run {0}: could not read the tread "
+                                   "layout.\n\n{1}".format(eid_int(run.Id), ex))
+            continue
 
-        label = make_label(settings["kind"], index, settings["pad"],
-                           settings["prefix"], settings["suffix"])
+        if not start_found and not warned_start[0]:
+            warned_start[0] = True
+            TaskDialog.Show(TITLE, "'{0}' was not found on these stairs - "
+                                   "numbering starts at 1.".format(START_NUMBER_PARAM))
 
-        t = DB.Transaction(doc, "Place bubble {}".format(label))
+        t = Transaction(doc, "Number Stair Treads")
         t.Start()
         try:
-            DB.TextNote.Create(doc, view.Id, center, label, options)
-
-            circle = DB.Ellipse.CreateCurve(
-                center, radius, radius, x_axis, y_axis, 0.0, 2.0 * math.pi
-            )
-            detail_curve = doc.Create.NewDetailCurve(view, circle)
-            if line_style is not None:
-                detail_curve.LineStyle = line_style
-
+            place_numbers(items, radius, plane_z, style, opts)
             t.Commit()
         except Exception as ex:
             t.RollBack()
-            forms.alert(
-                "Could not place bubble '{}':\n\n{}".format(label, ex),
-                title="Bubble Numbering"
-            )
-            break
-
-        index += -1 if settings["descending"] else 1
-        placed += 1
-
-        if settings["descending"] and index < 1:
-            hit_floor = True
-            break
-
-    return placed, hit_floor
-
-
-# ------------------------------------------------------------------- main ---
-def main():
-    view = doc.ActiveView
-
-    if view.IsTemplate or view.ViewType not in PLACEABLE_VIEW_TYPES:
-        forms.alert(
-            "Open a plan, section, elevation, detail, drafting or legend view first.\n"
-            "Text notes and detail lines cannot be placed in the current view.",
-            title="Bubble Numbering"
-        )
-        return
-
-    type_rows = collect_text_types()
-    if not type_rows:
-        forms.alert("This project has no text note types.", title="Bubble Numbering")
-        return
-
-    style_rows = collect_line_styles()
-
-    settings = show_dialog(type_rows, style_rows)
-    if not settings:
-        return
-
-    placed, hit_floor = place_bubbles(view, settings)
-    message = "Placed {} bubble{} in '{}'.".format(
-        placed, "" if placed == 1 else "s", view.Name
-    )
-    if hit_floor:
-        message += "\n\nThe count-down reached 1, so placement stopped there."
-    forms.alert(message, title="Bubble Numbering")
+            TaskDialog.Show(TITLE, "Run {0}: numbering failed and was rolled "
+                                   "back.\n\n{1}".format(eid_int(run.Id), ex))
 
 
 main()
