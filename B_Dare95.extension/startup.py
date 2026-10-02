@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""B_Dare95 extension startup: auto-update + ribbon tab logo.
+"""B_Dare95 extension startup: auto-update + ribbon tab logo + room tracking.
 
 Runs automatically every time pyRevit loads the extension (Revit start and
 every pyRevit Reload). No user interaction.
@@ -17,10 +17,18 @@ every pyRevit Reload). No user interaction.
 
 2. Tab logo
 
+3. Room Register live tracking
+    Arms the room tracker from lib/room_register.py, so room changes are
+    recorded in every session without anyone clicking the Room Register
+    button. The tracker parks itself in envvars under its own key and replaces
+    any tracker from a previous load, so a pyRevit Reload never subscribes its
+    events twice.
+
 Placement:
     B_Dare95.extension/startup.py
     B_Dare95.extension/resources/logo.png        (required)
     B_Dare95.extension/resources/logo_dark.png   (optional, dark theme)
+    B_Dare95.extension/lib/room_register.py      (Room Register core)
 
 There is no Revit API or pyRevit feature for tab icons. This reaches into the
 WPF visual tree behind ComponentManager.Ribbon and inserts an Image into the
@@ -442,10 +450,30 @@ def _try_apply(attempt):
 
 
 # ---------------------------------------------------------------------------
+# room register live tracking
+# ---------------------------------------------------------------------------
+
+def _arm_room_register(uiapp):
+    """Arms the Room Register tracker for this Revit session."""
+    import room_register                 # lib/room_register.py
+    room_register.rearm_tracker(uiapp, 'startup')
+
+
+def _log_room_register_failure(err):
+    """pyRevit debug log plus the register's own tracker.log, where users look."""
+    logger.debug('room register: arming failed: %s', err)
+    try:
+        import room_register
+        room_register._log('Startup arming failed: {0}'.format(err))
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
 # entry point
 # ---------------------------------------------------------------------------
 
-# Kept in separate try blocks so a failure in one never stops the other.
+# Kept in separate try blocks so a failure in one never stops the others.
 try:
     _auto_update()
 except Exception as err:
@@ -459,3 +487,8 @@ try:
         logger.debug('tab icon: %s not found, skipping', LIGHT_ICON)
 except Exception as err:
     logger.debug('tab icon: startup failed: %s', err)
+
+try:
+    _arm_room_register(__revit__)        # noqa: F821 - injected by pyRevit
+except Exception as err:
+    _log_room_register_failure(err)
