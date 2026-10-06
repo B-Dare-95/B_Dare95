@@ -11,7 +11,9 @@ every pyRevit Reload). No user interaction.
     diverged or ZIP install on the way. It never blocks the load.
     When new commits arrive, a small notification lists the new/updated tools
     and offers "Reload now"; a ZIP/no-git install gets a daily reminder to run
-    the installer. hooks/app-closing.py updates again as Revit exits, so the
+    the installer. While Revit stays open, GitHub is checked again every hour
+    and the same notification appears on its own when you push something new.
+    hooks/app-closing.py updates again as Revit exits, so the
     next start opens on the new version. Every outcome is logged to
     %LOCALAPPDATA%\\B_Dare95\\update.log.
 

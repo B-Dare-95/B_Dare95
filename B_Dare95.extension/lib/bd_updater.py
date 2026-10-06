@@ -2,7 +2,9 @@
 """B_Dare95 auto-updater core.
 
 Used by:
-    startup.py          start_background_update()  - every Revit start / Reload
+    startup.py          start_background_update()  - every Revit start / Reload,
+                                                     then an hourly check for the
+                                                     rest of the session
     hooks/app-closing   launch_detached_update()   - every time Revit closes
 
 Design rules
@@ -26,7 +28,7 @@ import time
 import clr
 clr.AddReference('System')
 
-from System import DateTime
+from System import AppDomain, DateTime, Guid
 from System.Diagnostics import Process, ProcessStartInfo, ProcessWindowStyle
 from System.IO import Directory, File, FileInfo
 from System.Text import UTF8Encoding
@@ -58,6 +60,14 @@ LOG_PATH = os.path.join(DATA_DIR, 'update.log')
 STATE_PATH = os.path.join(DATA_DIR, 'updater_state.json')
 
 MUTEX_NAME = 'Local\\B_Dare95_updater'
+
+# Open sessions ask GitHub for the newest commit this often. One tiny
+# `git ls-remote` request; files are only downloaded when something changed.
+WATCH_INTERVAL_MINUTES = 60
+# AppDomain slot holding the token of the current session's watcher. Every
+# pyRevit Reload starts a new watcher; older ones see the token change and stop.
+WATCH_KEY = 'BDARE95_UPDATE_WATCH_TOKEN'
+WATCH_MUTEX_WAIT_MS = 5 * 60 * 1000   # another Revit may be mid-update
 LOG_MAX_BYTES = 512 * 1024
 LOG_KEEP_CHARS = 256 * 1024
 STALE_LOCK_SECONDS = 10 * 60
@@ -467,7 +477,13 @@ def _off_notice(reason, source):
     return {'kind': 'off', 'reason': reason}
 
 
-def _update_once(source):
+def _update_once(source, session=None):
+    """Startup pass. `session` records, for the hourly watcher:
+        ribbon  commit pyRevit built this session's ribbon from
+        known   newest commit this session has already handled
+    """
+    if session is None:
+        session = {}
     git = find_git()
     if git is None:
         if os.path.isdir(GIT_DIR):
@@ -481,6 +497,8 @@ def _update_once(source):
         _clear_stale_locks(source)
         _quarantine_broken_repo(git, source)
         loaded = _head(git) if os.path.isdir(GIT_DIR) else None
+        session.setdefault('ribbon', loaded)
+        session['known'] = loaded
         _converge(git, source)
         new = _head(git)
     except GitStepFailed as fail:
@@ -500,6 +518,7 @@ def _update_once(source):
     if new is None:
         log(source, 'update finished but HEAD is unreadable')
         return None
+    session['known'] = new
 
     if loaded == new:
         log(source, 'up to date at {0} (git: {1})'.format(_short(new), git))
@@ -546,45 +565,145 @@ def note_skipped():
                        'pyRevit may load either one'.format(INSTALL_ROOT))
 
 
-def _worker(callback):
-    mutex = None
+def _locked(source, fn, wait_ms=0):
+    """Run fn() holding the cross-process updater mutex; None if busy."""
+    mutex = Mutex(False, MUTEX_NAME)
     owned = [False]
     try:
-        _rotate_log()
-        mutex = Mutex(False, MUTEX_NAME)
         try:
-            owned[0] = mutex.WaitOne(0)
-        except AbandonedMutexException:
+            owned[0] = mutex.WaitOne(wait_ms)
+        except AbandonedMutexException:      # a previous holder died mid-update
             owned[0] = True
         if not owned[0]:
-            log('startup', 'another update is already running - skipped')
-            return
-        result = _update_once('startup')
+            log(source, 'another update is already running - skipped')
+            return None
+        return fn()
+    finally:
+        if owned[0]:
+            try:
+                mutex.ReleaseMutex()
+            except Exception:
+                pass
+        try:
+            mutex.Dispose()
+        except Exception:
+            pass
+
+
+def _watch_check(session, callback):
+    """One hourly check. Notifies when GitHub has a commit this session has
+    not handled yet - downloading it first, so "Reload now" is instant."""
+    git = find_git()
+    if git is None or not os.path.isdir(GIT_DIR):
+        return                               # startup already reminded the user
+
+    code, out, err = _run_git(
+        git, ['-C', REPO_ROOT, 'ls-remote', 'origin', 'refs/heads/' + BRANCH], 60)
+    bits = out.split() if code == 0 else []
+    if not bits:
+        if not session.get('offline'):       # log once per offline streak
+            log('watch', 'could not reach GitHub: {0}'.format(
+                _first_lines(err, 1) if code is not None else 'timed out'))
+        session['offline'] = True
+        return
+    if session.pop('offline', False):
+        log('watch', 'GitHub reachable again')
+
+    remote = bits[0]
+    if remote == session.get('known'):
+        return                               # nothing new since we last looked
+
+    log('watch', 'new commit on GitHub: {0}'.format(_short(remote)))
+
+    def _apply():
+        head = _head(git)
+        if head != remote:                   # another Revit may have done it
+            _clear_stale_locks('watch')
+            _converge(git, 'watch')
+            head = _head(git)
+            log('watch', 'updated {0} -> {1}'.format(_short(session.get('known')), _short(head)))
+        return head
+
+    try:
+        new = _locked('watch', _apply, WATCH_MUTEX_WAIT_MS)
+    except GitStepFailed as fail:
+        log('watch', 'update failed at "{0}" (exit {1}): {2}'.format(
+            fail.step, fail.code, _first_lines(fail.detail)))
+        return
+    if not new:
+        return                               # busy or unreadable: retry next hour
+    session['known'] = new
+
+    state = _load_state()
+    state['last_seen'] = new
+    state['last_ok_at'] = time.time()
+    state.pop('first_fail_at', None)
+    _save_state(state)
+
+    ribbon = session.get('ribbon')
+    if callback is None or new == ribbon:
+        return
+    try:
+        # Everything not in the ribbon yet - so a card the user dismissed is
+        # rolled into the next one instead of being lost.
+        result = _summarize(git, ribbon, ribbon, new)
+    except GitStepFailed as fail:
+        log('watch', 'could not describe the update ({0}): {1}'.format(
+            fail.step, _first_lines(fail.detail)))
+        result = {'kind': 'updated', 'new': [], 'updated': [], 'removed': [],
+                  'needs_reload': True, 'commits': 0}
+    result['converted'] = False
+    log('watch', 'notifying - new: {0} | updated: {1} | removed: {2} | reload needed: {3}'.format(
+        ', '.join(result['new']) or '-', ', '.join(result['updated']) or '-',
+        ', '.join(result['removed']) or '-', result['needs_reload']))
+    callback(result)
+
+
+def _is_current(token):
+    try:
+        return AppDomain.CurrentDomain.GetData(WATCH_KEY) == token
+    except Exception:
+        return False
+
+
+def _session_loop(token, callback):
+    """Startup update, then an hourly check until Revit closes or pyRevit
+    reloads (which starts a fresh loop). Never raises."""
+    session = {}
+    try:
+        _rotate_log()
+        result = _locked('startup', lambda: _update_once('startup', session))
         if result is not None and callback is not None:
             callback(result)
     except Exception as err:
         log('startup', 'updater error: {0}'.format(err))
-    finally:
-        if mutex is not None:
-            if owned[0]:
-                try:
-                    mutex.ReleaseMutex()
-                except Exception:
-                    pass
-            try:
-                mutex.Dispose()
-            except Exception:
-                pass
+
+    while True:
+        try:
+            Thread.Sleep(WATCH_INTERVAL_MINUTES * 60 * 1000)
+        except Exception:
+            return
+        if not _is_current(token):
+            return                           # a Reload started a newer watcher
+        try:
+            _rotate_log()
+            _watch_check(session, callback)
+        except Exception as err:
+            log('watch', 'check error: {0}'.format(err))
 
 
 def start_background_update(callback=None):
-    """Update on a background thread; never blocks the pyRevit load.
+    """Update now, then check GitHub hourly - on one background thread that
+    never blocks Revit.
 
     callback(result) is called ON THE WORKER THREAD when there is something
     to tell the user; it must marshal to the UI thread itself.
     """
+    token = Guid.NewGuid().ToString()
+    AppDomain.CurrentDomain.SetData(WATCH_KEY, token)
+
     def _run():
-        _worker(callback)
+        _session_loop(token, callback)
 
     thread = Thread(ThreadStart(_run))
     thread.IsBackground = True               # never keeps Revit alive on exit
