@@ -473,4 +473,24 @@ except Exception as err:
 try:
     _arm_room_register(__revit__)        # noqa: F821 - injected by pyRevit
 except Exception as err:
-    _log_room_register_failure(err)
+    _log_room_register_failure(err)
+# --- Change Tracker: refresh on document open / sync / reload latest ---
+try:
+    import change_tracker
+    change_tracker.arm(__revit__.Application)
+except Exception:
+    try:
+        import change_tracker
+        change_tracker.log_error("startup arming")
+    except Exception:
+        pass
+# --- BIM Brother Links: refresh monitored links on host open / link reload ---
+try:
+    import link_tracker
+    link_tracker.arm(__revit__.Application)
+except Exception:
+    try:
+        import change_tracker
+        change_tracker.log_error("startup arming (links)")
+    except Exception:
+        pass
