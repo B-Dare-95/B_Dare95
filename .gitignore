@@ -1,0 +1,3 @@
+# Per-user runtime state. Tools keep it in %APPDATA%\B_Dare95 now; it must
+# never be committed, because auto-update resets every tracked file.
+toggle_state.json

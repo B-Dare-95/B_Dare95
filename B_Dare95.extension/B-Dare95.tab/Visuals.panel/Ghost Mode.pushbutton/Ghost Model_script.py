@@ -47,20 +47,10 @@ PATH_SCRIPT = os.path.dirname(__file__)
 
 # ── Toggle Config ──────────────────────────────────────────────────────────────
 def read_toggle_config():
-    """Read toggle_state.json from the script folder.
-    Creates the file with a False value if not found."""
-    json_toggle_state = os.path.join(PATH_SCRIPT, 'toggle_state.json')
-
-    if os.path.exists(json_toggle_state):
-        with open(json_toggle_state) as f:
-            TOGGLE = json.load(f)['toggle_state']
-    else:
-        TOGGLE = False
-
-    with open(json_toggle_state, "w") as f:
-        json.dump({"toggle_state": not TOGGLE}, f)
-
-    return TOGGLE
+    """Per-user toggle state in %APPDATA%\\B_Dare95 (never in this folder)."""
+    import bd_userstate
+    return bd_userstate.flip_toggle(
+        'ghost_mode', legacy_path=os.path.join(PATH_SCRIPT, 'toggle_state.json'))
 
 TOGGLE = read_toggle_config()
 
@@ -144,4 +134,4 @@ else:
         t.Commit()
     except Exception as e:
         t.RollBack()
-        TaskDialog.Show("Ghost Model Error", "Failed to reset Ghost Mode:\n{}".format(e))
+        TaskDialog.Show("Ghost Model Error", "Failed to reset Ghost Mode:\n{}".format(e))

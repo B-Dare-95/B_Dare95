@@ -4,16 +4,16 @@
 Runs automatically every time pyRevit loads the extension (Revit start and
 every pyRevit Reload). No user interaction.
 
-1. Auto-update
-    Starts a background `git pull --ff-only` on the install clone created by
-    B_Dare95_Installer.bat (%LOCALAPPDATA%\\B_Dare95_dist). It never blocks the
-    load: offline, no git, or a refused pull just means no update this time.
-    Changes to existing tools' scripts apply as soon as the pull finishes;
-    new/renamed buttons, icons and bundle.yaml edits show on the next load.
-
-    Only runs on that install clone, never on a development working copy.
-    git is the portable copy the installer drops in
-    %LOCALAPPDATA%\\B_Dare95_git, else whatever git is on PATH.
+1. Auto-update  (lib/bd_updater.py + lib/bd_update_toast.py)
+    Only on the installer's copy (%LOCALAPPDATA%\\B_Dare95_dist), never on a
+    development folder. A background thread brings the copy to exactly what is
+    on GitHub (fetch + forced checkout of origin/main), repairing a dirty,
+    diverged or ZIP install on the way. It never blocks the load.
+    When new commits arrive, a small notification lists the new/updated tools
+    and offers "Reload now"; a ZIP/no-git install gets a daily reminder to run
+    the installer. hooks/app-closing.py updates again as Revit exits, so the
+    next start opens on the new version. Every outcome is logged to
+    %LOCALAPPDATA%\\B_Dare95\\update.log.
 
 2. Tab logo
 
@@ -29,6 +29,9 @@ Placement:
     B_Dare95.extension/resources/logo.png        (required)
     B_Dare95.extension/resources/logo_dark.png   (optional, dark theme)
     B_Dare95.extension/lib/room_register.py      (Room Register core)
+    B_Dare95.extension/lib/bd_updater.py         (auto-update core)
+    B_Dare95.extension/lib/bd_update_toast.py    (update notification)
+    B_Dare95.extension/hooks/app-closing.py      (update on Revit close)
 
 There is no Revit API or pyRevit feature for tab icons. This reaches into the
 WPF visual tree behind ComponentManager.Ribbon and inserts an Image into the
@@ -55,7 +58,6 @@ clr.AddReference('PresentationFramework')
 clr.AddReference('WindowsBase')
 
 from System import Action, EventHandler, Object, TimeSpan
-from System.Diagnostics import Process, ProcessStartInfo, ProcessWindowStyle
 from System.Windows import (HorizontalAlignment, PresentationSource,
                             RoutedEventHandler, SizeChangedEventHandler,
                             Thickness, VerticalAlignment)
@@ -90,16 +92,6 @@ _HERE = os.path.dirname(__file__)
 LIGHT_ICON = os.path.join(_HERE, 'resources', 'logo.png')
 DARK_ICON = os.path.join(_HERE, 'resources', 'logo_dark.png')
 
-# --- auto-update ---
-_LOCALAPPDATA = os.environ.get('LOCALAPPDATA', '')
-
-# startup.py sits in B_Dare95.extension/; the git repo root is one level up.
-REPO_ROOT = os.path.dirname(os.path.abspath(_HERE))
-
-# Must match DEST and BD_GIT_HOME in B_Dare95_Installer.bat.
-INSTALL_ROOT = os.path.join(_LOCALAPPDATA, 'B_Dare95_dist')
-PORTABLE_GIT = os.path.join(_LOCALAPPDATA, 'B_Dare95_git', 'cmd', 'git.exe')
-
 # Script engines are torn down after a run, so the icon reference, the event
 # handlers and the retry timer are parked in envvars (AppDomain-backed) to keep
 # them alive for the whole Revit session.
@@ -120,41 +112,29 @@ def _state():
 # auto-update
 # ---------------------------------------------------------------------------
 
-def _same_path(a, b):
-    return os.path.normcase(os.path.normpath(a)) == \
-        os.path.normcase(os.path.normpath(b))
-
-
-def _git_exe():
-    """Portable copy if the installer made one, else git on PATH."""
-    if os.path.isfile(PORTABLE_GIT):
-        return PORTABLE_GIT
-    return 'git'
-
-
-def _auto_update():
-    """Fire-and-forget `git pull --ff-only` on the installed clone."""
-    if not _LOCALAPPDATA or not _same_path(REPO_ROOT, INSTALL_ROOT):
-        # Loaded from somewhere else, e.g. the author's development folder.
-        logger.debug('auto-update: %s is not the install clone, skipping',
-                     REPO_ROOT)
+def _auto_update(uiapp):
+    """Starts the background updater; the notification is optional."""
+    import bd_updater                    # lib/bd_updater.py
+    if not bd_updater.is_install_copy():
+        bd_updater.note_skipped()        # dev copy (or a stray second copy)
         return
-    if not os.path.isdir(os.path.join(REPO_ROOT, '.git')):
-        # ZIP install - only the installer can refresh it.
-        logger.debug('auto-update: %s has no .git folder, skipping', REPO_ROOT)
-        return
-
-    psi = ProcessStartInfo(_git_exe())
-    psi.Arguments = '-C "{0}" pull --ff-only --quiet'.format(REPO_ROOT)
-    psi.WorkingDirectory = REPO_ROOT
-    psi.UseShellExecute = False          # required for EnvironmentVariables
-    psi.CreateNoWindow = True
-    psi.WindowStyle = ProcessWindowStyle.Hidden
-    psi.EnvironmentVariables['GIT_TERMINAL_PROMPT'] = '0'   # never wait on a prompt
+    callback = None
     try:
-        Process.Start(psi)               # not awaited - Revit keeps loading
-    except Exception as err:             # git missing -> Win32Exception
-        logger.debug('auto-update: could not start git: %s', err)
+        import bd_update_toast           # lib/bd_update_toast.py
+        bd_update_toast.prepare(uiapp)
+        callback = bd_update_toast.on_update_result
+    except Exception as err:             # updates still run without the UI
+        bd_updater.log('startup', 'notification unavailable: {0}'.format(err))
+    bd_updater.start_background_update(callback)
+
+
+def _log_auto_update_failure(err):
+    logger.debug('auto-update: failed: %s', err)
+    try:
+        import bd_updater
+        bd_updater.log('startup', 'auto-update could not start: {0}'.format(err))
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -475,9 +455,9 @@ def _log_room_register_failure(err):
 
 # Kept in separate try blocks so a failure in one never stops the others.
 try:
-    _auto_update()
+    _auto_update(__revit__)              # noqa: F821 - injected by pyRevit
 except Exception as err:
-    logger.debug('auto-update: failed: %s', err)
+    _log_auto_update_failure(err)
 
 try:
     if os.path.isfile(LIGHT_ICON):
@@ -491,4 +471,4 @@ except Exception as err:
 try:
     _arm_room_register(__revit__)        # noqa: F821 - injected by pyRevit
 except Exception as err:
-    _log_room_register_failure(err)
+    _log_room_register_failure(err)

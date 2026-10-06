@@ -30,23 +30,10 @@ output      = script.get_output()
 PATH_SCRIPT = os.path.dirname(__file__)
 
 def read_toggle_config():
-    """Function to read toggle_state.json config located in the script's folder.
-    If file is not found it will be created with False value."""
-    json_toggle_state = os.path.join(PATH_SCRIPT, 'toggle_state.json')
-
-    # READ/CREATE file
-    if os.path.exists(json_toggle_state):
-        with open(json_toggle_state) as f:
-            json_data = json.load(f)
-            TOGGLE = json_data['toggle_state']
-    else:
-        TOGGLE = False
-    # REVERSE VALUE
-    with open(json_toggle_state, "w") as f:
-        x = not TOGGLE
-        new_data = {"toggle_state": x}
-        json.dump(new_data, f)
-    return TOGGLE
+    """Per-user toggle state in %APPDATA%\\B_Dare95 (never in this folder)."""
+    import bd_userstate
+    return bd_userstate.flip_toggle(
+        'highlight_mep', legacy_path=os.path.join(PATH_SCRIPT, 'toggle_state.json'))
 
 TOGGLE = read_toggle_config()
 
@@ -122,4 +109,4 @@ if not TOGGLE:
             doc.ActiveView.SetCategoryOverrides(category.Id, reset_override)
         except:
             pass
-    t.Commit()
+    t.Commit()
