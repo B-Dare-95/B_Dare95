@@ -32,7 +32,7 @@ from System.Windows.Input import Mouse, Cursors
 from System.Windows.Interop import WindowInteropHelper
 from System.Windows.Threading import Dispatcher, DispatcherFrame, DispatcherTimer
 
-from Autodesk.Revit.DB import ElementId, XYZ, Reference
+from Autodesk.Revit.DB import ElementId, XYZ, Reference, ViewType
 from Autodesk.Revit.UI import TaskDialog
 
 import change_tracker as ct
@@ -60,6 +60,8 @@ KIND_STYLE = {
 CHIP_LABELS = [("All", u"All"), (ct.NEW, u"New"), (ct.DELETED, u"Deleted"),
                (ct.MOVED, u"Moved"), (ct.RESIZED, u"Resized"), (ct.DATA, u"Data")]
 AUTO_EXPAND_LIMIT = 150
+MODEL_VIEW_TYPES = [ViewType.FloorPlan, ViewType.CeilingPlan, ViewType.EngineeringPlan, ViewType.AreaPlan,
+                    ViewType.Section, ViewType.Elevation, ViewType.Detail, ViewType.ThreeD]
 CHEV_CLOSED, CHEV_OPEN = u"\u25B8", u"\u25BE"
 SEP = u"  \u00B7  "
 
@@ -382,6 +384,8 @@ class ReportWindow(object):
         self.sel_uid = None
         self.sel_btn = None
         self.sort_time = False
+        self.cycle_uid = None          # card whose views are being cycled
+        self.cycle_seen = set()        # view ids already visited for that card
 
         self.sort_btn = find("SortTimeBtn")
         self.sort_btn.Click += RoutedEventHandler(self.on_sort_toggle)
@@ -655,53 +659,103 @@ class ReportWindow(object):
     def _instance(self):
         return self.link["instances"][0] if self.link and self.link["instances"] else None
 
-    def _zoom_link_box(self, bb):
-        """Zoom the active view to a box given in link coordinates."""
+    def _host_box(self, bb):
+        """Box in link coordinates -> padded (min, max) XYZ in host coordinates."""
         inst = self._instance()
         if not bb or inst is None:
-            return False
+            return None
         t = inst.GetTotalTransform()
         pts = [t.OfPoint(XYZ(x, y, z)) for x in (bb[0], bb[3]) for y in (bb[1], bb[4]) for z in (bb[2], bb[5])]
         pad = 3.0
-        lo = XYZ(min(p.X for p in pts) - pad, min(p.Y for p in pts) - pad, min(p.Z for p in pts) - pad)
-        hi = XYZ(max(p.X for p in pts) + pad, max(p.Y for p in pts) + pad, max(p.Z for p in pts) + pad)
-        view = doc.ActiveView
-        for v in uidoc.GetOpenUIViews():
-            if ct.eid_value(v.ViewId) == ct.eid_value(view.Id):
-                v.ZoomAndCenterRectangle(lo, hi)
-                return True
-        return False
+        return (XYZ(min(q.X for q in pts) - pad, min(q.Y for q in pts) - pad, min(q.Z for q in pts) - pad),
+                XYZ(max(q.X for q in pts) + pad, max(q.Y for q in pts) + pad, max(q.Z for q in pts) + pad))
 
-    def go_to(self, rec):
-        label = u"{0} {1}".format(ct.noun(rec.get("cat")), rec.get("id"))
-        if ct.DELETED in (rec.get("kinds") or []):
-            uidoc.Selection.SetElementIds(List[ElementId]())
-            if self._zoom_link_box(rec.get("bb")):
-                self.set_status(u"{0} no longer exists in the link{1}active view zoomed to its last known location"
-                                .format(label, SEP), ERROR)
-            else:
-                self.set_status(u"{0} no longer exists and has no stored location to zoom to.".format(label), ERROR)
+    def _open_model_views(self):
+        """Open views that can show model geometry, in Revit's open order: [(UIView, View)]."""
+        out = []
+        for uiv in uidoc.GetOpenUIViews():
+            view = doc.GetElement(uiv.ViewId)
+            if view is None or view.IsTemplate:
+                continue
+            if view.ViewType in MODEL_VIEW_TYPES:
+                out.append((uiv, view))
+        return out
+
+    def _next_view(self, uid, views):
+        """First click on a card: the active view. Every further click: the next open view not yet visited."""
+        active = ct.eid_value(doc.ActiveView.Id)
+        if uid != self.cycle_uid:
+            self.cycle_uid, self.cycle_seen = uid, set()
+            for i, (_, view) in enumerate(views):
+                if ct.eid_value(view.Id) == active:
+                    return i
+        remaining = [i for i, (_, view) in enumerate(views) if ct.eid_value(view.Id) not in self.cycle_seen]
+        if not remaining:                                  # all visited: start a new round
+            self.cycle_seen = set()
+            remaining = [i for i, (_, view) in enumerate(views) if ct.eid_value(view.Id) != active] or [0]
+        return remaining[0]
+
+    def zoom_cycle(self, rec, bb, label):
+        """Zoom the element in one open view per click, activating that view."""
+        box = self._host_box(bb)
+        views = self._open_model_views()
+        if box is None:
+            self.set_status(u"{0} has no stored location to zoom to.".format(label), ERROR)
+            return
+        if not views:
+            self.set_status(u"No open plan, section, elevation or 3D view to zoom in.", WARN)
             return
 
+        i = self._next_view(rec.get("uid"), views)
+        uiview, view = views[i]
+        self.cycle_seen.add(ct.eid_value(view.Id))
+        try:
+            if ct.eid_value(view.Id) != ct.eid_value(doc.ActiveView.Id):
+                uidoc.ActiveView = view
+            for uiv in uidoc.GetOpenUIViews():              # re-fetch: activation can replace UIView objects
+                if ct.eid_value(uiv.ViewId) == ct.eid_value(view.Id):
+                    uiview = uiv
+                    break
+            uiview.ZoomAndCenterRectangle(box[0], box[1])
+        except Exception as ex:
+            ct.log_error("zoom cycle")
+            self.set_status(u"Could not zoom in {0}: {1}".format(view.Name, ex), ERROR)
+            return
+
+        more = u"click the card again for the next open view" if len(views) > 1 else u"only open model view"
+        prefix = (u"{0} no longer exists (last known location)".format(label)
+                  if ct.DELETED in (rec.get("kinds") or []) else label)
+        self.set_status(u"{0}{1}view {2} of {3}: {4}{1}{5}".format(
+            prefix, SEP, i + 1, len(views), view.Name, more),
+            ERROR if ct.DELETED in (rec.get("kinds") or []) else OK)
+
+    def go_to(self, rec):
+        """Card click: zoom only, cycling through the open views on repeated clicks."""
+        label = u"{0} {1}".format(ct.noun(rec.get("cat")), rec.get("id"))
+        if ct.DELETED in (rec.get("kinds") or []):
+            self.zoom_cycle(rec, rec.get("bb"), label)
+            return
         link_el = self.link["doc"].GetElement(rec.get("uid"))
         if link_el is None:
             self.set_status(u"{0} is no longer in the loaded link. Refresh to update the register.".format(label), WARN)
             return
-        selected = False
+        self.zoom_cycle(rec, ct._bbox(link_el), label)
+
+    def pick_element(self, rec):
+        """Detail button: select the linked element so Revit highlights it."""
+        label = u"{0} {1}".format(ct.noun(rec.get("cat")), rec.get("id"))
+        link_el = self.link["doc"].GetElement(rec.get("uid"))
+        if link_el is None:
+            self.set_status(u"{0} is no longer in the loaded link. Refresh to update the register.".format(label), WARN)
+            return
         try:
             refs = List[Reference]()
             refs.Add(Reference(link_el).CreateLinkReference(self._instance()))
             uidoc.Selection.SetReferences(refs)
-            selected = True
-        except Exception:
-            pass
-        zoomed = self._zoom_link_box(ct._bbox(link_el))
-        if selected and zoomed:
-            self.set_status(u"Selected {0} in the link{1}active view zoomed to element".format(label, SEP))
-        elif zoomed:
-            self.set_status(u"Active view zoomed to {0} (linked elements could not be selected here)".format(label), WARN)
-        else:
-            self.set_status(u"{0} found, but the active view cannot show it.".format(label), WARN)
+            self.set_status(u"Picked {0} in the link{1}highlighted in every view that shows it".format(label, SEP))
+        except Exception as ex:
+            ct.log_error("pick linked element")
+            self.set_status(u"Could not pick {0}: {1}".format(label, ex), ERROR)
 
     # ----------------------------------------------------------------- detail
     def show_placeholder(self):
@@ -774,13 +828,14 @@ class ReportWindow(object):
                     ct.fmt_time(h.get("detected")), SEP, h.get("summary") or u"\u2014",
                     h.get("modified_by") or u"\u2014"), 12, SUB, margin=Thickness(0, 0, 0, 4), wrap=True))
 
-        go = Button()
-        go.Style = self.win.FindResource("PrimaryBtn")
-        go.Margin = Thickness(0, 16, 0, 0)
-        go.HorizontalAlignment = HorizontalAlignment.Left
-        go.Content = u"Zoom to last location" if ct.DELETED in (rec.get("kinds") or []) else u"Zoom to element"
-        go.Click += RoutedEventHandler(lambda s, e: self.go_to(rec))
-        p.Children.Add(go)
+        if ct.DELETED not in (rec.get("kinds") or []):
+            pick = Button()
+            pick.Style = self.win.FindResource("PrimaryBtn")
+            pick.Margin = Thickness(0, 16, 0, 0)
+            pick.HorizontalAlignment = HorizontalAlignment.Left
+            pick.Content = u"Pick Element"
+            pick.Click += RoutedEventHandler(lambda s, e: self.pick_element(rec))
+            p.Children.Add(pick)
 
     # ----------------------------------------------------------------- events
     def _chip_handler(self, key):
