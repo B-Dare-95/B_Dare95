@@ -9,8 +9,9 @@ Snapshot-and-diff tracker for the active document.
       <Title>__<key>.json            register: meta + change records (what the report reads)
       <Title>__<key>.snapshot.json   baseline: fingerprint of every tracked element
 
-  Refresh triggers: document open, Sync with Central, Reload Latest (armed from
-  startup.py), plus the Refresh button in the report.
+  Refresh triggers: Sync with Central and Reload Latest (armed from startup.py),
+  plus Refresh now in the report. Opening a document never scans: it used to
+  hold the open for minutes on large models, and the next sync catches up anyway.
 
   Tracked change kinds: New, Deleted, Moved, Resized, Data.
   Records whose kinds have a life expectancy (Deleted by default) are purged
@@ -802,7 +803,8 @@ def _on_reloaded(sender, args):
 
 
 def arm(app):
-    """Subscribe open / sync / reload-latest handlers once per session (re-arm safe on pyRevit reload)."""
+    """Subscribe sync / reload-latest handlers once per session (re-arm safe on pyRevit reload).
+    Slot 0 (document open) is intentionally empty: it is only unsubscribed if an older version armed it."""
     from pyrevit.coreutils import envvars
 
     old = envvars.get_pyrevit_env_var(_ENV_KEY)
@@ -820,15 +822,13 @@ def arm(app):
         except Exception:
             pass
 
-    h_open = EventHandler[DocumentOpenedEventArgs](_on_opened)
     h_sync = EventHandler[DocumentSynchronizedWithCentralEventArgs](_on_synced)
     h_reload = EventHandler[DocumentReloadedLatestEventArgs](_on_reloaded)
-    app.DocumentOpened += h_open
     app.DocumentSynchronizedWithCentral += h_sync
     app.DocumentReloadedLatest += h_reload
 
     handlers = List[object]()
-    handlers.Add(h_open)
+    handlers.Add(None)
     handlers.Add(h_sync)
     handlers.Add(h_reload)
     envvars.set_pyrevit_env_var(_ENV_KEY, handlers)

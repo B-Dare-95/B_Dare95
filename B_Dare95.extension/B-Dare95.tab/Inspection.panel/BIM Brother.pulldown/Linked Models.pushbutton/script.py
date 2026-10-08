@@ -7,6 +7,7 @@ Click: open the report.
 Shift+Click: open the link registers folder."""
 
 import os
+import time
 import clr
 clr.AddReference("System")
 clr.AddReference("PresentationFramework")
@@ -21,7 +22,7 @@ from System.Windows import (
     FontWeights, CornerRadius, TextTrimming, RoutedEventHandler, MessageBox,
     MessageBoxButton, MessageBoxResult
 )
-from System import DateTime
+from System import DateTime, Action
 from System.Windows.Controls import (
     Button, StackPanel, TextBlock, Border, DockPanel, Dock, WrapPanel, Orientation
 )
@@ -30,7 +31,7 @@ from System.Windows.Markup import XamlReader
 from System.Windows.Media import BrushConverter, Brushes
 from System.Windows.Input import Mouse, Cursors
 from System.Windows.Interop import WindowInteropHelper
-from System.Windows.Threading import Dispatcher, DispatcherFrame, DispatcherTimer
+from System.Windows.Threading import Dispatcher, DispatcherFrame, DispatcherTimer, DispatcherPriority
 
 from Autodesk.Revit.DB import ElementId, XYZ, Reference, ViewType
 from Autodesk.Revit.UI import TaskDialog
@@ -266,6 +267,7 @@ XAML = u"""
 
     <DockPanel Grid.Row="0" LastChildFill="True">
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+        <Button x:Name="ScanAllBtn" Style="{StaticResource GhostBtn}" Content="Scan all stale"/>
         <Button x:Name="StopBtn" Style="{StaticResource GhostBtn}" Content="Stop monitoring"/>
         <Button x:Name="RefreshBtn" Style="{StaticResource PrimaryBtn}" Content="Refresh now"/>
         <Button x:Name="ExpandBtn" Style="{StaticResource GhostBtn}" Content="Expand all"/>
@@ -414,6 +416,9 @@ class ReportWindow(object):
         self.popup.Closed += EventHandler(self.on_popup_closed)
         self.link_search.TextChanged += self.on_link_search_changed
         self.stop_btn.Click += RoutedEventHandler(self.on_stop)
+        self.scan_all_btn = find("ScanAllBtn")
+        self.scan_all_btn.Click += RoutedEventHandler(self.on_scan_all)
+        self.busy = False
 
         self.set_link(start_link)
 
@@ -431,6 +436,9 @@ class ReportWindow(object):
         self.load_state()
 
     def update_picker(self):
+        stale = len(self._stale_links())
+        self.scan_all_btn.Visibility = Visibility.Visible if stale else Visibility.Collapsed
+        self.scan_all_btn.Content = u"Scan all stale ({0})".format(stale)
         if self.link is None:
             self.picker_name.Text = u"Choose a link to monitor"
             self.picker_sub.Text = u"{0} loaded link(s) in {1}".format(len(self.links), doc.Title)
@@ -445,9 +453,16 @@ class ReportWindow(object):
         inst = u"1 instance" if n == 1 else u"{0} instances".format(n)
         if not link["monitored"]:
             return u"Not monitored{0}{1}{0}select to start watching".format(SEP, inst)
+        if link.get("stale"):
+            return u"Monitored{0}{1}{0}new version, not scanned yet".format(SEP, inst)
         last = link.get("last_refresh") or {}
         when = ct.fmt_time(last.get("time")) if last else u"\u2014"
-        return u"Monitored{0}{1}{0}last scan {2}".format(SEP, inst, when)
+        took = last.get("seconds_total") or last.get("seconds")
+        took = u" ({0} s)".format(took) if took is not None else u""
+        return u"Monitored{0}{1}{0}last scan {2}{3}".format(SEP, inst, when, took)
+
+    def _stale_links(self):
+        return [l for l in self.links if l["monitored"] and l.get("stale")]
 
     def load_state(self):
         self.records = list((self.reg.get("changes") or {}).values())
@@ -504,8 +519,8 @@ class ReportWindow(object):
             if self.link is None:
                 msg = u"Choose a link from the dropdown above to start monitoring it."
             elif not self.records:
-                msg = (u"No changes recorded yet. They appear after the link is reloaded, "
-                       u"when the host opens with a newer version of it, or on Refresh now.")
+                msg = (u"No changes recorded yet. They appear once a newer version of the link "
+                       u"is loaded and scanned here, or on Refresh now.")
             else:
                 msg = u"No changes match this filter."
             self.tree_panel.Children.Add(tb(msg, 13, SUB, margin=Thickness(16), wrap=True))
@@ -880,17 +895,66 @@ class ReportWindow(object):
         return None
 
     def on_refresh(self, sender, args):
-        if self.link is None:
+        if self.link is not None:
+            self.scan([self.link], lt.TRIGGER_MANUAL, force=True)
+
+    def on_scan_all(self, sender, args):
+        stale = self._stale_links()
+        if stale:
+            self.scan(stale, lt.TRIGGER_REPORT)
+
+    # ------------------------------------------------------------------- scan
+    def run_later(self, fn):
+        """Queue work below render priority, so the status bar repaints before Revit gets busy."""
+        self.win.Dispatcher.BeginInvoke(DispatcherPriority.Background, Action(fn))
+
+    def scan(self, links, trigger, force=False, start=False, show_uid=None):
+        """Scan links one after another, repainting the status between them."""
+        if self.busy or not links:
             return
-        Mouse.OverrideCursor = Cursors.Wait
-        try:
-            lt.refresh_link(doc, self.link, lt.TRIGGER_MANUAL, force=True)
-            self.set_link(self._reload_links(self.link["type_uid"]))
-        except Exception as ex:
-            ct.log_error("manual link refresh")
-            self.set_status(u"Refresh failed: {0}".format(ex), ERROR)
-        finally:
+        self.busy = True
+        queue = list(links)
+        total = len(queue)
+        keep = show_uid or (self.link["type_uid"] if self.link else None)
+        state = {"n": 0, "errors": [], "t0": time.time()}
+
+        def step():
+            if not queue:
+                finish()
+                return
+            link = queue.pop(0)
+            state["n"] += 1
+            self.set_status(u"Scanning {0} ({1} of {2}){3}Revit stays busy until it finishes".format(
+                link["name"], state["n"], total, SEP), WARN)
+            Mouse.OverrideCursor = Cursors.Wait
+
+            def work():
+                try:
+                    if start:
+                        lt.start_monitoring(doc, link)
+                    else:
+                        lt.refresh_link(doc, link, trigger, force=force)
+                except Exception:
+                    ct.log_error(u"link scan: " + link["name"])
+                    state["errors"].append(link["name"])
+                self.run_later(step)
+            self.run_later(work)
+
+        def finish():
             Mouse.OverrideCursor = None
+            self.busy = False
+            self.set_link(self._reload_links(keep) if keep else None)
+            took = round(time.time() - state["t0"], 1)
+            if state["errors"]:
+                self.set_status(u"Scan failed for: {0} (see tracker_errors.log)".format(
+                    u", ".join(state["errors"])), ERROR)
+            elif start:
+                self.set_status(u"Now watching {0}. Baseline captured in {1} s{2}changes appear once a newer "
+                                u"version of the link is loaded.".format(links[0]["name"], took, SEP))
+            else:
+                self.set_status(u"Scanned {0} link(s) in {1} s".format(total, took))
+
+        self.run_later(step)
 
     def on_stop(self, sender, args):
         if self.link is None:
@@ -953,6 +1017,15 @@ class ReportWindow(object):
                 tag.VerticalAlignment = VerticalAlignment.Center
                 tag.Child = tb(u"WATCHING", 10, "#A7F0BA", True)
                 top.Children.Add(tag)
+            if link.get("stale"):
+                new = Border()
+                new.Background = br(ACCENT)
+                new.CornerRadius = CornerRadius(10)
+                new.Padding = Thickness(8, 1, 8, 2)
+                new.Margin = Thickness(6, 0, 0, 0)
+                new.VerticalAlignment = VerticalAlignment.Center
+                new.Child = tb(u"NEW VERSION", 10, BG, True)
+                top.Children.Add(new)
             body.Children.Add(top)
             body.Children.Add(tb(self._link_sub(link), 11, SUB, margin=Thickness(0, 3, 0, 0)))
             btn.Content = body
@@ -966,21 +1039,13 @@ class ReportWindow(object):
         return handler
 
     def pick(self, link):
-        if link["monitored"]:
-            lt.set_last_picked(doc, link["type_uid"])
-            self.set_link(link)
+        if not link["monitored"]:
+            self.scan([link], lt.TRIGGER_MONITOR, start=True, show_uid=link["type_uid"])
             return
-        Mouse.OverrideCursor = Cursors.Wait
-        try:
-            lt.start_monitoring(doc, link)
-            self.set_link(self._reload_links(link["type_uid"]))
-            self.set_status(u"Now watching {0}. Baseline captured{1}changes appear after the link is reloaded."
-                            .format(link["name"], SEP))
-        except Exception as ex:
-            ct.log_error("start monitoring")
-            self.set_status(u"Could not start monitoring {0}: {1}".format(link["name"], ex), ERROR)
-        finally:
-            Mouse.OverrideCursor = None
+        lt.set_last_picked(doc, link["type_uid"])
+        self.set_link(link)                                   # show what is already recorded right away
+        if link.get("stale"):
+            self.scan([link], lt.TRIGGER_REPORT, show_uid=link["type_uid"])
 
     def set_status(self, text, color=OK):
         self.status_text.Text = text
@@ -999,6 +1064,8 @@ class ReportWindow(object):
 
         self.win.Closed += EventHandler(on_closed)
         self.win.Show()
+        if self.link is not None and self.link.get("stale"):   # the link on screen catches up first
+            self.scan([self.link], lt.TRIGGER_REPORT)
         Dispatcher.PushFrame(frame)
 
 

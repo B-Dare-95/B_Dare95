@@ -16,9 +16,11 @@ Same snapshot-and-diff engine as change_tracker, pointed at linked documents.
   Fingerprints are taken in the link's own coordinates, so moving the link
   instance in the host never reports every element as moved.
 
-  Refresh triggers: host opened, link reloaded (host DocumentChanged on a link
-  type / instance), plus Refresh now in the report. Automatic refreshes are
-  skipped when the link's document version hasn't changed since the last scan.
+  Scanning is ON DEMAND only. Nothing runs while a host opens or a link reloads:
+  a link whose document version differs from its last scan is flagged "stale",
+  and stale links are scanned when the BIM Brother Links report asks for it
+  (the link on screen when the report opens, a picked link, or Scan all stale).
+  Checking a version is a few milliseconds; a full scan of a large link is minutes.
 """
 
 import clr
@@ -29,25 +31,16 @@ import os
 import time
 from datetime import datetime
 
-from System import EventHandler
 from System.IO import File, Directory
-from System.Collections.Generic import List
 
-from Autodesk.Revit.DB import (
-    Document, FilteredElementCollector, RevitLinkInstance, RevitLinkType,
-    ElementClassFilter, LogicalOrFilter
-)
-from Autodesk.Revit.DB.Events import (
-    DocumentOpenedEventArgs, DocumentChangedEventArgs, RevitAPIEventStatus
-)
+from Autodesk.Revit.DB import Document, FilteredElementCollector, RevitLinkInstance
 
 import change_tracker as ct
 
 
 LINK_DIR = os.path.join(ct.REGISTER_DIR, "Links")
 
-TRIGGER_HOST_OPEN = u"Host opened"
-TRIGGER_LINK_RELOAD = u"Link reloaded"
+TRIGGER_REPORT = u"New version found"
 TRIGGER_MONITOR = u"Monitoring started"
 TRIGGER_MANUAL = ct.TRIGGER_MANUAL
 
@@ -147,6 +140,13 @@ def list_links(host):
             uid = ltype.UniqueId
             if uid not in by_type:
                 info = monitored.get(uid) or {}
+                version = _version(link_doc)
+                stale = False
+                if uid in monitored:
+                    stored = info.get("version")
+                    if "version" not in info:            # entries written before versions were stored
+                        stored = _register_version(link_doc)
+                    stale = version is None or version != stored
                 by_type[uid] = {
                     "type_uid": uid,
                     "type_id": ct.eid_value(ltype.Id),
@@ -155,11 +155,21 @@ def list_links(host):
                     "instances": [],
                     "monitored": uid in monitored,
                     "last_refresh": info.get("last_refresh"),
+                    "version": version,
+                    "stale": stale,
                 }
             by_type[uid]["instances"].append(inst)
         except Exception:
             ct.log_error("list links")
     return sorted(by_type.values(), key=lambda l: l["name"].lower())
+
+
+def _register_version(link_doc):
+    try:
+        reg = ct._read_json(link_paths(link_doc)[0]) or {}
+        return reg.get("version")
+    except Exception:
+        return None
 
 
 def _version(link_doc):
@@ -245,12 +255,15 @@ def refresh_link(host, link, trigger, force=False):
     ct._write_json(reg_path, reg)
     ct._write_json(snap_path, new_snap)
 
+    summary = dict(reg["last_refresh"])
+    summary["seconds_total"] = round(time.time() - t0, 1)    # scan + saving the files
     data = load_monitored(host)
     data["links"][link["type_uid"]] = {
-        "name": link["name"], "doc_key": key,
-        "register": os.path.basename(reg_path), "last_refresh": reg["last_refresh"],
+        "name": link["name"], "doc_key": key, "version": version,
+        "register": os.path.basename(reg_path), "last_refresh": summary,
     }
     save_monitored(host, data)
+    link["version"], link["stale"], link["last_refresh"] = version, False, summary
     return reg, True
 
 
@@ -269,68 +282,15 @@ def load_link_register(link):
     return reg, reg_path
 
 
-def check_monitored(host, trigger, only_type_uids=None):
-    """Refresh every monitored, loaded link of the host (version-gated)."""
-    monitored = load_monitored(host)["links"]
-    if not monitored:
-        return
-    for link in list_links(host):
-        if link["type_uid"] not in monitored:
-            continue
-        if only_type_uids is not None and link["type_uid"] not in only_type_uids:
-            continue
-        try:
-            refresh_link(host, link, trigger)
-        except Exception:
-            ct.log_error(u"link refresh: " + link["name"])
-
-
 # =============================================================================
 # EVENT ARMING (called from startup.py)
 # =============================================================================
-_LINK_FILTER = [None]
-
-
-def _link_filter():
-    if _LINK_FILTER[0] is None:
-        _LINK_FILTER[0] = LogicalOrFilter(ElementClassFilter(RevitLinkType),
-                                          ElementClassFilter(RevitLinkInstance))
-    return _LINK_FILTER[0]
-
-
-def _on_opened(sender, args):
-    try:
-        if args.Status == RevitAPIEventStatus.Succeeded and ct._eligible(args.Document):
-            check_monitored(args.Document, TRIGGER_HOST_OPEN)
-    except Exception:
-        ct.log_error("links: host opened")
-
-
-def _on_changed(sender, args):
-    """Cheap filter first: only transactions that touched a link type or instance."""
-    try:
-        flt = _link_filter()
-        ids = list(args.GetModifiedElementIds(flt)) + list(args.GetAddedElementIds(flt))
-        if not ids:
-            return
-        host = args.GetDocument()
-        if not ct._eligible(host) or not File.Exists(monitored_path(host)):
-            return
-        type_uids = set()
-        for eid in ids:
-            el = host.GetElement(eid)
-            if isinstance(el, RevitLinkInstance):
-                el = host.GetElement(el.GetTypeId())
-            if el is not None:
-                type_uids.add(el.UniqueId)
-        if type_uids:
-            check_monitored(host, TRIGGER_LINK_RELOAD, type_uids)
-    except Exception:
-        ct.log_error("links: document changed")
-
-
 def arm(app):
-    """Subscribe host-open and link-reload detection once per session (re-arm safe)."""
+    """
+    Nothing is subscribed any more: scanning is on demand from the report.
+    This only detaches handlers an older version may have attached in this session,
+    so the startup.py block can stay as it is.
+    """
     from pyrevit.coreutils import envvars
 
     old = envvars.get_pyrevit_env_var(_ENV_KEY)
@@ -343,13 +303,4 @@ def arm(app):
             app.DocumentChanged -= old[1]
         except Exception:
             pass
-
-    h_open = EventHandler[DocumentOpenedEventArgs](_on_opened)
-    h_changed = EventHandler[DocumentChangedEventArgs](_on_changed)
-    app.DocumentOpened += h_open
-    app.DocumentChanged += h_changed
-
-    handlers = List[object]()
-    handlers.Add(h_open)
-    handlers.Add(h_changed)
-    envvars.set_pyrevit_env_var(_ENV_KEY, handlers)
+    envvars.set_pyrevit_env_var(_ENV_KEY, None)
