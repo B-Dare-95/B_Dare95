@@ -18,6 +18,7 @@ __author__ = "Mohamed Bedair"
 __doc__ = "Create inner / outer railings on a selected stair from a menu of railing types."
 
 import clr
+import json
 
 clr.AddReference("PresentationCore")
 clr.AddReference("PresentationFramework")
@@ -32,11 +33,15 @@ from System.Windows.Markup import XamlReader
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 
 from Autodesk.Revit.DB import (
+    Arc,
+    BuiltInParameter,
     CurveLoop,
     Element,
     ElementId,
     GeometryInstance,
     Options,
+    Plane,
+    SketchPlane,
     Solid,
     ViewDetailLevel,
     FilteredElementCollector,
@@ -65,9 +70,30 @@ uidoc = __revit__.ActiveUIDocument
 # tolerances (all internal units = decimal feet)
 # --------------------------------------------------------------------------- #
 
+def _app_tolerance(name, fallback):
+    try:
+        return getattr(__revit__.Application, name)
+    except Exception:
+        return fallback
+
+
+VERTEX_TOL = _app_tolerance("VertexTolerance", 0.0005233)        # ~0.16 mm, Revit's "same point"
+SHORT_CURVE = _app_tolerance("ShortCurveTolerance", 0.0025603)   # ~0.78 mm, Revit's shortest curve
 JOIN_TOL = 0.0015          # ~0.5 mm, used to decide if two endpoints coincide
-SHORT_CURVE = 1.0 / 32.0   # Revit's shortest allowed curve, ~0.79 mm
+MIN_SEGMENT = 5.0 / 304.8  # 5 mm, shorter path pieces are folded into their neighbours
 PARALLEL_DOT = 0.60        # |dot| above this means "runs along the stair path"
+
+# True = when Revit rejects a railing path, draw that path as model lines at the
+# stair base so you can see where it goes wrong. Delete the lines afterwards.
+DRAW_REJECTED_PATHS = False
+
+# True = when a railing fails, copy that stair's raw geometry (run and landing
+# footprints, the edge chain, the cleaned path and the offset path) to the
+# clipboard as JSON, and save it to %TEMP%\stair_railing_failure.json.
+DUMP_FAILED_GEOMETRY = True
+
+FAILED_DUMPS = []   # one entry per failed railing, filled by record_failure()
+LAST_ATTEMPT = {}   # what make_railing() built on its latest call
 
 
 # --------------------------------------------------------------------------- #
@@ -146,13 +172,109 @@ def curve_tangent(crv, normalized_param=0.5):
     return vec.Normalize()
 
 
+def flat_point(point, z_value):
+    return XYZ(point.X, point.Y, z_value)
+
+
 def flatten_curve(crv, z_value):
-    """Force a curve onto the horizontal plane at z_value (lines and arcs only)."""
-    pts = [crv.GetEndPoint(0), crv.GetEndPoint(1)]
-    if abs(pts[0].Z - z_value) < 1e-9 and abs(pts[1].Z - z_value) < 1e-9:
+    """Force a curve onto the horizontal plane at z_value.
+
+    Both ends are dropped onto the plane. Translating by the start point alone
+    would leave the far end of a sloped piece hanging off the plane.
+    """
+    p0 = crv.GetEndPoint(0)
+    p1 = crv.GetEndPoint(1)
+    if abs(p0.Z - z_value) < 1e-9 and abs(p1.Z - z_value) < 1e-9:
         return crv
-    translation = XYZ(0, 0, z_value - pts[0].Z)
+    if isinstance(crv, Line):
+        return Line.CreateBound(flat_point(p0, z_value), flat_point(p1, z_value))
+    if isinstance(crv, Arc):
+        try:
+            return Arc.Create(flat_point(p0, z_value), flat_point(p1, z_value),
+                              flat_point(crv.Evaluate(0.5, True), z_value))
+        except Exception:
+            pass
+    translation = XYZ(0, 0, z_value - p0.Z)
     return crv.CreateTransformed(Transform.CreateTranslation(translation))
+
+
+def rebuild_curve(crv, start, end):
+    """The same curve with new end points: lines stay lines, arcs keep their bulge.
+    None when the result would be shorter than Revit allows."""
+    if start.DistanceTo(end) < SHORT_CURVE:
+        return None
+    if isinstance(crv, Arc):
+        try:
+            return Arc.Create(start, end, crv.Evaluate(0.5, True))
+        except Exception:
+            pass
+    return Line.CreateBound(start, end)
+
+
+def plan_direction(crv):
+    """Unit plan direction of a curve from its start to its end, or None."""
+    vec = crv.GetEndPoint(1) - crv.GetEndPoint(0)
+    vec = XYZ(vec.X, vec.Y, 0.0)
+    if vec.GetLength() < 1e-9:
+        return None
+    return vec.Normalize()
+
+
+def plan_cross(a, b):
+    """Z of a x b - positive when b turns left from a."""
+    return a.X * b.Y - a.Y * b.X
+
+
+def plan_line_intersection(p, u, q, v):
+    """Where the endless lines (p, u) and (q, v) cross in plan, at p's height.
+    None when they are parallel."""
+    denom = plan_cross(u, v)
+    if abs(denom) < 1e-6:
+        return None
+    t = plan_cross(q - p, v) / denom
+    return XYZ(p.X + u.X * t, p.Y + u.Y * t, p.Z)
+
+
+def line_corner(first, second, reach):
+    """Corner where two straight pieces would meet if trimmed / extended.
+
+    Returns (corner, first_survives, second_survives), or None when they are not
+    both lines, are parallel, or the corner is further than reach from the second
+    piece's start. A piece "survives" if it still runs forwards and is longer
+    than Revit's shortest curve once cut back to the corner.
+    """
+    if not (isinstance(first, Line) and isinstance(second, Line)):
+        return None
+    d1 = plan_direction(first)
+    d2 = plan_direction(second)
+    if d1 is None or d2 is None:
+        return None
+    corner = plan_line_intersection(first.GetEndPoint(0), d1, second.GetEndPoint(0), d2)
+    if corner is None:
+        return None
+    if plan_distance(corner, second.GetEndPoint(0)) > reach:
+        return None
+    first_survives = (corner - first.GetEndPoint(0)).DotProduct(d1) >= SHORT_CURVE
+    second_survives = (second.GetEndPoint(1) - corner).DotProduct(d2) >= SHORT_CURVE
+    return corner, first_survives, second_survives
+
+
+def meet_lines(first, second, reach):
+    """Trim / extend two consecutive straight pieces so they share one corner.
+
+    Returns (first, second) rebuilt, or None when they cannot meet within reach
+    of both ends without one of them being flipped over or shrunk to nothing.
+    """
+    found = line_corner(first, second, reach)
+    if found is None:
+        return None
+    corner, first_survives, second_survives = found
+    if not (first_survives and second_survives):
+        return None
+    if plan_distance(corner, first.GetEndPoint(1)) > reach:
+        return None
+    return (Line.CreateBound(first.GetEndPoint(0), corner),
+            Line.CreateBound(corner, second.GetEndPoint(1)))
 
 
 def chain_curves(curves):
@@ -197,22 +319,161 @@ def reverse_chain(chain):
     return [c.CreateReversed() for c in reversed(chain)]
 
 
-def build_curve_loop(curves):
-    """Append curves into a CurveLoop, bridging any tiny gaps with straight lines."""
-    cl = CurveLoop()
-    previous_end = None
+def close_gaps(curves):
+    """Make an ordered chain contiguous.
+
+    A gap of MIN_SEGMENT or more gets a straight bridge. Anything smaller, down to
+    Revit's own vertex tolerance, is closed by pulling the next piece's start back
+    onto the previous end (CurveLoop.Append refuses anything above that tolerance).
+    """
+    out = []
     for crv in curves:
-        if previous_end is not None:
-            gap = plan_distance(previous_end, crv.GetEndPoint(0))
-            if SHORT_CURVE <= gap:
-                cl.Append(Line.CreateBound(previous_end, crv.GetEndPoint(0)))
-            elif JOIN_TOL < gap < SHORT_CURVE:
-                # too small for Revit to accept as its own curve - snap instead
-                crv = Line.CreateBound(previous_end, crv.GetEndPoint(1)) \
-                    if crv.GetEndPoint(0).DistanceTo(crv.GetEndPoint(1)) > SHORT_CURVE else crv
+        if out:
+            previous_end = out[-1].GetEndPoint(1)
+            gap = previous_end.DistanceTo(crv.GetEndPoint(0))
+            if gap >= MIN_SEGMENT:
+                out.append(Line.CreateBound(previous_end, crv.GetEndPoint(0)))
+            elif gap > VERTEX_TOL:
+                crv = rebuild_curve(crv, previous_end, crv.GetEndPoint(1))
+                if crv is None:
+                    continue
+        out.append(crv)
+    return out
+
+
+def absorb_short_piece(work, index):
+    """Drop a too-short piece and let its neighbours meet in its place."""
+    if index == 0 or index == len(work) - 1:
+        work.pop(index)
+        return
+    met = meet_lines(work[index - 1], work[index + 1], 4.0 * MIN_SEGMENT)
+    if met is not None:
+        work[index - 1:index + 2] = list(met)
+    else:
+        work.pop(index)   # close_gaps() pulls the next piece back onto the previous one
+
+
+def tidy_path(curves):
+    """Clean an ordered chain into something a railing can follow.
+
+    - closes gaps (see close_gaps)
+    - removes slivers under MIN_SEGMENT, stretching the neighbours to meet
+    - merges consecutive straight pieces running on one line in one direction
+    A piece that doubles back over the previous one is left alone: only the
+    offset can pull the two legs apart, see offset_loop.
+    """
+    work = close_gaps(list(curves))
+    for _ in range(500):
+        short = None
+        if len(work) > 1:
+            for i in range(len(work)):
+                if work[i].Length < MIN_SEGMENT:
+                    short = i
+                    break
+        if short is not None:
+            absorb_short_piece(work, short)
+            work = close_gaps(work)
+            continue
+
+        merged = False
+        for i in range(len(work) - 1):
+            first = work[i]
+            second = work[i + 1]
+            if not (isinstance(first, Line) and isinstance(second, Line)):
+                continue
+            d1 = plan_direction(first)
+            d2 = plan_direction(second)
+            if d1 is None or d2 is None:
+                continue
+            if abs(plan_cross(d1, d2)) > 1e-5 or d1.DotProduct(d2) <= 0:
+                continue
+            work[i:i + 2] = [Line.CreateBound(first.GetEndPoint(0), second.GetEndPoint(1))]
+            merged = True
+            break
+        if not merged:
+            break
+    return work
+
+
+def build_curve_loop(curves):
+    """Append curves into a CurveLoop, closing any gaps first."""
+    cl = CurveLoop()
+    for crv in close_gaps(curves):
         cl.Append(crv)
-        previous_end = crv.GetEndPoint(1)
     return cl
+
+
+def _segment_hit(a0, a1, b0, b1):
+    """Plan point where segment a touches / crosses segment b, or None."""
+    r = a1 - a0
+    s = b1 - b0
+    w = b0 - a0
+    r_len = (r.X * r.X + r.Y * r.Y) ** 0.5
+    s_len = (s.X * s.X + s.Y * s.Y) ** 0.5
+    if r_len < 1e-9 or s_len < 1e-9:
+        return None
+    denom = plan_cross(r, s)
+    if abs(denom) < 1e-9 * r_len * s_len:
+        # parallel: only a problem if they lie on one line and overlap
+        if abs(plan_cross(w, r)) / r_len > VERTEX_TOL:
+            return None
+        rr = r_len * r_len
+        t0 = (w.X * r.X + w.Y * r.Y) / rr
+        t1 = ((b1 - a0).X * r.X + (b1 - a0).Y * r.Y) / rr
+        low = max(0.0, min(t0, t1))
+        high = min(1.0, max(t0, t1))
+        if high < low - VERTEX_TOL / r_len:
+            return None
+        return XYZ(a0.X + r.X * low, a0.Y + r.Y * low, a0.Z)
+    t = plan_cross(w, s) / denom
+    u = plan_cross(w, r) / denom
+    tol_t = VERTEX_TOL / r_len
+    tol_u = VERTEX_TOL / s_len
+    if -tol_t <= t <= 1.0 + tol_t and -tol_u <= u <= 1.0 + tol_u:
+        return XYZ(a0.X + r.X * t, a0.Y + r.Y * t, a0.Z)
+    return None
+
+
+def path_defect(curves):
+    """Why a path is not one clean open line, as (reason, point), or None if it is."""
+    segments = []
+    for crv in curves:
+        pts = list(crv.Tessellate())
+        for k in range(len(pts) - 1):
+            segments.append((pts[k], pts[k + 1]))
+    if not segments:
+        return None
+
+    for k in range(len(segments) - 1):
+        d1 = segments[k][1] - segments[k][0]
+        d2 = segments[k + 1][1] - segments[k + 1][0]
+        l1 = (d1.X * d1.X + d1.Y * d1.Y) ** 0.5
+        l2 = (d2.X * d2.X + d2.Y * d2.Y) ** 0.5
+        if l1 > 1e-9 and l2 > 1e-9 and (d1.X * d2.X + d1.Y * d2.Y) / (l1 * l2) < -0.999:
+            return ("it folds back on itself", segments[k][1])
+
+    closed = plan_distance(segments[0][0], segments[-1][1]) <= VERTEX_TOL
+    last = len(segments) - 1
+    for i in range(len(segments)):
+        for j in range(i + 2, len(segments)):
+            if closed and i == 0 and j == last:
+                continue
+            hit = _segment_hit(segments[i][0], segments[i][1], segments[j][0], segments[j][1])
+            if hit is not None:
+                return ("it loops back and touches or crosses itself", hit)
+    return None
+
+
+def draw_debug_path(curves, z_value, notes, label):
+    """Leave a rejected path in the model as model lines, for inspection."""
+    try:
+        plane = Plane.CreateByNormalAndOrigin(XYZ.BasisZ, XYZ(0, 0, z_value))
+        sketch = SketchPlane.Create(doc, plane)
+        for crv in curves:
+            doc.Create.NewModelCurve(crv, sketch)
+        notes.append("{0}: the rejected path was drawn as model lines at the stair base.".format(label))
+    except Exception as err:
+        notes.append("{0}: could not draw the rejected path: {1}".format(label, err))
 
 
 # --------------------------------------------------------------------------- #
@@ -360,6 +621,7 @@ def split_run_edges(run):
     up_vector = run_up_vector(run)
     info["side_a"] = orient_along(chain_curves(info["side_a"]), up_vector)
     info["side_b"] = orient_along(chain_curves(info["side_b"]), up_vector)
+    info["oriented"] = up_vector is not None
     return info
 
 
@@ -426,6 +688,7 @@ def analyse_stairs(stairs):
             "outer": outer,
             "centroid": edges["centroid"],
             "z": edges["z"],
+            "oriented": edges["oriented"],
         })
 
     return analysed, skipped
@@ -435,6 +698,13 @@ def orient_inner_sequence(analysed):
     """Orient each run's inner chain so the whole set reads as one continuous line."""
     chains = [dict(item) for item in analysed]
     if not chains:
+        return chains
+
+    # Runs are sorted by height and every chain already reads bottom to top, so
+    # run N's top end always meets run N+1's bottom end across the landing. The
+    # nearest-end guess below is only a fallback: on a U stair both ends of the
+    # first run are equally close to the second run, and the guess can flip it.
+    if all(item.get("oriented") for item in chains):
         return chains
 
     if len(chains) > 1:
@@ -500,7 +770,10 @@ def trim_curve(curve, start_param, end_param):
     if end_param - start_param < 1e-9:
         return None
     piece = curve.Clone()
-    piece.MakeBound(start_param, end_param)
+    try:
+        piece.MakeBound(start_param, end_param)
+    except Exception:
+        return None
     if piece.Length < SHORT_CURVE:
         return None
     return piece
@@ -511,7 +784,8 @@ def walk_boundary(curves, from_index, from_param, to_index, to_param):
     count = len(curves)
     pieces = []
 
-    if from_index == to_index and to_param > from_param:
+    if from_index == to_index and to_param >= from_param:
+        # same edge, walking forwards (or not at all) - never the long way round
         piece = trim_curve(curves[from_index], from_param, to_param)
         return [piece] if piece is not None else []
 
@@ -540,7 +814,7 @@ def path_length(curves):
     return total
 
 
-def landing_connector(landings, start_point, end_point, notes):
+def landing_connector(landings, start_point, end_point, notes, label):
     """The stretch of landing boundary joining two run edges.
 
     Falls back to a straight line when no landing carries both points, which keeps
@@ -558,24 +832,30 @@ def landing_connector(landings, start_point, end_point, notes):
         if best is None or score < best[0]:
             best = (score, landing, curves, from_hit, to_hit)
 
+    straight = [Line.CreateBound(start_point, end_point)]
+
     if best is None:
-        notes.append("No landing found between two runs - joined them with a straight line.")
-        return [Line.CreateBound(start_point, end_point)]
+        notes.append("{0}: no landing found between two runs - joined them with a straight line.".format(label))
+        return straight
 
     _, landing, curves, from_hit, to_hit = best
 
     forward = walk_boundary(curves, from_hit[1], from_hit[2], to_hit[1], to_hit[2])
     backward = walk_boundary(curves, to_hit[1], to_hit[2], from_hit[1], from_hit[2])
-    backward = reverse_chain(backward) if backward else []
 
-    candidates = [c for c in (forward, backward) if c]
-    if not candidates:
-        return [Line.CreateBound(start_point, end_point)]
+    # An empty walk means both run ends land on the same spot of the landing edge:
+    # they only miss each other by a sliver (a run stopping short of the landing,
+    # or starting just past its corner). There is nothing to walk round, so stitch
+    # them straight. The other way round would be a full lap of the landing that
+    # comes back to where it started - a closed loop inside the railing path,
+    # which Revit refuses.
+    if not forward or not backward:
+        return straight
 
     # the way round that hugs the landing corner is always the short one; the other
     # lap runs the full outside perimeter of the landing
-    candidates.sort(key=path_length)
-    bridge = candidates[0]
+    backward = reverse_chain(backward)
+    bridge = forward if path_length(forward) <= path_length(backward) else backward
 
     # tie the trimmed ends back onto the run edges exactly
     stitched = []
@@ -594,49 +874,86 @@ def landing_connector(landings, start_point, end_point, notes):
 # offsetting
 # --------------------------------------------------------------------------- #
 
-def offset_loop(curve_loop, distance_ft, towards_point):
-    """Offset a path so it moves towards towards_point by distance_ft.
+def side_of(crv, point):
+    """+1 when point lies left of the curve (looking along it), -1 when right."""
+    return 1 if plan_cross(curve_tangent(crv), point - curve_midpoint(crv)) >= 0 else -1
 
-    Tries CurveLoop.CreateViaOffset first (it trims/extends the joints properly);
-    falls back to per curve Curve.CreateOffset with straight bridges if that fails.
+
+def offset_pieces(curves, signed_distance):
+    """Offset every piece on its own, then trim / extend neighbours to meet.
+
+    Corners are rebuilt where the offset pieces actually cross, so an inside
+    corner gets trimmed instead of bridged backwards across itself. Only joints
+    that cannot meet (parallel legs of a U-turn, arcs) get a straight bridge.
+    """
+    pieces = [crv.CreateOffset(signed_distance, XYZ.BasisZ) for crv in curves]
+    reach = 4.0 * abs(signed_distance) + MIN_SEGMENT
+    joined = [pieces[0]]
+    for crv in pieces[1:]:
+        while True:
+            met = meet_lines(joined[-1], crv, reach)
+            if met is not None:
+                joined[-1] = met[0]
+                joined.append(met[1])
+                break
+            found = line_corner(joined[-1], crv, reach)
+            if len(joined) > 1 and found is not None and not found[1] and found[2]:
+                # an inside corner swallowed the whole previous piece: drop it and
+                # let the piece before it meet this one directly
+                joined.pop()
+                continue
+            joined.append(crv)
+            break
+    return close_gaps(joined)
+
+
+def offset_loop(curve_loop, distance_ft, towards_point):
+    """Shift a path sideways by distance_ft.
+
+    Positive moves it towards the side towards_point is on (onto the treads),
+    negative pushes it the other way. CurveLoop.CreateViaOffset is tried first;
+    when it throws or gives a path Revit will not take, every piece is offset on
+    its own and the corners are rebuilt (offset_pieces).
+
+    Returns (CurveLoop, note or None).
     """
     if abs(distance_ft) < 1e-9:
         return curve_loop, None
 
-    reference = curve_midpoint(loop_curves(curve_loop)[0])
-    base_distance = plan_distance(reference, towards_point)
+    raw = loop_curves(curve_loop)
+    wanted = side_of(raw[0], towards_point)
+    if distance_ft < 0:
+        wanted = -wanted
+    size = abs(distance_ft)
+    # a joint close to a U-turn can shoot its corner miles away; anything longer
+    # than this is not a sensible offset of the original path
+    length_cap = path_length(raw) + 4.0 * size * len(raw) + MIN_SEGMENT
 
-    best = None
+    def on_wanted_side(curves):
+        return bool(curves) and side_of(raw[0], curve_midpoint(curves[0])) == wanted
+
     for sign in (1.0, -1.0):
         try:
-            candidate = CurveLoop.CreateViaOffset(curve_loop, sign * distance_ft, XYZ.BasisZ)
+            candidate = CurveLoop.CreateViaOffset(curve_loop, sign * size, XYZ.BasisZ)
         except Exception:
             continue
         curves = loop_curves(candidate)
-        if not curves:
+        if not on_wanted_side(curves):
             continue
-        moved = plan_distance(curve_midpoint(curves[0]), towards_point)
-        if best is None or moved < best[0]:
-            best = (moved, candidate)
+        if path_length(curves) <= length_cap and Railing.IsValidPathForRailing(candidate):
+            return candidate, None
 
-    if best is not None and best[0] < base_distance:
-        return best[1], None
-
-    # fallback: offset every curve on its own, then re-chain
     for sign in (1.0, -1.0):
-        pieces = []
-        ok = True
-        for crv in loop_curves(curve_loop):
-            try:
-                pieces.append(crv.CreateOffset(sign * distance_ft, XYZ.BasisZ))
-            except Exception:
-                ok = False
-                break
-        if not ok or not pieces:
+        try:
+            pieces = offset_pieces(raw, sign * size)
+        except Exception:
             continue
-        moved = plan_distance(curve_midpoint(pieces[0]), towards_point)
-        if moved < base_distance:
+        if not on_wanted_side(pieces):
+            continue
+        try:
             return build_curve_loop(pieces), "offset applied per segment"
+        except Exception:
+            continue
 
     return curve_loop, "offset could not be applied, path left on the edge"
 
@@ -1118,32 +1435,227 @@ def gather_targets():
 # creation
 # --------------------------------------------------------------------------- #
 
-def make_railing(curves, type_id, level_id, host_id, offset_ft, towards_point, notes,
-                 placement_levels=None):
-    """Build one railing from an ordered chain of curves. Returns the Railing or None."""
+def _dump_mm(value_ft):
+    return round(value_ft * 304.8, 3)
+
+
+def _dump_point(point):
+    return [_dump_mm(point.X), _dump_mm(point.Y), _dump_mm(point.Z)]
+
+
+def _dump_curves(curves):
+    out = []
+    for crv in curves or []:
+        try:
+            item = {
+                "type": type(crv).__name__,
+                "start": _dump_point(crv.GetEndPoint(0)),
+                "end": _dump_point(crv.GetEndPoint(1)),
+            }
+            if not isinstance(crv, Line):
+                item["mid"] = _dump_point(crv.Evaluate(0.5, True))
+            out.append(item)
+        except Exception as err:
+            out.append({"error": str(err)})
+    return out
+
+
+def record_failure(stairs, analysed, label, offset_ft, attempt=None):
+    """Keep the raw geometry behind a failed railing, for save_failure_dump()."""
+    if not DUMP_FAILED_GEOMETRY:
+        return
+    source = attempt if attempt is not None else LAST_ATTEMPT
+    try:
+        by_run = {}
+        for item in analysed:
+            by_run[eid_value(item["run"].Id)] = item
+
+        runs = []
+        for rid in stairs.GetStairsRuns():
+            run = doc.GetElement(rid)
+            if run is None:
+                continue
+            entry = {"id": int(eid_value(rid))}
+            for key, reader in (("base_elevation", lambda r: _dump_mm(r.BaseElevation)),
+                                ("footprint", lambda r: _dump_curves(loop_curves(r.GetFootprintBoundary()))),
+                                ("stairs_path", lambda r: _dump_curves(loop_curves(r.GetStairsPath())))):
+                try:
+                    entry[key] = reader(run)
+                except Exception as err:
+                    entry[key] = {"error": str(err)}
+            item = by_run.get(eid_value(rid))
+            if item is None:
+                entry["skipped"] = True
+            else:
+                entry["inner"] = _dump_curves(item["inner"])
+                entry["outer"] = _dump_curves(item["outer"])
+                entry["centroid"] = _dump_point(item["centroid"])
+                entry["oriented"] = bool(item.get("oriented"))
+            runs.append(entry)
+
+        landings = []
+        for lid in stairs.GetStairsLandings():
+            landing = doc.GetElement(lid)
+            if landing is None:
+                continue
+            try:
+                footprint = _dump_curves(loop_curves(landing.GetFootprintBoundary()))
+            except Exception as err:
+                footprint = {"error": str(err)}
+            landings.append({"id": int(eid_value(lid)), "footprint": footprint})
+
+        towards = source.get("towards")
+        FAILED_DUMPS.append({
+            "label": label,
+            "offset_mm": _dump_mm(offset_ft),
+            "towards": _dump_point(towards) if towards is not None else None,
+            "runs": runs,
+            "landings": landings,
+            "chain": _dump_curves(source.get("chain")),
+            "tidy": _dump_curves(source.get("tidy")),
+            "final": _dump_curves(source.get("final")),
+        })
+    except Exception as err:
+        FAILED_DUMPS.append({"label": label, "dump_error": str(err)})
+
+
+def _json_fallback(value):
+    """json.dumps hook for .NET values IronPython's json does not know, such as
+    the System.Int64 that ElementId.Value returns on Revit 2025+."""
+    try:
+        return int(value)
+    except Exception:
+        pass
+    try:
+        return float(value)
+    except Exception:
+        return str(value)
+
+
+def save_failure_dump():
+    """Copy the collected failure geometry to the clipboard and a temp file.
+    Returns a note for the result dialog, or None if there was nothing to save."""
+    if not FAILED_DUMPS:
+        return None
+    try:
+        version = __revit__.Application.VersionNumber
+    except Exception:
+        version = "?"
+    try:
+        text = json.dumps({"revit": str(version), "units": "mm", "failures": FAILED_DUMPS},
+                          separators=(",", ":"), default=_json_fallback)
+    except Exception as err:
+        return "Could not write the failure geometry: {0}".format(err)
+
+    saved = None
+    try:
+        from System.IO import Path as IOPath
+        saved = IOPath.Combine(IOPath.GetTempPath(), "stair_railing_failure.json")
+        handle = open(saved, "w")
+        try:
+            handle.write(text)
+        finally:
+            handle.close()
+    except Exception:
+        saved = None
+
+    copied = False
+    try:
+        from System.Windows import Clipboard
+        Clipboard.SetText(text)
+        copied = True
+    except Exception:
+        copied = False
+
+    if copied and saved:
+        return "Failure geometry copied to the clipboard (also saved to {0}).".format(saved)
+    if copied:
+        return "Failure geometry copied to the clipboard."
+    if saved:
+        return "Failure geometry saved to {0}.".format(saved)
+    return "Could not save the failure geometry."
+
+
+def build_path(curves, offset_ft, towards_point, notes, label):
+    """Flatten, clean and offset an edge chain.
+
+    Returns a dict describing the attempt. Its "curves" entry is the finished
+    path (a plain list, so neighbouring paths can still be joined up), or None
+    when the chain could not be assembled.
+    """
+    attempt = {
+        "chain": list(curves or []),
+        "towards": towards_point,
+        "offset_ft": offset_ft,
+        "tidy": None,
+        "final": None,
+        "curves": None,
+        "raw_defect": None,
+        "z": None,
+    }
+    LAST_ATTEMPT.clear()
+    LAST_ATTEMPT.update(attempt)
+    if not curves:
+        notes.append("{0}: no edge to follow.".format(label))
+        return attempt
+
+    z_plane = curves[0].GetEndPoint(0).Z
+    attempt["z"] = z_plane
+    try:
+        flat = tidy_path([flatten_curve(c, z_plane) for c in curves])
+        attempt["tidy"] = flat
+        loop = build_curve_loop(flat)
+    except Exception as err:
+        notes.append("{0}: could not assemble the path: {1}".format(label, err))
+        LAST_ATTEMPT.update(attempt)
+        return attempt
+
+    attempt["raw_defect"] = path_defect(flat)
+    loop, offset_note = offset_loop(loop, offset_ft, towards_point)
+    if offset_note:
+        notes.append("{0}: {1}".format(label, offset_note))
+    attempt["curves"] = loop_curves(loop)
+    attempt["final"] = attempt["curves"]
+    LAST_ATTEMPT.update(attempt)
+    return attempt
+
+
+def create_railing(attempt, type_id, level_id, host_id, notes, label, placement_levels=None):
+    """Create, host and spread one railing from a build_path() result.
+    Returns the Railing or None."""
+    curves = attempt.get("curves")
     if not curves:
         return None
 
-    z_plane = curves[0].GetEndPoint(0).Z
-    flat = [flatten_curve(c, z_plane) for c in curves]
-
     try:
-        path = build_curve_loop(flat)
+        path = build_curve_loop(curves)
     except Exception as err:
-        notes.append("Could not assemble the path: {0}".format(err))
+        notes.append("{0}: could not assemble the path: {1}".format(label, err))
         return None
 
-    path, offset_note = offset_loop(path, offset_ft, towards_point)
-    if offset_note:
-        notes.append(offset_note)
-
     if not Railing.IsValidPathForRailing(path):
-        notes.append("Revit rejected the path (it must be one open, connected line).")
+        final = loop_curves(path)
+        raw_defect = attempt.get("raw_defect")
+        offset_ft = attempt.get("offset_ft") or 0.0
+        defect = path_defect(final) or raw_defect
+        reason = defect[0] if defect else "reason not identified"
+        if raw_defect is not None:
+            stage = "the edge path already {0} before any offset".format(raw_defect[0][3:])
+        else:
+            stage = "the edge path was clean, the {0:g} mm offset broke it".format(
+                round(offset_ft * 304.8, 1))
+        message = "{0}: Revit rejected the path - {1} ({2}).".format(label, reason, stage)
+        if raw_defect is not None and raw_defect[0].startswith("it folds back") \
+                and abs(offset_ft) < 1e-9:
+            message += " Two runs share one inner edge here; give this side a non-zero offset."
+        notes.append(message)
+        if DRAW_REJECTED_PATHS:
+            draw_debug_path(final, attempt.get("z") or 0.0, notes, label)
         return None
 
     railing = Railing.Create(doc, path, type_id, level_id)
     if railing is None:
-        notes.append("Railing.Create returned nothing.")
+        notes.append("{0}: Railing.Create returned nothing.".format(label))
         return None
 
     doc.Regenerate()
@@ -1154,21 +1666,29 @@ def make_railing(curves, type_id, level_id, host_id, offset_ft, towards_point, n
                 railing.HostId = host_id
                 doc.Regenerate()
             else:
-                notes.append("Railing {0} could not be hosted on the stair.".format(
-                    eid_value(railing.Id)))
+                notes.append("{0}: railing {1} could not be hosted on element {2}, it was "
+                             "left flat at the stair's base level.".format(
+                                 label, eid_value(railing.Id), eid_value(host_id)))
         except Exception as err:
-            notes.append("Hosting failed for railing {0}: {1}".format(
-                eid_value(railing.Id), err))
+            notes.append("{0}: hosting failed for railing {1}: {2}".format(
+                label, eid_value(railing.Id), err))
 
     if placement_levels is not None:
         try:
             railing.SetMultistoryStairsPlacementLevels(placement_levels)
             doc.Regenerate()
         except Exception as err:
-            notes.append("Could not spread railing {0} over the storeys: {1}".format(
-                eid_value(railing.Id), err))
+            notes.append("{0}: could not spread railing {1} over the storeys: {2}".format(
+                label, eid_value(railing.Id), err))
 
     return railing
+
+
+def make_railing(curves, type_id, level_id, host_id, offset_ft, towards_point, notes,
+                 label, placement_levels=None):
+    """Build one railing from an ordered chain of curves. Returns the Railing or None."""
+    attempt = build_path(curves, offset_ft, towards_point, notes, label)
+    return create_railing(attempt, type_id, level_id, host_id, notes, label, placement_levels)
 
 
 def flip_railing(railing, notes):
@@ -1178,6 +1698,509 @@ def flip_railing(railing, notes):
         doc.Regenerate()
     except Exception as err:
         notes.append("Could not flip railing {0}: {1}".format(eid_value(railing.Id), err))
+
+
+# --------------------------------------------------------------------------- #
+# inner side: pieces per run, and stairs whose flights are stacked in plan
+# --------------------------------------------------------------------------- #
+
+def plan_polygon(curve_loop):
+    """Ordered plan outline points of a closed CurveLoop."""
+    pts = []
+    for crv in curve_loop:
+        tess = list(crv.Tessellate())
+        pts.extend(tess[:-1])
+    return pts
+
+
+def point_in_polygon(point, polygon):
+    """Ray casting in plan."""
+    inside = False
+    count = len(polygon)
+    j = count - 1
+    for i in range(count):
+        a = polygon[i]
+        b = polygon[j]
+        if (a.Y > point.Y) != (b.Y > point.Y):
+            cross_x = a.X + (point.Y - a.Y) * (b.X - a.X) / (b.Y - a.Y)
+            if point.X < cross_x:
+                inside = not inside
+        j = i
+    return inside
+
+
+def stacked_runs(stairs):
+    """True when two runs of one stair sit over each other in plan.
+
+    That happens when a single Stairs element climbs more than one storey: every
+    footprint is projected onto the stair's base level, so the flights of each
+    storey land on top of the ones below. One flat railing path would then have
+    to run over itself, which Revit refuses.
+    """
+    polygons = []
+    for rid in stairs.GetStairsRuns():
+        run = doc.GetElement(rid)
+        if run is None:
+            continue
+        try:
+            polygon = plan_polygon(run.GetFootprintBoundary())
+        except Exception:
+            continue
+        if len(polygon) >= 3:
+            polygons.append(polygon)
+
+    for i in range(len(polygons)):
+        centre = average_point(polygons[i])
+        # the centre plus points halfway to each corner - all well inside the run
+        samples = [centre] + [XYZ((centre.X + p.X) / 2.0, (centre.Y + p.Y) / 2.0, centre.Z)
+                              for p in polygons[i]]
+        for j in range(len(polygons)):
+            if i == j:
+                continue
+            for sample in samples:
+                if point_in_polygon(sample, polygons[j]):
+                    return True
+    return False
+
+
+def connected_landing_id(run_before, run_after):
+    """Id value of the landing run_before ends on and run_after starts from,
+    read from the runs' own connections, or None."""
+    ends = set()
+    starts = set()
+    try:
+        for conn in run_before.GetConnections():
+            if str(conn.ConnectionType) == "ET_RunEnd":
+                ends.add(eid_value(conn.PeerElementId))
+        for conn in run_after.GetConnections():
+            if str(conn.ConnectionType) == "ET_RunStart":
+                starts.add(eid_value(conn.PeerElementId))
+    except Exception:
+        return None
+    common = list(ends & starts)
+    return common[0] if common else None
+
+
+def landings_between(run_before, run_after, landings):
+    """The landing(s) a turn between two runs may walk along.
+
+    On a stair whose storeys repeat, the landings of every storey sit on top of
+    each other in plan, so the nearest outline is not necessarily the right
+    one. The runs' connections say which landing joins them; failing that, the
+    landing at the height where run_before tops out; failing that, all of them.
+    """
+    wanted = connected_landing_id(run_before, run_after)
+    if wanted is not None:
+        chosen = [pair for pair in landings if eid_value(pair[0].Id) == wanted]
+        if chosen:
+            return chosen
+    try:
+        top = run_before.TopElevation
+        chosen = [pair for pair in landings if abs(pair[0].BaseElevation - top) < 0.01]
+        if chosen:
+            return chosen
+    except Exception:
+        pass
+    return landings
+
+
+def inner_pieces(sequence, landings, notes, label):
+    """[(run item, curves)]: each run's inner edge followed by the turn that
+    carries it across its top landing to where the next run's inner edge starts.
+    Chained together, the pieces are the whole inner side."""
+    pieces = [(item, list(item["inner"])) for item in sequence]
+    for index in range(len(pieces) - 1):
+        current = pieces[index][1]
+        following = pieces[index + 1][1]
+        gap_start = current[-1].GetEndPoint(1)
+        gap_end = following[0].GetEndPoint(0)
+        # smaller gaps are closed by tidy_path() when the path is built
+        if plan_distance(gap_start, gap_end) < MIN_SEGMENT:
+            continue
+        # two edges that turn a corner and nearly meet (L stair, runs a few mm
+        # off the landing): run them to their true corner
+        corner = meet_lines(current[-1], following[0], LANDING_SNAP)
+        if corner is not None:
+            current[-1] = corner[0]
+            following[0] = corner[1]
+            continue
+        candidates = landings_between(pieces[index][0]["run"], pieces[index + 1][0]["run"], landings)
+        current.extend(landing_connector(candidates, gap_start, gap_end, notes, label))
+    return pieces
+
+
+LAP_STAGGER = 10.0 / 304.8   # 10 mm, see stagger_turns()
+
+# True = when no host gives a whole single railing, keep the last broken one in
+# the model (for Geo Eyes) instead of falling back to one railing per run
+KEEP_BROKEN_SINGLE_RAILING = True
+
+
+def path_corners(curves):
+    pts = [curves[0].GetEndPoint(0)]
+    for crv in curves:
+        pts.append(crv.GetEndPoint(1))
+    return pts
+
+
+def repeated_corners(curves):
+    """How many corners of a path land on an earlier corner (in plan)."""
+    pts = path_corners(curves)
+    count = 0
+    for i in range(len(pts)):
+        for j in range(i):
+            if plan_distance(pts[i], pts[j]) < MIN_SEGMENT:
+                count += 1
+                break
+    return count
+
+
+def is_u_turn(before, turn, after):
+    """A short straight piece across the well, between two legs running opposite ways."""
+    if not (isinstance(before, Line) and isinstance(turn, Line) and isinstance(after, Line)):
+        return False
+    d_before = plan_direction(before)
+    d_turn = plan_direction(turn)
+    d_after = plan_direction(after)
+    if d_before is None or d_turn is None or d_after is None:
+        return False
+    if abs(d_before.DotProduct(d_turn)) > 0.1 or d_before.DotProduct(d_after) > -0.9:
+        return False
+    return turn.Length < before.Length and turn.Length < after.Length
+
+
+def turn_midpoints(curves):
+    return [curve_midpoint(curves[k]) for k in range(1, len(curves) - 1)
+            if is_u_turn(curves[k - 1], curves[k], curves[k + 1])]
+
+
+def stagger_turns(curves, step):
+    """Copy of a path where a turn across the well that repeats an earlier one
+    exactly is moved `step` further onto its landing, so the path never passes
+    through the same corner twice.
+
+    When every storey of a stair is identical, the inner path goes round the same
+    rectangle once per storey. Revit accepts a path whose legs overlap in plan
+    (a 4-flight stair whose two top landings differ by 10 mm worked) but not one
+    that keeps coming back through the very same corners.
+    """
+    work = list(curves)
+    # corners already spoken for: the two ends of the path never move, and every
+    # turn claims its two corners once it has been placed
+    taken = [work[0].GetEndPoint(0), work[-1].GetEndPoint(1)]
+    for k in range(1, len(work) - 1):
+        before = work[k - 1]
+        turn = work[k]
+        after = work[k + 1]
+        if not (isinstance(before, Line) and isinstance(turn, Line) and isinstance(after, Line)):
+            continue
+        d_before = plan_direction(before)
+        d_turn = plan_direction(turn)
+        d_after = plan_direction(after)
+        if d_before is None or d_turn is None or d_after is None:
+            continue
+        # a U-turn: across, between two legs that run opposite ways. It is the
+        # short piece - a long leg between two turns matches the angles too
+        if abs(d_before.DotProduct(d_turn)) > 0.1 or d_before.DotProduct(d_after) > -0.9:
+            continue
+        if turn.Length >= before.Length or turn.Length >= after.Length:
+            continue
+        steps = 0
+        while steps < 50:
+            shift = d_before * (step * steps)
+            start = turn.GetEndPoint(0) + shift
+            end = turn.GetEndPoint(1) + shift
+            if not any(plan_distance(start, p) < MIN_SEGMENT or plan_distance(end, p) < MIN_SEGMENT
+                       for p in taken):
+                break
+            steps += 1
+        taken.append(start)
+        taken.append(end)
+        if steps == 0:
+            continue
+        work[k - 1] = Line.CreateBound(before.GetEndPoint(0), start)
+        work[k] = Line.CreateBound(start, end)
+        work[k + 1] = Line.CreateBound(end, after.GetEndPoint(1))
+    return work
+
+
+def geometry_count(element):
+    """Solids with volume plus family instances in an element's geometry."""
+    if element is None:
+        return 0
+    options = Options()
+    options.ComputeReferences = False
+    options.IncludeNonVisibleObjects = False
+    options.DetailLevel = ViewDetailLevel.Medium
+    try:
+        geometry = element.get_Geometry(options)
+    except Exception:
+        return 0
+    if geometry is None:
+        return 0
+    count = 0
+    for obj in geometry:
+        if isinstance(obj, Solid):
+            if obj.Volume > 1e-9:
+                count += 1
+        elif isinstance(obj, GeometryInstance):
+            count += 1
+    return count
+
+
+def type_has_balusters(railing_type):
+    """True / False from the type's baluster pattern and posts, None if unreadable."""
+    try:
+        placement = railing_type.BalusterPlacement
+        pattern = placement.BalusterPattern
+        for index in range(pattern.GetBalusterCount()):
+            if pattern.GetBaluster(index).BalusterFamilyId != ElementId.InvalidElementId:
+                return True
+        posts = placement.PostPattern
+        for post in (posts.StartPost, posts.EndPost, posts.CornerPost):
+            if post.BalusterFamilyId != ElementId.InvalidElementId:
+                return True
+        return False
+    except Exception:
+        return None
+
+
+def built_extent(railing):
+    """Plan extent (min x, min y, max x, max y) of everything Revit built for a
+    railing: the railing itself, its top rail and its handrails."""
+    ids = [railing.Id]
+    try:
+        top_id = railing.TopRail
+        if top_id is not None and top_id != ElementId.InvalidElementId:
+            ids.append(top_id)
+    except Exception:
+        pass
+    try:
+        ids.extend(list(railing.GetHandRails()))
+    except Exception:
+        pass
+    extent = None
+    for element_id in ids:
+        element = doc.GetElement(element_id)
+        if element is None:
+            continue
+        try:
+            box = element.get_BoundingBox(None)
+        except Exception:
+            box = None
+        if box is None or geometry_count(element) == 0:
+            continue
+        if extent is None:
+            extent = [box.Min.X, box.Min.Y, box.Max.X, box.Max.Y]
+        else:
+            extent = [min(extent[0], box.Min.X), min(extent[1], box.Min.Y),
+                      max(extent[2], box.Max.X), max(extent[3], box.Max.Y)]
+    return extent
+
+
+def missing_parts(railing, turns=None, margin=0.0):
+    """What Revit failed to build on a railing, as a list of words; empty if whole.
+
+    Revit accepts a railing path in plan first and builds the top rail and
+    balusters afterwards, along the path at the host's heights. When it cannot
+    work those out it keeps the railing element and silently drops the parts -
+    on a stair it can follow the flights and still lose everything over the
+    landings, so the turns across the well are checked one by one.
+    """
+    missing = []
+    if turns:
+        extent = built_extent(railing)
+        reached = 0
+        if extent is not None:
+            for pt in turns:
+                if extent[0] - margin <= pt.X <= extent[2] + margin and \
+                        extent[1] - margin <= pt.Y <= extent[3] + margin:
+                    reached += 1
+        if reached < len(turns):
+            missing.append("{0} of {1} turn(s) across the well".format(len(turns) - reached, len(turns)))
+    try:
+        railing_type = doc.GetElement(railing.GetTypeId())
+    except Exception:
+        railing_type = None
+    try:
+        wants_top = railing_type is not None and railing_type.TopRailType != ElementId.InvalidElementId
+    except Exception:
+        wants_top = False
+    if wants_top:
+        try:
+            top_id = railing.TopRail
+        except Exception:
+            top_id = None
+        if top_id is None or top_id == ElementId.InvalidElementId or \
+                geometry_count(doc.GetElement(top_id)) == 0:
+            missing.append("top rail")
+    if type_has_balusters(railing_type) and geometry_count(railing) == 0:
+        missing.append("balusters")
+    return missing
+
+
+def set_offset_from_path(railing, offset_ft, notes, label):
+    """Offset a railing sideways through its own 'Offset from Path' parameter."""
+    try:
+        param = railing.get_Parameter(BuiltInParameter.STAIRS_RAILING_PLACEMENT_OFFSET)
+    except Exception:
+        param = None
+    if param is None or param.IsReadOnly:
+        notes.append("{0}: 'Offset from Path' is not editable on railing {1}, the offset was "
+                     "not applied.".format(label, eid_value(railing.Id)))
+        return
+    try:
+        param.Set(offset_ft)
+        doc.Regenerate()
+    except Exception as err:
+        notes.append("{0}: could not set 'Offset from Path': {1}".format(label, err))
+
+
+def stacked_single_railing(stairs, pieces, type_id, level_id, offset_ft, multistory,
+                           placement_levels, notes, label):
+    """One continuous inner railing over flights that are stacked in plan.
+
+    Built like the railing that works on the 4-flight stair: the runs' inner
+    edges joined across the well at each run's own landing, read from the top
+    run down, offset through 'Offset from Path' rather than by moving the
+    path, and hosted on the top run. If the path keeps passing through the
+    same corners, the repeated turns are staggered (stagger_turns) and the path
+    is tried again. Returns (railing, how) or None.
+    """
+    chain = [crv for _, curves in pieces for crv in curves]
+    if not chain:
+        return None
+    z_plane = chain[0].GetEndPoint(0).Z
+    try:
+        drawn = tidy_path([flatten_curve(c, z_plane) for c in chain])
+    except Exception as err:
+        notes.append("{0}: could not assemble the single path: {1}".format(label, err))
+        return None
+
+    attempts = [("as drawn", drawn)]
+    if repeated_corners(drawn):
+        attempts.append(("with repeated turns staggered in {0:g} mm steps".format(
+            round(LAP_STAGGER * 304.8, 1)), stagger_turns(drawn, LAP_STAGGER)))
+
+    host_id = stairs.Id if multistory is not None else pieces[-1][0]["run"].Id
+    for how, curves in attempts:
+        try:
+            path = build_curve_loop(reverse_chain(curves))
+        except Exception as err:
+            notes.append("{0}: single path {1} could not be assembled: {2}".format(label, how, err))
+            continue
+        if not Railing.IsValidPathForRailing(path):
+            notes.append("{0}: Revit refused the single path {1} ({2} repeated corner(s)).".format(
+                label, how, repeated_corners(curves)))
+            continue
+
+        railing = Railing.Create(doc, path, type_id, level_id)
+        if railing is None:
+            notes.append("{0}: Railing.Create returned nothing.".format(label))
+            return None
+        doc.Regenerate()
+        if abs(offset_ft) > 1e-9:
+            set_offset_from_path(railing, offset_ft, notes, label)
+        if placement_levels is not None:
+            try:
+                railing.SetMultistoryStairsPlacementLevels(placement_levels)
+                doc.Regenerate()
+            except Exception as err:
+                notes.append("{0}: could not spread railing {1} over the storeys: {2}".format(
+                    label, eid_value(railing.Id), err))
+
+        # host it, then check Revit really built it - top rail, balusters and every
+        # turn across the well. Tried in turn: the top run (how the railings that
+        # work are hosted), the Stairs element (how Revit hosts its own stair
+        # railings), the bottom run
+        if host_id == stairs.Id:
+            hosts = [stairs.Id]
+        else:
+            hosts = [host_id, stairs.Id, pieces[0][0]["run"].Id]
+        turns = turn_midpoints(curves)
+        margin = 5.0 / 304.8 + max(0.0, -offset_ft)
+        whole = False
+        for candidate in hosts:
+            try:
+                if not railing.RailingCanBeHostedByElement(candidate):
+                    notes.append("{0}: railing {1} cannot be hosted on element {2}.".format(
+                        label, eid_value(railing.Id), eid_value(candidate)))
+                    continue
+                railing.HostId = candidate
+                doc.Regenerate()
+            except Exception as err:
+                notes.append("{0}: hosting railing {1} on element {2} failed: {3}".format(
+                    label, eid_value(railing.Id), eid_value(candidate), err))
+                continue
+            missing = missing_parts(railing, turns, margin)
+            if candidate == stairs.Id:
+                where = "the stair"
+            elif candidate == hosts[0]:
+                where = "the top run"
+            else:
+                where = "the bottom run"
+            if not missing:
+                if candidate != hosts[0]:
+                    notes.append("{0}: rails built once hosted on {1}.".format(label, where))
+                whole = True
+                break
+            notes.append("{0}: hosted on {1}, Revit left out: {2}.".format(
+                label, where, ", ".join(missing)))
+
+        if whole:
+            return railing, how
+        if KEEP_BROKEN_SINGLE_RAILING:
+            notes.append("{0}: kept broken railing {1} for inspection "
+                         "(KEEP_BROKEN_SINGLE_RAILING).".format(label, eid_value(railing.Id)))
+            return railing, how + " - BROKEN, kept for inspection"
+        notes.append("{0}: removed railing {1}, path {2}, since parts were missing.".format(
+            label, eid_value(railing.Id), how))
+        doc.Delete(railing.Id)
+        doc.Regenerate()
+    return None
+
+
+def stacked_inner_railings(stairs, analysed, pieces, type_id, level_id, offset_ft, multistory,
+                           placement_levels, notes, created, label):
+    """Inner side of a stair whose flights overlap in plan: one railing per run.
+
+    Each railing follows its run's inner edge and the turn across the well at
+    the top of that run, and is hosted on that run so Revit knows which storey
+    it belongs to. Neighbouring railings meet at the corner they share.
+    """
+    built = []
+    for item, curves in pieces:
+        piece_label = "{0} - inner run {1}".format(label, eid_value(item["run"].Id))
+        attempt = build_path(curves, offset_ft, item["centroid"], notes, piece_label)
+        if not attempt.get("curves"):
+            record_failure(stairs, analysed, piece_label, offset_ft, attempt)
+        built.append((item, piece_label, attempt))
+
+    # each run was offset on its own: carry each railing's end and the next
+    # one's start out to the corner they share, so the turn closes up
+    reach = 4.0 * abs(offset_ft) + LANDING_SNAP
+    for index in range(len(built) - 1):
+        first = built[index][2].get("curves")
+        second = built[index + 1][2].get("curves")
+        if not first or not second:
+            continue
+        met = meet_lines(first[-1], second[0], reach)
+        if met is not None:
+            first[-1] = met[0]
+            second[0] = met[1]
+
+    for item, piece_label, attempt in built:
+        if not attempt.get("curves"):
+            continue
+        # on a multistory stair the placement levels only apply to railings
+        # hosted on the Stairs element itself
+        host_id = stairs.Id if multistory is not None else item["run"].Id
+        railing = create_railing(attempt, type_id, level_id, host_id, notes, piece_label,
+                                 placement_levels)
+        if railing is not None:
+            created.append((piece_label, railing))
+        else:
+            record_failure(stairs, analysed, piece_label, offset_ft, attempt)
 
 
 def build_for_stairs(stairs, multistory, choice, offsets, notes, created):
@@ -1215,39 +2238,58 @@ def build_for_stairs(stairs, multistory, choice, offsets, notes, created):
             doc.Regenerate()
             notes.append("{0}: deleted {1} existing railing(s).".format(label, existing.Count))
 
+    stacked = stacked_runs(stairs)
+    inner_label = "{0} - inner".format(label)
+
     if choice["do_inner"]:
         sequence = orient_inner_sequence(analysed)
-        landings = landing_boundaries(stairs)
-        chain = []
-        for index, item in enumerate(sequence):
-            if index > 0 and chain:
-                gap_start = chain[-1].GetEndPoint(1)
-                gap_end = item["inner"][0].GetEndPoint(0)
-                if plan_distance(gap_start, gap_end) >= SHORT_CURVE:
-                    chain.extend(landing_connector(landings, gap_start, gap_end, notes))
-            chain.extend(item["inner"])
+        pieces = inner_pieces(sequence, landing_boundaries(stairs), notes, label)
 
-        railing = make_railing(
-            chain,
-            choice["inner_type"],
-            level_id,
-            stairs.Id,
-            offsets["inner"],
-            sequence[0]["centroid"],
-            notes,
-            placement_levels,
-        )
-        if railing is not None:
-            created.append(("{0} - inner".format(label), railing))
+        if stacked:
+            result = stacked_single_railing(stairs, pieces, choice["inner_type"], level_id,
+                                            offsets["inner"], multistory, placement_levels,
+                                            notes, inner_label)
+            if result is not None:
+                railing, how = result
+                created.append((inner_label, railing))
+                notes.append("{0}: flights are stacked in plan; made one continuous railing, "
+                             "path {1}.".format(inner_label, how))
+            else:
+                notes.append("{0}: no single railing came out whole, falling back to one "
+                             "railing per run.".format(inner_label))
+                stacked_inner_railings(stairs, analysed, pieces, choice["inner_type"], level_id,
+                                       offsets["inner"], multistory, placement_levels, notes,
+                                       created, label)
+        else:
+            chain = [crv for _, curves in pieces for crv in curves]
+            railing = make_railing(
+                chain,
+                choice["inner_type"],
+                level_id,
+                stairs.Id,
+                offsets["inner"],
+                sequence[0]["centroid"],
+                notes,
+                inner_label,
+                placement_levels,
+            )
+            if railing is not None:
+                created.append((inner_label, railing))
+            else:
+                record_failure(stairs, analysed, inner_label, offsets["inner"])
 
     if choice["do_outer"]:
         for item in analysed:
             # a railing on a multistory stair has to hang off the Stairs element
-            # itself for the placement levels to apply
-            if multistory is not None or not choice["host_to_run"]:
+            # itself for the placement levels to apply. With stacked flights the
+            # path sits over several runs in plan, so it must hang off its own run
+            # or Revit cannot tell which flight it belongs to.
+            if multistory is not None:
                 host_id = stairs.Id
-            else:
+            elif stacked or choice["host_to_run"]:
                 host_id = item["run"].Id
+            else:
+                host_id = stairs.Id
 
             railing = make_railing(
                 item["outer"],
@@ -1257,6 +2299,7 @@ def build_for_stairs(stairs, multistory, choice, offsets, notes, created):
                 offsets["outer"],
                 item["centroid"],
                 notes,
+                "{0} - outer run {1}".format(label, eid_value(item["run"].Id)),
                 placement_levels,
             )
             if railing is not None:
@@ -1266,6 +2309,10 @@ def build_for_stairs(stairs, multistory, choice, offsets, notes, created):
                     "{0} - outer run {1}".format(label, eid_value(item["run"].Id)),
                     railing,
                 ))
+            else:
+                record_failure(stairs, analysed,
+                               "{0} - outer run {1}".format(label, eid_value(item["run"].Id)),
+                               offsets["outer"])
 
 
 def main():
@@ -1303,6 +2350,7 @@ def main():
     }
     notes = []
     created = []
+    del FAILED_DUMPS[:]
 
     transaction = Transaction(doc, "Create Stair Railings")
     transaction.Start()
@@ -1319,6 +2367,10 @@ def main():
     except Exception:
         transaction.RollBack()
         raise
+
+    dump_note = save_failure_dump()
+    if dump_note:
+        notes.append(dump_note)
 
     lines = ["Created {0} railing(s) on {1} stair(s).".format(len(created), len(targets))]
     for label, railing in created:
