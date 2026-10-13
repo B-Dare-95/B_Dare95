@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 Clash Navigator (single-file)
-Loads a Navisworks HTML clash report, lets the user browse clashes, and
+Loads Navisworks HTML clash reports (one tab each), lets the user browse
+clashes, tick them Solved / Approved, export those results to HTML, and
 either focuses the two clashing elements (section box, zoom, selection --
 linked elements included; Isolate adds a temporary isolate on top) or
 marks/frames the clash point in the model.
@@ -358,6 +359,7 @@ import os
 import math
 import json
 import hashlib
+import datetime
 import clr
 clr.AddReference("PresentationFramework")
 clr.AddReference("PresentationCore")
@@ -368,12 +370,16 @@ from System import Action, EventHandler
 from System import Uri, UriKind
 from System.Collections.Generic import List
 from System.Diagnostics import Process
-from System.Windows import RoutedEventHandler, Thickness, VerticalAlignment, HorizontalAlignment, TextTrimming
-from System.Windows.Controls import (
-    SelectionChangedEventHandler, TextChangedEventHandler,
-    CheckBox, TextBlock, DockPanel, Border, Dock,
+from System.Windows import (
+    RoutedEventHandler, Thickness, CornerRadius, VerticalAlignment, HorizontalAlignment, TextTrimming,
+    Point,
 )
-from System.Windows.Media import BrushConverter
+from System.Windows.Controls import (
+    SelectionChangedEventHandler,
+    CheckBox, TextBlock, DockPanel, Border, Dock, Button,
+)
+from System.Windows.Input import MouseButtonEventHandler, Cursors
+from System.Windows.Media import BrushConverter, ColorConverter, LinearGradientBrush, GradientStop
 from System.Windows.Interop import WindowInteropHelper
 from System.Windows.Markup import XamlReader
 from System.Windows.Media.Imaging import BitmapImage, BitmapCacheOption
@@ -382,7 +388,11 @@ from System.Windows.Threading import DispatcherPriority
 from Autodesk.Revit.DB import (
     Transaction, BoundingBoxXYZ, XYZ, ElementId, FilteredElementCollector,
     RevitLinkInstance, UnitUtils, UnitTypeId, View3D, Reference, TemporaryViewMode,
-    ElementType, CategoryType,
+    ElementType, CategoryType, BuiltInCategory, FamilyInstance, Wall,
+    BoundingBoxIntersectsFilter, Outline,
+)
+from Autodesk.Revit.DB.Architecture import (
+    Railing, ContinuousRail, Stairs, StairsRun, StairsLanding,
 )
 from Autodesk.Revit.UI import IExternalEventHandler, ExternalEvent
 
@@ -680,6 +690,140 @@ def element_reference(element, link_instance):
     return ref
 
 
+# ---------------------------------------------------------- sub-element -> main
+# Navisworks reports the exact piece that clashed: one curtain panel, one
+# mullion, one stair landing, one top rail. Selecting that piece is rarely
+# useful -- the thing you open, move or edit is the curtain wall, the stair,
+# the railing. These helpers climb from the reported piece to that element.
+#
+# Only the selection (and the Isolate targets) climb. The section box and the
+# zoom stay fitted to the reported pieces themselves: fitting them to a whole
+# curtain wall would crop to the facade and lose the clash.
+
+
+def _bics(*names):
+    """BuiltInCategory members by name, skipping any this Revit version lacks."""
+    return tuple(getattr(BuiltInCategory, n) for n in names if hasattr(BuiltInCategory, n))
+
+
+CURTAIN_PART_BICS = _bics("OST_CurtainWallPanels", "OST_CurtainWallMullions")
+RAILING_PART_BICS = _bics(
+    "OST_StairsRailingBaluster", "OST_RailingSupport", "OST_RailingTermination",
+    "OST_RailingTopRail", "OST_RailingHandRail",
+)
+# Stringers / carriages. No API class of their own (there is no StairsSupport
+# type) and no property pointing at their stair -- found from the stair side.
+STAIR_SUPPORT_BICS = _bics("OST_StairsStringerCarriage", "OST_StairsSupports")
+MAX_PARENT_DEPTH = 6   # a nested shared family inside a panel inside a wall is 2; 6 is plenty
+
+
+def category_bic(element):
+    try:
+        return element.Category.BuiltInCategory if element.Category else None
+    except Exception:
+        return None
+
+
+def railing_parts(owner):
+    return owner.GetDependentElements(None)
+
+
+def stair_supports(owner):
+    return owner.GetStairsSupports()
+
+
+def owner_listing(element, owner_class, list_parts=railing_parts):
+    """The owner_class element whose list_parts(owner) includes this element.
+
+    Balusters, railing supports, terminations and stair stringers have no API
+    property pointing back at their owner. The owner does list them, though --
+    so ask the few owners whose box overlaps this element, rather than every
+    railing or stair in the model."""
+    doc = element.Document
+    bbox = element.get_BoundingBox(None)
+    if bbox is None:
+        return None
+    nearby = (FilteredElementCollector(doc)
+              .OfClass(owner_class)
+              .WherePasses(BoundingBoxIntersectsFilter(Outline(bbox.Min, bbox.Max))))
+    target = id_value(element.Id)
+    for owner in nearby:
+        try:
+            parts = list_parts(owner)
+        except Exception:
+            continue
+        if target in set(id_value(p) for p in parts):
+            return owner
+    return None
+
+
+def parent_element(element):
+    """One step up from a sub-element to what owns it, or None if it is
+    already a main element."""
+    doc = element.Document
+
+    if isinstance(element, (StairsRun, StairsLanding)):
+        return element.GetStairs()
+
+    if isinstance(element, ContinuousRail):              # top rail, handrail
+        return doc.GetElement(element.HostRailingId)
+
+    if isinstance(element, Wall) and element.IsStackedWallMember:
+        return doc.GetElement(element.StackedWallOwnerId)
+
+    bic = category_bic(element)
+
+    # Panels and mullions report their curtain wall / curtain system / sloped
+    # glazing roof as Host. Deliberately category-gated: a door's Host is also
+    # its wall, and a door must stay a door.
+    if bic in CURTAIN_PART_BICS and isinstance(element, FamilyInstance):
+        return element.Host
+
+    if isinstance(element, FamilyInstance) and element.SuperComponent is not None:
+        return element.SuperComponent                    # nested shared family
+
+    if bic in STAIR_SUPPORT_BICS:
+        return owner_listing(element, Stairs, stair_supports)
+
+    if bic in RAILING_PART_BICS:
+        return (owner_listing(element, ContinuousRail)
+                or owner_listing(element, Railing))
+
+    return None
+
+
+def main_element(element):
+    """Climbs to the top-level owner. Returns the element itself when it isn't
+    a sub-element, so callers can always use the result."""
+    current = element
+    for _ in range(MAX_PARENT_DEPTH):
+        try:
+            parent = parent_element(current)
+        except Exception as ex:
+            logger.debug("Parent lookup failed for {0}: {1}".format(id_value(current.Id), ex))
+            parent = None
+        if parent is None or id_value(parent.Id) == id_value(current.Id):
+            break
+        current = parent
+    return current
+
+
+def main_targets(resolved):
+    """(element, link) pairs to select and isolate: each clashing piece swapped
+    for its main element, deduplicated -- a panel clashing with a mullion of the
+    same curtain wall is one wall, selected once. Also returns how many were
+    swapped."""
+    targets = []
+    swapped = 0
+    for element, link in resolved:
+        main = main_element(element)
+        if id_value(main.Id) != id_value(element.Id):
+            swapped += 1
+        if not any(same_element(main, link, t_el, t_link) for t_el, t_link in targets):
+            targets.append((main, link))
+    return targets, swapped
+
+
 def element_label(element, link_instance):
     if element is None:
         return "(not found in host or any loaded link)"
@@ -698,6 +842,19 @@ def element_label(element, link_instance):
             link_name = "link"
         return u"{0}  |  {1}   [in link: {2}]".format(cat, name, link_name)
     return u"{0}  |  {1}".format(cat, name)
+
+
+def element_label_with_main(element, link_instance):
+    """The label, plus the main element Focus/Isolate will actually select
+    when the reported element is only a part of it."""
+    label = element_label(element, link_instance)
+    if element is None:
+        return label
+    main = main_element(element)
+    if id_value(main.Id) == id_value(element.Id):
+        return label
+    return u"{0}\n    \u2192 selects: {1}  (ID {2})".format(
+        label, element_label(main, None), id_value(main.Id))
 
 
 def load_bitmap(path):
@@ -986,9 +1143,12 @@ def do_focus(clash, isolate=False):
         return None
     doc, view, resolved = context
 
+    # The box and zoom fit the pieces that actually clash; selection and
+    # isolate use their main elements (curtain wall, stair, railing).
     padding_ft = UnitUtils.ConvertToInternalUnits(FOCUS_BOX_PADDING_M, UnitTypeId.Meters)
     extent = host_extent(resolved, padding_ft)
     box_note = section_box_blocker(view, extent)
+    targets, swapped = main_targets(resolved)
 
     clear_isolate = (not isolate) and view.IsTemporaryHideIsolateActive()
 
@@ -997,7 +1157,7 @@ def do_focus(clash, isolate=False):
         t.Start()
         try:
             if isolate:
-                apply_isolate(view, resolved)
+                apply_isolate(view, targets)
             elif clear_isolate:
                 view.DisableTemporaryViewMode(TemporaryViewMode.TemporaryHideIsolate)
             if box_note is None:
@@ -1015,12 +1175,12 @@ def do_focus(clash, isolate=False):
     # transaction. It survives the section box (and the isolate), which is
     # what keeps the two elements highlighted inside the cropped view.
     uidoc = get_uidoc()
-    links_selected = select_clash_elements(uidoc, resolved)
+    links_selected = select_clash_elements(uidoc, targets)
     uidoc.RefreshActiveView()
     if extent is not None:
         zoom_to_box(uidoc, view, extent[0], extent[1])
 
-    linked_count = len([1 for _el, link in resolved if link is not None])
+    linked_count = len([1 for _el, link in targets if link is not None])
     parts = []
     if isolate:
         parts.append("isolated")
@@ -1031,7 +1191,9 @@ def do_focus(clash, isolate=False):
         parts.append("host element(s) selected -- linked selection failed")
     else:
         parts.append("{0} element(s) selected{1}".format(
-            len(resolved), " ({0} linked)".format(linked_count) if linked_count else ""))
+            len(targets), " ({0} linked)".format(linked_count) if linked_count else ""))
+    if swapped:
+        parts.append("{0} sub-element(s) swapped for their main element".format(swapped))
     return (u"Isolate: " if isolate else u"Focus: ") + u", ".join(parts) + u"."
 
 
@@ -1112,7 +1274,7 @@ def zoom_to_box(uidoc, view, low, high):
 XAML = u"""
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Clash Navigator" Height="620" Width="820"
+        Title="Clash Navigator" Height="660" Width="900"
         WindowStartupLocation="CenterScreen"
         Background="#161616">
     <Window.Resources>
@@ -1136,6 +1298,30 @@ XAML = u"""
             <Setter Property="Background" Value="#F1C21B"/>
             <Setter Property="Foreground" Value="#161616"/>
         </Style>
+        <Style x:Key="TabCloseButton" TargetType="Button">
+            <Setter Property="Foreground" Value="#A8A8A8"/>
+            <Setter Property="Width" Value="18"/>
+            <Setter Property="Height" Value="18"/>
+            <Setter Property="Margin" Value="8,0,0,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="ToolTip" Value="Close this report"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="Transparent" CornerRadius="9">
+                            <TextBlock Text="&#x2715;" FontSize="10" Foreground="{TemplateBinding Foreground}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#DA1E28"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
     <Grid Margin="12">
         <Grid.RowDefinitions>
@@ -1144,12 +1330,19 @@ XAML = u"""
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <DockPanel Grid.Row="0" Margin="0,0,0,10">
-            <Button x:Name="LoadButton" Content="Load HTML Report..." DockPanel.Dock="Left"
-                    Width="170" Style="{StaticResource AccentButton}" Margin="0,0,10,0"/>
-            <TextBlock x:Name="ReportLabel" Text="No report loaded" Foreground="#A8A8A8"
-                       VerticalAlignment="Center"/>
-        </DockPanel>
+        <StackPanel Grid.Row="0" Margin="0,0,0,10">
+            <DockPanel Margin="0,0,0,8">
+                <Button x:Name="LoadButton" Content="Load HTML Reports..." DockPanel.Dock="Left"
+                        Width="170" Style="{StaticResource AccentButton}" Margin="0,0,10,0"/>
+                <Button x:Name="ExportButton" Content="Export Results..." DockPanel.Dock="Right"
+                        Width="140" Style="{StaticResource RoundButton}" Margin="10,0,0,0"/>
+                <TextBlock x:Name="ReportLabel" Text="No report loaded" Foreground="#A8A8A8"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            </DockPanel>
+            <Border BorderBrush="#393939" BorderThickness="0,0,0,1">
+                <WrapPanel x:Name="ReportTabs"/>
+            </Border>
+        </StackPanel>
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
@@ -1158,12 +1351,28 @@ XAML = u"""
             </Grid.ColumnDefinitions>
 
             <DockPanel Grid.Column="0" Margin="0,0,10,0">
-                <TextBox x:Name="FilterBox" DockPanel.Dock="Top" Margin="0,0,0,8"
-                         Background="#262626" Foreground="#F4F4F4" BorderBrush="#525252"
-                         Padding="6" Tag="Filter clashes..."/>
+                <Border DockPanel.Dock="Top" Margin="0,0,0,8" Padding="12,7"
+                        Background="#262626" BorderBrush="#525252" BorderThickness="1">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Total" Foreground="#A8A8A8" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="SumTotal" Text="-" Foreground="#F4F4F4" FontWeight="Bold"
+                                   FontSize="14" Margin="8,0,28,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="Solved" Foreground="#A8A8A8" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="SumSolved" Text="-" Foreground="#42BE65" FontWeight="Bold"
+                                   FontSize="14" Margin="8,0,28,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="Approved" Foreground="#A8A8A8" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="SumApproved" Text="-" Foreground="#78A9FF" FontWeight="Bold"
+                                   FontSize="14" Margin="8,0,28,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="Remaining" Foreground="#A8A8A8" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="SumRemaining" Text="-" Foreground="#FF8389" FontWeight="Bold"
+                                   FontSize="14" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
                 <Border DockPanel.Dock="Top" Background="#393939" CornerRadius="4,4,0,0" Padding="4,5">
                     <DockPanel>
                         <TextBlock Text="Solved" Width="52" TextAlignment="Center"
+                                   Foreground="#A8A8A8" FontWeight="SemiBold"/>
+                        <TextBlock Text="Approved" Width="66" TextAlignment="Center"
                                    Foreground="#A8A8A8" FontWeight="SemiBold"/>
                         <TextBlock Text="Clash" Margin="6,0,0,0"
                                    Foreground="#A8A8A8" FontWeight="SemiBold"/>
@@ -1206,8 +1415,9 @@ XAML = u"""
 """
 
 
-# ---------------------------------------------------------------- solved state
-# Which clashes the user has ticked as solved, kept per report. The file sits
+# ---------------------------------------------------------- solved / approved
+# Which clashes the user has ticked as solved or approved, kept per report.
+# The two are independent ticks. The file sits
 # next to the report ("<report>.html.solved.json") so it travels with it and a
 # coordinator opening the same report from the shared folder sees the same
 # ticks. If that folder is read-only, it falls back to %APPDATA%, keyed by the
@@ -1218,8 +1428,20 @@ XAML = u"""
 # added, removed or reordered) keeps the ticks of every clash still in it.
 # Keys of clashes that are no longer in the report are kept, not pruned -- a
 # clash that comes back in a later export comes back still ticked.
+#
+# The file keeps its original ".solved.json" name so reports ticked before the
+# Approved column existed still load; a file without "approved" just means
+# nothing is approved yet.
 
 SOLVED_SUFFIX = ".solved.json"
+
+# (flag, header, column width, checkbox tooltip) -- the header widths in the
+# XAML match these
+STATE_COLUMNS = (
+    ("solved", "Solved", 52, "Tick when this clash is solved."),
+    ("approved", "Approved", 66, "Tick when this clash is approved (accepted as is)."),
+)
+STATE_FLAGS = tuple(c[0] for c in STATE_COLUMNS)
 
 
 def clash_key(entry):
@@ -1238,8 +1460,8 @@ def solved_state_paths(report_path):
     return paths
 
 
-def load_solved_keys(report_path):
-    """Returns (set_of_keys, path_it_came_from_or_None)."""
+def load_clash_state(report_path):
+    """Returns ({flag: set_of_keys}, path_it_came_from_or_None)."""
     for path in solved_state_paths(report_path):
         if not os.path.isfile(path):
             continue
@@ -1249,19 +1471,19 @@ def load_solved_keys(report_path):
                 data = json.loads(f.read().decode("utf-8"))
             finally:
                 f.close()
-            return set(data.get("solved", [])), path
+            return dict((flag, set(data.get(flag, []))) for flag in STATE_FLAGS), path
         except Exception as ex:
-            logger.warning("Could not read solved state from {0}: {1}".format(path, ex))
-    return set(), None
+            logger.warning("Could not read clash state from {0}: {1}".format(path, ex))
+    return dict((flag, set()) for flag in STATE_FLAGS), None
 
 
-def save_solved_keys(report_path, keys):
-    """Writes the set to the first location that accepts it. Returns that path,
-    or None if neither did."""
-    payload = json.dumps({
-        "report": os.path.basename(report_path),
-        "solved": sorted(keys),
-    }, indent=2)
+def save_clash_state(report_path, state):
+    """Writes every flag's key set to the first location that accepts it.
+    Returns that path, or None if neither did."""
+    data = {"report": os.path.basename(report_path)}
+    for flag in STATE_FLAGS:
+        data[flag] = sorted(state[flag])
+    payload = json.dumps(data, indent=2, sort_keys=True)
     for path in solved_state_paths(report_path):
         try:
             folder = os.path.dirname(path)
@@ -1274,7 +1496,7 @@ def save_solved_keys(report_path, keys):
                 f.close()
             return path
         except Exception as ex:
-            logger.debug("Could not write solved state to {0}: {1}".format(path, ex))
+            logger.debug("Could not write clash state to {0}: {1}".format(path, ex))
     return None
 
 
@@ -1307,6 +1529,229 @@ def resolve_image_path(report_dir, rel):
     return os.path.join(report_dir, rel)
 
 
+# ------------------------------------------------------------ results export
+# A self-contained HTML of the solved / approved state of one or more reports.
+# Pure Python -- no Revit API -- so it runs straight from the button handler.
+#
+# Clash images are linked, not embedded: a few hundred Navisworks snapshots
+# embedded as base64 would turn the export into a 20+ MB file. The links are
+# absolute file:/// URIs, so they work as long as the report's image folder
+# stays where it is.
+
+def html_escape(value):
+    if value is None:
+        return u""
+    text = value if isinstance(value, basestring) else unicode(value)
+    return (text.replace(u"&", u"&amp;").replace(u"<", u"&lt;")
+                .replace(u">", u"&gt;").replace(u'"', u"&quot;"))
+
+
+def result_of(entry):
+    """(css class, label) for an entry's ticks."""
+    if entry["solved"] and entry["approved"]:
+        return "both", u"Solved & Approved"
+    if entry["solved"]:
+        return "solved", u"Solved"
+    if entry["approved"]:
+        return "approved", u"Approved"
+    return "open", u"Open"
+
+
+def tally(entries):
+    counts = {"total": len(entries), "solved": 0, "approved": 0, "open": 0}
+    for e in entries:
+        if e["solved"]:
+            counts["solved"] += 1
+        if e["approved"]:
+            counts["approved"] += 1
+        if not e["solved"] and not e["approved"]:
+            counts["open"] += 1
+    return counts
+
+
+def percent(part, whole):
+    return u"{0:.0f}%".format(100.0 * part / whole) if whole else u"-"
+
+
+def file_uri(path):
+    try:
+        return Uri(path).AbsoluteUri
+    except Exception:
+        return None
+
+
+EXPORT_CSS = u"""
+* { box-sizing: border-box; }
+body { font-family: "Segoe UI", Arial, sans-serif; margin: 0; padding: 28px 36px;
+       color: #161616; background: #f4f4f4; font-size: 13px; }
+h1 { font-size: 24px; margin: 0 0 4px 0; }
+h2 { font-size: 18px; margin: 0; display: inline; }
+.meta { color: #525252; margin-bottom: 20px; }
+.cards { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0 18px 0; }
+.card { background: #fff; border-left: 4px solid #8d8d8d; padding: 10px 16px; min-width: 120px; }
+.card b { display: block; font-size: 22px; }
+.card.solved { border-color: #24a148; } .card.approved { border-color: #0f62fe; }
+.card.open { border-color: #da1e28; }
+.controls { background: #fff; padding: 10px 14px; margin-bottom: 18px; display: flex;
+            gap: 8px; align-items: center; flex-wrap: wrap; position: sticky; top: 0; z-index: 2;
+            box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+.controls button { border: 1px solid #8d8d8d; background: #fff; padding: 5px 12px; cursor: pointer; }
+.controls button.on { background: #161616; color: #fff; border-color: #161616; }
+.controls input { padding: 5px 8px; border: 1px solid #8d8d8d; min-width: 260px; }
+details.report { background: #fff; margin-bottom: 22px; padding: 14px 18px; }
+details.report > summary { cursor: pointer; list-style: none; }
+.path { color: #6f6f6f; font-size: 12px; margin-top: 2px; word-break: break-all; }
+table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+th, td { border-bottom: 1px solid #e0e0e0; padding: 6px 8px; text-align: left; vertical-align: middle; }
+th { background: #e0e0e0; font-weight: 600; }
+table.tests { width: auto; min-width: 520px; }
+td.num, th.num { text-align: right; }
+.pill { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 12px; white-space: nowrap; }
+.pill.open { background: #ffd7d9; color: #750e13; }
+.pill.solved { background: #defbe6; color: #0e6027; }
+.pill.approved { background: #d0e2ff; color: #002d9c; }
+.pill.both { background: linear-gradient(90deg, #defbe6 50%, #d0e2ff 50%); color: #161616; }
+img.thumb { height: 54px; border: 1px solid #c6c6c6; }
+.footer { color: #8d8d8d; margin-top: 24px; font-size: 11px; }
+@media print {
+  body { background: #fff; padding: 0; }
+  .controls { display: none; }
+  details.report { padding: 0; page-break-after: always; }
+  tr { page-break-inside: avoid; }
+  img.thumb { height: 40px; }
+}
+"""
+
+EXPORT_JS = u"""
+(function () {
+  var current = 'all';
+  var buttons = document.querySelectorAll('.controls button');
+  var search = document.getElementById('search');
+  function apply() {
+    var q = search.value.toLowerCase();
+    var rows = document.querySelectorAll('tr.clash');
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var okStatus = current === 'all' || r.getAttribute('data-status').indexOf(current) >= 0;
+      var okText = !q || r.getAttribute('data-text').indexOf(q) >= 0;
+      r.style.display = (okStatus && okText) ? '' : 'none';
+    }
+  }
+  for (var i = 0; i < buttons.length; i++) {
+    buttons[i].addEventListener('click', function () {
+      for (var j = 0; j < buttons.length; j++) { buttons[j].className = ''; }
+      this.className = 'on';
+      current = this.getAttribute('data-filter');
+      apply();
+    });
+  }
+  search.addEventListener('input', apply);
+})();
+"""
+
+
+def cards_html(counts):
+    out = [u'<div class="cards">']
+    for key, label in (("total", u"Clashes"), ("open", u"Open"),
+                       ("solved", u"Solved"), ("approved", u"Approved")):
+        extra = u"" if key == "total" else u" ({0})".format(percent(counts[key], counts["total"]))
+        out.append(u'<div class="card {0}"><b>{1}</b>{2}{3}</div>'.format(
+            key, counts[key], label, extra))
+    out.append(u"</div>")
+    return u"".join(out)
+
+
+def report_section_html(report):
+    entries = report["items"]
+    out = [u'<details class="report" open><summary><h2>{0}</h2>'.format(html_escape(report["name"])),
+           u'<div class="path">{0}</div></summary>'.format(html_escape(report["path"])),
+           cards_html(tally(entries))]
+
+    # per-test breakdown, in report order
+    out.append(u'<table class="tests"><tr><th>Test</th><th class="num">Clashes</th>'
+               u'<th class="num">Open</th><th class="num">Solved</th><th class="num">Approved</th></tr>')
+    order = []
+    by_test = {}
+    for e in entries:
+        if e["test"] not in by_test:
+            by_test[e["test"]] = []
+            order.append(e["test"])
+        by_test[e["test"]].append(e)
+    for test in order:
+        c = tally(by_test[test])
+        out.append(u'<tr><td>{0}</td><td class="num">{1}</td><td class="num">{2}</td>'
+                   u'<td class="num">{3}</td><td class="num">{4}</td></tr>'.format(
+                       html_escape(test), c["total"], c["open"], c["solved"], c["approved"]))
+    out.append(u"</table>")
+
+    out.append(u'<table class="clashes"><tr><th class="num">#</th><th>Test</th><th>Clash</th>'
+               u'<th>Result</th><th>Navisworks status</th><th>Distance</th><th>Grid</th>'
+               u'<th>Item 1 ID</th><th>Item 2 ID</th><th>Clash point</th><th>Image</th></tr>')
+    for index, e in enumerate(entries, 1):
+        css, label = result_of(e)
+        point = e.get("clash_point")
+        point_text = u"{0:.3f}, {1:.3f}, {2:.3f}".format(*point) if point else u""
+        image = u""
+        image_path = e.get("image_abs_path")
+        if image_path and os.path.isfile(image_path):
+            uri = file_uri(image_path)
+            if uri:
+                image = u'<a href="{0}" target="_blank"><img class="thumb" loading="lazy" src="{0}"></a>'.format(
+                    html_escape(uri))
+        search_text = u" ".join(unicode(v) for v in (
+            e["test"], e.get("name"), e.get("item1_id"), e.get("item2_id"),
+            e.get("grid_location"), label) if v is not None).lower()
+        out.append(
+            u'<tr class="clash" data-status="{0}" data-text="{1}">'
+            u'<td class="num">{2}</td><td>{3}</td><td>{4}</td>'
+            u'<td><span class="pill {0}">{5}</span></td><td>{6}</td><td>{7}</td><td>{8}</td>'
+            u'<td>{9}</td><td>{10}</td><td>{11}</td><td>{12}</td></tr>'.format(
+                # "both" must match the Solved and the Approved filter
+                u"both solved approved" if css == "both" else css,
+                html_escape(search_text), index, html_escape(e["test"]), html_escape(e.get("name")),
+                label, html_escape(e.get("status")), html_escape(e.get("distance")),
+                html_escape(e.get("grid_location")), html_escape(e.get("item1_id")),
+                html_escape(e.get("item2_id")), point_text, image))
+    out.append(u"</table></details>")
+    return u"".join(out)
+
+
+def build_results_html(reports):
+    stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    all_entries = []
+    for report in reports:
+        all_entries.extend(report["items"])
+
+    out = [u'<!DOCTYPE html><html><head><meta charset="utf-8">',
+           u'<title>Clash Results {0}</title><style>{1}</style></head><body>'.format(stamp, EXPORT_CSS),
+           u'<h1>Clash Results</h1>',
+           u'<div class="meta">{0} report(s) &middot; exported {1} &middot; Clash Navigator</div>'.format(
+               len(reports), stamp)]
+    if len(reports) > 1:
+        out.append(cards_html(tally(all_entries)))
+    out.append(u'<div class="controls"><b>Show:</b>'
+               u'<button class="on" data-filter="all">All</button>'
+               u'<button data-filter="open">Open</button>'
+               u'<button data-filter="solved">Solved</button>'
+               u'<button data-filter="approved">Approved</button>'
+               u'<input id="search" type="text" placeholder="Search test, clash, element id, grid...">'
+               u'</div>')
+    for report in reports:
+        out.append(report_section_html(report))
+    out.append(u'<div class="footer">Results reflect the Solved / Approved ticks at export time. '
+               u'Filter, then print (Ctrl+P) to print only what is shown.</div>')
+    out.append(u"<script>{0}</script></body></html>".format(EXPORT_JS))
+    return u"".join(out)
+
+
+def write_text_utf8(path, text):
+    f = open(path, "wb")
+    try:
+        f.write(text.encode("utf-8"))
+    finally:
+        f.close()
+
+
 def run():
     # Pressing the button while the window is already open should bring it
     # forward, not open a second one against the same model.
@@ -1337,9 +1782,14 @@ def run():
         logger.debug("Could not set Revit as the owner window.")
 
     load_button = window.FindName("LoadButton")
+    export_button = window.FindName("ExportButton")
+    report_tabs = window.FindName("ReportTabs")
     report_label = window.FindName("ReportLabel")
     clash_list = window.FindName("ClashList")
-    filter_box = window.FindName("FilterBox")
+    sum_total = window.FindName("SumTotal")
+    sum_solved = window.FindName("SumSolved")
+    sum_approved = window.FindName("SumApproved")
+    sum_remaining = window.FindName("SumRemaining")
     clash_image = window.FindName("ClashImage")
     item1_label = window.FindName("Item1Label")
     item2_label = window.FindName("Item2Label")
@@ -1356,16 +1806,31 @@ def run():
         button.ToolTip = "Select a clash first."
 
     # mutable containers stand in for closures over primitives (IronPython 2.7 has no nonlocal)
-    flat_items = [[]]
-    visible_items = [[]]
+    #
+    # Every open report is one dict, shown as one tab:
+    #   path, name, tests, items (all clashes), state ({flag: set of clash keys}),
+    #   remembered (last clash selected in it), tab / tab_text (its tab chip).
+    # Switching tabs only swaps which report the shared list, summary and
+    # detail panel are showing; each report keeps its own selection.
+    reports = [[]]
+    active = [None]
     selected = [None]
     busy = [False]
-    report_path = [None]
-    solved_keys = [set()]
 
     brushes = BrushConverter()
     TEXT_BRUSH = brushes.ConvertFromString("#F4F4F4")
-    SOLVED_BRUSH = brushes.ConvertFromString("#6F6F6F")
+    MUTED_BRUSH = brushes.ConvertFromString("#A8A8A8")
+    # One colour language everywhere: solved green, approved blue, remaining red.
+    # Row text uses softer shades of the same colours so a long list stays readable.
+    SOLVED_BRUSH = brushes.ConvertFromString("#6FBF85")
+    APPROVED_BRUSH = brushes.ConvertFromString("#82A8E6")
+    TAB_ACTIVE_BG = brushes.ConvertFromString("#393939")
+    TAB_IDLE_BG = brushes.ConvertFromString("#262626")
+    TAB_EMPTY_LINE = brushes.ConvertFromString("#525252")
+    colors = ColorConverter()
+    LINE_SOLVED = colors.ConvertFromString("#42BE65")
+    LINE_APPROVED = colors.ConvertFromString("#4589FF")
+    LINE_REMAINING = colors.ConvertFromString("#FA4D56")
 
     def set_status(text):
         status_label.Text = text
@@ -1378,7 +1843,8 @@ def run():
         window.Dispatcher.Invoke(DispatcherPriority.Background, Action(lambda: None))
 
     FOCUS_TIP = ("Clear any temporary isolation, then section-box, zoom to and "
-                 "select both clashing elements.")
+                 "select both clashing elements -- or their main element when one is "
+                 "only a part (curtain panel -> curtain wall, landing -> stair).")
     ISOLATE_TIP = ("Same as Focus, plus temporarily isolate both elements. "
                    "A linked element can only be isolated through its whole link.")
 
@@ -1390,48 +1856,70 @@ def run():
         focus_button.ToolTip = FOCUS_TIP if enabled else reason
         isolate_button.ToolTip = ISOLATE_TIP if enabled else reason
 
-    def solved_count():
-        return len([e for e in flat_items[0] if e["solved"]])
+    def clear_details(reason="Select a clash first."):
+        selected[0] = None
+        item1_label.Text = ""
+        item2_label.Text = ""
+        point_label.Text = ""
+        clash_image.Source = None
+        set_focus_enabled(False, reason)
+
+    # ------------------------------------------------------------ ticks
+    def state_summary(report):
+        c = tally(report["items"])
+        return u"{0}: {1} solved, {2} approved, {3} open, of {4} clashes.".format(
+            report["name"], c["solved"], c["approved"], c["open"], c["total"])
 
     def style_row(entry):
-        """Solved clashes stay in the list, just greyed out."""
-        entry["row_text"].Foreground = SOLVED_BRUSH if entry["solved"] else TEXT_BRUSH
+        """Ticked clashes stay in the list: solved ones green, approved ones
+        (not solved) blue."""
+        if entry["solved"]:
+            entry["row_text"].Foreground = SOLVED_BRUSH
+        elif entry["approved"]:
+            entry["row_text"].Foreground = APPROVED_BRUSH
+        else:
+            entry["row_text"].Foreground = TEXT_BRUSH
 
-    def make_row_handler(entry):
-        # one handler per row, bound to its entry -- a closure over the loop
-        # variable would leave every checkbox pointing at the last clash
-        def on_solved_click(sender, args):
-            entry["solved"] = bool(sender.IsChecked)
+    def make_row_handler(report, entry, flag):
+        # one handler per row and column, bound to its report, entry and flag --
+        # a closure over the loop variables would leave every checkbox pointing
+        # at the last clash
+        def on_state_click(sender, args):
+            entry[flag] = bool(sender.IsChecked)
             key = clash_key(entry)
-            if entry["solved"]:
-                solved_keys[0].add(key)
+            if entry[flag]:
+                report["state"][flag].add(key)
             else:
-                solved_keys[0].discard(key)
+                report["state"][flag].discard(key)
             style_row(entry)
 
-            saved_to = save_solved_keys(report_path[0], solved_keys[0])
-            if saved_to is None:
-                set_status(u"Couldn't save the solved state -- neither the report folder "
-                           u"nor %APPDATA% is writable.")
+            update_summary(report)
+            update_tab_progress(report)
+            if save_clash_state(report["path"], report["state"]) is None:
+                set_status(u"Couldn't save the solved/approved state -- neither the report "
+                           u"folder nor %APPDATA% is writable.")
             else:
-                set_status(u"{0} of {1} clashes solved.".format(solved_count(), len(flat_items[0])))
-        return on_solved_click
+                set_status(state_summary(report))
+        return on_state_click
 
-    def build_row(entry):
-        """Built once per clash and reused: the filter only re-adds the same
-        rows, so a checkbox never loses its state to a keystroke. DockPanel
-        rather than a Grid, so no GridLength is needed from Python."""
-        check = CheckBox()
-        check.IsChecked = entry["solved"]
-        check.HorizontalAlignment = HorizontalAlignment.Center
-        check.VerticalAlignment = VerticalAlignment.Center
-        check.ToolTip = "Tick when this clash is solved."
-        check.Click += RoutedEventHandler(safe_handler(make_row_handler(entry)))
+    def build_row(report, entry):
+        """Built once per clash and reused: the tabs only re-add the same rows,
+        so a checkbox never loses its state to a tab switch. DockPanel rather than a Grid, so no GridLength is needed
+        from Python."""
+        row = DockPanel()
+        for flag, _header, width, tip in STATE_COLUMNS:
+            check = CheckBox()
+            check.IsChecked = entry[flag]
+            check.HorizontalAlignment = HorizontalAlignment.Center
+            check.VerticalAlignment = VerticalAlignment.Center
+            check.ToolTip = tip
+            check.Click += RoutedEventHandler(safe_handler(make_row_handler(report, entry, flag)))
 
-        check_cell = Border()
-        check_cell.Width = 52
-        check_cell.Child = check
-        DockPanel.SetDock(check_cell, Dock.Left)
+            check_cell = Border()
+            check_cell.Width = width
+            check_cell.Child = check
+            DockPanel.SetDock(check_cell, Dock.Left)
+            row.Children.Add(check_cell)
 
         text = TextBlock()
         text.Text = entry["label"]
@@ -1440,27 +1928,188 @@ def run():
         text.TextTrimming = TextTrimming.CharacterEllipsis
         text.ToolTip = entry["label"]
 
-        row = DockPanel()
-        row.Children.Add(check_cell)
         row.Children.Add(text)
 
         entry["row"] = row
         entry["row_text"] = text
         style_row(entry)
 
+    # ------------------------------------------------------------ list
     def refresh_list():
         clash_list.Items.Clear()
-        for entry in visible_items[0]:
+        report = active[0]
+        if report is None:
+            return
+        for entry in report["items"]:
             clash_list.Items.Add(entry["row"])
 
-    def on_filter_changed(sender, args):
-        query = filter_box.Text.strip().lower()
-        if not query:
-            visible_items[0] = flat_items[0]
-        else:
-            visible_items[0] = [e for e in flat_items[0] if query in e["label"].lower()]
+    def update_summary(report):
+        """The bar above the list. Remaining = neither solved nor approved,
+        the same definition the export uses for Open."""
+        if report is None:
+            for label in (sum_total, sum_solved, sum_approved, sum_remaining):
+                label.Text = u"-"
+            return
+        c = tally(report["items"])
+        sum_total.Text = unicode(c["total"])
+        sum_solved.Text = u"{0}  ({1})".format(c["solved"], percent(c["solved"], c["total"]))
+        sum_approved.Text = u"{0}  ({1})".format(c["approved"], percent(c["approved"], c["total"]))
+        sum_remaining.Text = u"{0}  ({1})".format(c["open"], percent(c["open"], c["total"]))
+
+    # ------------------------------------------------------------ tabs
+    def progress_brush(counts):
+        """The line under a tab as a progress bar: solved | approved | remaining,
+        left to right, each as wide as its share of the report.
+
+        A horizontal gradient with two stops at every boundary offset gives
+        hard edges instead of a blend -- a segmented bar without building
+        Grid columns (GridLength isn't constructible from IronPython). A clash
+        both solved and approved counts once, as solved, so the segments add
+        up to the whole tab."""
+        total = counts["total"]
+        if not total:
+            return TAB_EMPTY_LINE
+        solved_end = float(counts["solved"]) / total
+        approved_end = solved_end + float(total - counts["solved"] - counts["open"]) / total
+
+        brush = LinearGradientBrush()
+        brush.StartPoint = Point(0, 0)
+        brush.EndPoint = Point(1, 0)
+        for color, start, end in ((LINE_SOLVED, 0.0, solved_end),
+                                  (LINE_APPROVED, solved_end, approved_end),
+                                  (LINE_REMAINING, approved_end, 1.0)):
+            if end > start:
+                brush.GradientStops.Add(GradientStop(color, start))
+                brush.GradientStops.Add(GradientStop(color, end))
+        return brush
+
+    def update_tab_progress(report):
+        c = tally(report["items"])
+        report["tab"].BorderBrush = progress_brush(c)
+        report["tab"].ToolTip = u"{0}\n{1} solved, {2} approved, {3} remaining, of {4}".format(
+            report["path"], c["solved"], c["approved"], c["open"], c["total"])
+
+    def style_tabs():
+        """Active tab: lighter background and bright text. The progress line
+        shows on every tab, so the state of all reports is visible at once."""
+        for report in reports[0]:
+            is_active = report is active[0]
+            report["tab"].Background = TAB_ACTIVE_BG if is_active else TAB_IDLE_BG
+            report["tab_text"].Foreground = TEXT_BRUSH if is_active else MUTED_BRUSH
+
+    def update_tab_text(report):
+        report["tab_text"].Text = u"{0}  ({1})".format(report["name"], len(report["items"]))
+        update_tab_progress(report)
+
+    def activate(report):
+        """Show a report in the shared list / summary / details. None empties them."""
+        active[0] = report
+        clear_details()
+        update_summary(report)
+        if report is None:
+            report_label.Text = "No report loaded"
+            refresh_list()
+            style_tabs()
+            set_status("Ready.")
+            return
+
         refresh_list()
-        set_status(u"{0} of {1} clashes shown.".format(len(visible_items[0]), len(flat_items[0])))
+        report_label.Text = report["path"]
+        style_tabs()
+
+        # bring back the clash that was selected when this tab was left
+        remembered = report.get("remembered")
+        if remembered is not None and remembered in report["items"]:
+            clash_list.SelectedItem = remembered["row"]
+            clash_list.ScrollIntoView(remembered["row"])
+        set_status(state_summary(report))
+
+    def close_report(report):
+        index = reports[0].index(report)
+        reports[0].remove(report)
+        report_tabs.Children.Remove(report["tab"])
+        if report is active[0]:
+            # the tab to the right takes its place, or the one before it
+            remaining = reports[0]
+            activate(remaining[min(index, len(remaining) - 1)] if remaining else None)
+        else:
+            style_tabs()
+        if active[0] is not None:
+            set_status(u"Closed {0}. {1}".format(report["name"], state_summary(active[0])))
+        else:
+            set_status(u"Closed {0}.".format(report["name"]))
+
+    def build_tab(report):
+        text = TextBlock()
+        text.VerticalAlignment = VerticalAlignment.Center
+        text.MaxWidth = 240
+        text.TextTrimming = TextTrimming.CharacterEllipsis
+
+        close = Button()
+        close.Style = window.FindResource("TabCloseButton")
+        close.Click += RoutedEventHandler(safe_handler(lambda s, a: close_report(report)))
+
+        content = DockPanel()
+        DockPanel.SetDock(close, Dock.Right)
+        content.Children.Add(close)
+        content.Children.Add(text)
+
+        tab = Border()
+        tab.Child = content
+        tab.Padding = Thickness(12, 6, 6, 6)
+        tab.Margin = Thickness(0, 0, 4, 0)
+        tab.CornerRadius = CornerRadius(4, 4, 0, 0)
+        tab.BorderThickness = Thickness(0, 0, 0, 3)
+        tab.Cursor = Cursors.Hand
+        # The close button handles its own mouse-up, so clicking it never
+        # also activates the tab it is closing.
+        tab.MouseLeftButtonUp += MouseButtonEventHandler(
+            safe_handler(lambda s, a: activate(report) if report is not active[0] else None))
+
+        report["tab"] = tab
+        report["tab_text"] = text
+        update_tab_text(report)
+        report_tabs.Children.Add(tab)
+
+    # ------------------------------------------------------------ loading
+    def find_open_report(path):
+        wanted = os.path.normcase(os.path.abspath(path))
+        for report in reports[0]:
+            if os.path.normcase(os.path.abspath(report["path"])) == wanted:
+                return report
+        return None
+
+    def load_one(html_path, position, total):
+        """Parses one report into a report dict (rows built, ticks applied).
+        Returns None if it holds no clashes."""
+        prefix = u"[{0}/{1}] ".format(position, total) if total > 1 else u""
+        name = os.path.basename(html_path)
+        set_status(u"{0}Reading {1}...".format(prefix, name))
+        pump()
+        html_text = read_report_text(html_path)
+
+        def report_progress(test_name, count):
+            set_status(u"{0}Parsing {1}: {2} -- {3} clashes so far...".format(
+                prefix, name, test_name, count))
+            pump()
+
+        tests = parse_report(html_text, progress=report_progress)
+        items = build_flat_list(tests)
+        if not items:
+            return None
+
+        report = {"path": html_path, "name": name, "tests": tests, "items": items,
+                  "remembered": None}
+        report_dir = os.path.dirname(html_path)
+        state, _source = load_clash_state(html_path)
+        report["state"] = state
+        for entry in items:
+            entry["image_abs_path"] = resolve_image_path(report_dir, entry.get("image_path"))
+            key = clash_key(entry)
+            for flag in STATE_FLAGS:
+                entry[flag] = key in state[flag]
+            build_row(report, entry)
+        return report
 
     def on_load_click(sender, args):
         # pump() lets input through, so without this guard a second click during
@@ -1468,71 +2117,131 @@ def run():
         if busy[0]:
             return
 
-        html_path = forms.pick_file(file_ext="html", title="Select Navisworks Clash Report (HTML)")
-        if not html_path:
+        picked = forms.pick_file(file_ext="html", multi_file=True,
+                                 title="Select Navisworks Clash Reports (HTML)")
+        if not picked:
             return
+        if isinstance(picked, basestring):
+            picked = [picked]
 
+        loaded, reloaded, empty, failed = [], [], [], []
         busy[0] = True
         load_button.IsEnabled = False
+        export_button.IsEnabled = False
         try:
-            set_status(u"Reading {0}...".format(os.path.basename(html_path)))
-            pump()
-            html_text = read_report_text(html_path)
+            for position, html_path in enumerate(picked, 1):
+                try:
+                    report = load_one(html_path, position, len(picked))
+                except Exception as ex:
+                    logger.warning("Failed to load {0}: {1}".format(html_path, ex))
+                    failed.append(os.path.basename(html_path))
+                    continue
+                if report is None:
+                    empty.append(os.path.basename(html_path))
+                    continue
 
-            def report_progress(test_name, count):
-                set_status(u"Parsing {0} -- {1} clashes so far...".format(test_name, count))
-                pump()
-
-            tests = parse_report(html_text, progress=report_progress)
+                existing = find_open_report(html_path)
+                if existing is not None:
+                    # Loading an open report again re-reads it in place -- the way
+                    # to pick up a re-export. Its tab stays put.
+                    existing["tests"] = report["tests"]
+                    existing["items"] = report["items"]
+                    existing["state"] = report["state"]
+                    existing["remembered"] = None
+                    for entry in existing["items"]:
+                        build_row(existing, entry)
+                    update_tab_text(existing)
+                    reloaded.append(existing)
+                else:
+                    reports[0].append(report)
+                    build_tab(report)
+                    loaded.append(report)
         finally:
             busy[0] = False
             load_button.IsEnabled = True
+            export_button.IsEnabled = True
 
-        items = build_flat_list(tests)
-        if not items:
-            set_status("Ready.")
-            forms.alert("No clashes were found in this report.")
+        landed = loaded + reloaded
+        if landed:
+            activate(landed[-1])
+
+        notes = []
+        if loaded:
+            notes.append(u"{0} report(s) opened".format(len(loaded)))
+        if reloaded:
+            notes.append(u"{0} reloaded".format(len(reloaded)))
+        if landed:
+            notes.append(u"{0} clashes in total".format(sum(len(r["items"]) for r in landed)))
+        if notes:
+            set_status(u", ".join(notes) + u".")
+
+        problems = []
+        if empty:
+            problems.append(u"No clashes found in:\n  " + u"\n  ".join(empty))
+        if failed:
+            problems.append(u"Could not be read:\n  " + u"\n  ".join(failed))
+        if problems:
+            forms.alert(u"\n\n".join(problems))
+
+    # ------------------------------------------------------------ export
+    def on_export_click(sender, args):
+        if busy[0]:
+            return
+        if not reports[0]:
+            forms.alert("Load at least one clash report first.")
             return
 
-        report_dir = os.path.dirname(html_path)
-        keys, _source = load_solved_keys(html_path)
-        for entry in items:
-            entry["image_abs_path"] = resolve_image_path(report_dir, entry.get("image_path"))
-            entry["solved"] = clash_key(entry) in keys
-            build_row(entry)
+        if len(reports[0]) == 1:
+            chosen = list(reports[0])
+        else:
+            # Same file name in two folders is common (one per discipline), so
+            # the folder goes in the option text to keep them apart.
+            options = []
+            by_option = {}
+            for report in reports[0]:
+                option = u"{0}   ({1})".format(report["name"], os.path.dirname(report["path"]))
+                options.append(option)
+                by_option[option] = report
+            picked = forms.SelectFromList.show(
+                options, title="Export results for which reports?",
+                multiselect=True, button_name="Export", width=700, height=420)
+            if not picked:
+                return
+            chosen = [r for r in reports[0] if any(by_option[p] is r for p in picked)]
 
-        report_path[0] = html_path
-        solved_keys[0] = keys
-        flat_items[0] = items
-        visible_items[0] = items
-        filter_box.Text = ""
-        item1_label.Text = ""
-        item2_label.Text = ""
-        point_label.Text = ""
-        clash_image.Source = None
-        selected[0] = None
-        set_focus_enabled(False, "Select a clash first.")
-        report_label.Text = os.path.basename(html_path)
-        refresh_list()
+        if len(chosen) == 1:
+            default_name = os.path.splitext(chosen[0]["name"])[0] + u" - Results"
+        else:
+            default_name = u"Clash Results {0}".format(datetime.date.today().isoformat())
 
-        with_points = len([e for e in items if e["clash_point"] is not None])
-        set_status(u"Loaded {0} clashes from {1} test(s); {2} have clash points; "
-                   u"{3} already marked solved.".format(
-                       len(items), len(tests), with_points, solved_count()))
+        # no title= here: older pyRevit builds' save_file doesn't accept one
+        out_path = forms.save_file(file_ext="html", default_name=default_name)
+        if not out_path:
+            return
 
+        set_status(u"Writing results for {0} report(s)...".format(len(chosen)))
+        pump()
+        write_text_utf8(out_path, build_results_html(chosen))
+        set_status(u"Exported {0} report(s) to {1}".format(len(chosen), out_path))
+        try:
+            Process.Start(out_path)
+        except Exception:
+            logger.debug("Could not open the exported file automatically.")
+
+    # ------------------------------------------------------------ selection
     def on_selection_changed(sender, args):
+        report = active[0]
         idx = clash_list.SelectedIndex
-        if idx < 0 or idx >= len(visible_items[0]):
-            selected[0] = None
-            item1_label.Text = ""
-            item2_label.Text = ""
-            point_label.Text = ""
-            clash_image.Source = None
-            set_focus_enabled(False, "Select a clash first.")
+        if report is None or idx < 0 or idx >= len(report["items"]):
+            # Deliberately leaves report["remembered"] alone: the list empties
+            # on every tab switch, and that must not
+            # forget where the user was.
+            clear_details()
             return
 
-        clash = visible_items[0][idx]
+        clash = report["items"][idx]
         selected[0] = clash
+        report["remembered"] = clash
         clash_image.Source = load_bitmap(clash.get("image_abs_path"))
 
         point = clash["clash_point"]
@@ -1560,9 +2269,9 @@ def run():
                 return
             (el1, link1), (el2, link2) = resolve_clash_pair(doc, clash)
             item1_label.Text = u"Item 1 (ID {0}): {1}".format(
-                clash["item1_id"], element_label(el1, link1))
+                clash["item1_id"], element_label_with_main(el1, link1))
             item2_label.Text = u"Item 2 (ID {0}): {1}".format(
-                clash["item2_id"], element_label(el2, link2))
+                clash["item2_id"], element_label_with_main(el2, link2))
 
             # Isolating one of two elements is worse than not isolating at all --
             # it looks like it worked while hiding half of what you needed to see.
@@ -1636,10 +2345,10 @@ def run():
             logger.debug("ExternalEvent was already disposed.")
 
     load_button.Click += RoutedEventHandler(safe_handler(on_load_click))
+    export_button.Click += RoutedEventHandler(safe_handler(on_export_click))
     focus_button.Click += RoutedEventHandler(safe_handler(on_focus_click))
     isolate_button.Click += RoutedEventHandler(safe_handler(on_isolate_click))
     clash_box_button.Click += RoutedEventHandler(safe_handler(on_clash_box_click))
-    filter_box.TextChanged += TextChangedEventHandler(safe_handler(on_filter_changed))
     clash_list.SelectionChanged += SelectionChangedEventHandler(safe_handler(on_selection_changed))
     window.Closed += EventHandler(on_closed)
 
