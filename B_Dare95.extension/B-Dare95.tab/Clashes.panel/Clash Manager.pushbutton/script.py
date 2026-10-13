@@ -2,8 +2,9 @@
 """
 Clash Navigator (single-file)
 Loads a Navisworks HTML clash report, lets the user browse clashes, and
-either isolates the two clashing elements in view or marks/frames the
-clash point in the model.
+either focuses the two clashing elements (section box, zoom, selection --
+linked elements included; Isolate adds a temporary isolate on top) or
+marks/frames the clash point in the model.
 """
 
 __persistentengine__ = True
@@ -355,6 +356,8 @@ def parse_report(html_text, progress=None):
 # ============================================================== main tool
 import os
 import math
+import json
+import hashlib
 import clr
 clr.AddReference("PresentationFramework")
 clr.AddReference("PresentationCore")
@@ -365,8 +368,12 @@ from System import Action, EventHandler
 from System import Uri, UriKind
 from System.Collections.Generic import List
 from System.Diagnostics import Process
-from System.Windows import RoutedEventHandler
-from System.Windows.Controls import SelectionChangedEventHandler, TextChangedEventHandler
+from System.Windows import RoutedEventHandler, Thickness, VerticalAlignment, HorizontalAlignment, TextTrimming
+from System.Windows.Controls import (
+    SelectionChangedEventHandler, TextChangedEventHandler,
+    CheckBox, TextBlock, DockPanel, Border, Dock,
+)
+from System.Windows.Media import BrushConverter
 from System.Windows.Interop import WindowInteropHelper
 from System.Windows.Markup import XamlReader
 from System.Windows.Media.Imaging import BitmapImage, BitmapCacheOption
@@ -374,7 +381,8 @@ from System.Windows.Threading import DispatcherPriority
 
 from Autodesk.Revit.DB import (
     Transaction, BoundingBoxXYZ, XYZ, ElementId, FilteredElementCollector,
-    RevitLinkInstance, UnitUtils, UnitTypeId, View3D,
+    RevitLinkInstance, UnitUtils, UnitTypeId, View3D, Reference, TemporaryViewMode,
+    ElementType, CategoryType,
 )
 from Autodesk.Revit.UI import IExternalEventHandler, ExternalEvent
 
@@ -386,6 +394,11 @@ logger = script.get_logger()
 REPORT_LENGTH_UNIT = UnitTypeId.Meters       # unit the report's coordinates are in
 BOX_SIZE_UNIT = UnitTypeId.Meters            # the "Clash Box Size (m)" field is always meters
 DEFAULT_BOX_SIZE_M = 3.0
+
+# Clearance added on every side of the two clashing elements when Focus fits
+# its section box and zoom around them. Without it a thin element (a pipe, a
+# duct) gets a section box that slices its own surfaces off.
+FOCUS_BOX_PADDING_M = 0.5
 
 # How the report's clash-point coordinates map onto Revit internal coordinates.
 #
@@ -513,31 +526,158 @@ def get_link_instances(doc):
     return FilteredElementCollector(doc).OfClass(RevitLinkInstance).ToElements()
 
 
-def resolve_element(doc, element_id):
-    """
-    Returns (element, doc_it_lives_in, link_instance_or_None) or (None, None, None).
-    Checks host doc first, then every loaded link.
+def is_model_element(element):
+    """A placed, physical element -- the only kind Navisworks can report as
+    clashing. Types, link instances, views and other non-model elements are
+    exactly what a stray id-number collision tends to land on."""
+    if element is None or isinstance(element, (ElementType, RevitLinkInstance)):
+        return False
+    try:
+        category = element.Category
+        return category is not None and category.CategoryType == CategoryType.Model
+    except Exception:
+        return False
 
-    Note: ids are NOT interchangeable across documents -- the same integer can be a
-    valid element in the host and in a link. Host wins, which matches how the
-    Navisworks report is normally read back.
-    """
+
+def element_candidates(doc, element_id):
+    """Every (element, link_instance_or_None, host_extent) this id number could
+    mean: the host, then every loaded link instance, model elements only.
+
+    Ids are NOT unique across documents. Each model numbers its own elements,
+    so the id of a linked duct routinely also exists in the host as something
+    else. Taking the first hit ("host wins") turns a host-vs-link clash into a
+    host-vs-host one and isolates the link out of sight. A link loaded more
+    than once gives one candidate per instance; proximity picks the right one."""
     if element_id is None or doc is None:
-        return None, None, None
+        return []
 
     eid = ElementId(element_id)
-    el = doc.GetElement(eid)
-    if el is not None:
-        return el, doc, None
-
+    sources = [(doc, None)]
     for link_inst in get_link_instances(doc):
         link_doc = link_inst.GetLinkDocument()
-        if link_doc is None:
+        if link_doc is not None:
+            sources.append((link_doc, link_inst))
+
+    found = []
+    for source_doc, link_inst in sources:
+        el = source_doc.GetElement(eid)
+        if not is_model_element(el):
             continue
-        link_el = link_doc.GetElement(eid)
-        if link_el is not None:
-            return link_el, link_doc, link_inst
-    return None, None, None
+        extent = host_extent([(el, link_inst)])
+        if extent is not None:
+            found.append((el, link_inst, extent))
+    return found
+
+
+def extent_gap(a, b):
+    """Shortest distance between two (low, high) boxes, zero if they overlap."""
+    (alo, ahi), (blo, bhi) = a, b
+    dx = max(alo.X - bhi.X, 0.0, blo.X - ahi.X)
+    dy = max(alo.Y - bhi.Y, 0.0, blo.Y - ahi.Y)
+    dz = max(alo.Z - bhi.Z, 0.0, blo.Z - ahi.Z)
+    return math.sqrt(dx * dx + dy * dy + dz * dz)
+
+
+def same_element(el_a, link_a, el_b, link_b):
+    if id_value(el_a.Id) != id_value(el_b.Id):
+        return False
+    if link_a is None or link_b is None:
+        return link_a is None and link_b is None
+    return id_value(link_a.Id) == id_value(link_b.Id)
+
+
+def resolve_clash_pair(doc, clash):
+    """Returns ((el1, link1), (el2, link2)); either element may be None.
+
+    When an id matches in several models, the pair that is physically closest
+    wins -- the two items of a clash are, by definition, touching. Ties go to
+    the pair with fewer linked elements, so a genuine host-vs-host clash is
+    never pulled into a link. A side with no other side to measure against
+    falls back to its first candidate (host first)."""
+    cands1 = element_candidates(doc, clash["item1_id"])
+    cands2 = element_candidates(doc, clash["item2_id"])
+
+    best = None
+    for el1, link1, ext1 in cands1:
+        for el2, link2, ext2 in cands2:
+            if same_element(el1, link1, el2, link2):
+                continue
+            key = (extent_gap(ext1, ext2), (link1 is not None) + (link2 is not None))
+            if best is None or key < best[0]:
+                best = (key, (el1, link1), (el2, link2))
+    if best is not None:
+        return best[1], best[2]
+
+    side1 = (cands1[0][0], cands1[0][1]) if cands1 else (None, None)
+    side2 = (cands2[0][0], cands2[0][1]) if cands2 else (None, None)
+    return side1, side2
+
+
+def id_value(element_id):
+    """ElementId -> number, across Revit 2024-2027 (.Value from 2025 on)."""
+    try:
+        return element_id.Value
+    except AttributeError:
+        return element_id.IntegerValue
+
+
+def host_corners(element, link_instance):
+    """All 8 corners of an element's model bounding box, in HOST coordinates.
+
+    Transforming only Min/Max of a linked element's box is wrong as soon as the
+    link is rotated -- the two points swap or cross over and the result is a
+    box that misses the element. Transforming all 8 and re-taking min/max
+    gives a correct (axis-aligned, slightly loose) host box."""
+    try:
+        bbox = element.get_BoundingBox(None)
+    except Exception:
+        bbox = None
+    if bbox is None:
+        return []
+
+    lo, hi = bbox.Min, bbox.Max
+    corners = [XYZ(x, y, z)
+               for x in (lo.X, hi.X) for y in (lo.Y, hi.Y) for z in (lo.Z, hi.Z)]
+
+    if bbox.Transform is not None:
+        corners = [bbox.Transform.OfPoint(c) for c in corners]
+    if link_instance is not None:
+        link_transform = link_instance.GetTotalTransform()
+        corners = [link_transform.OfPoint(c) for c in corners]
+    return corners
+
+
+def host_extent(resolved, padding_ft=0.0):
+    """(low, high) host-coordinate box around a list of (element, link_or_None)
+    pairs, grown by padding_ft on every side, or None if none have a box."""
+    corners = []
+    for element, link in resolved:
+        if element is not None:
+            corners.extend(host_corners(element, link))
+    if not corners:
+        return None
+    low = XYZ(min(c.X for c in corners) - padding_ft,
+              min(c.Y for c in corners) - padding_ft,
+              min(c.Z for c in corners) - padding_ft)
+    high = XYZ(max(c.X for c in corners) + padding_ft,
+               max(c.Y for c in corners) + padding_ft,
+               max(c.Z for c in corners) + padding_ft)
+    return (low, high)
+
+
+def element_reference(element, link_instance):
+    """A selectable Reference to a host element, or to a linked element through
+    the link instance that places it.
+
+    Selection.SetElementIds only understands host ids -- handing it a linked
+    element's id selects whatever host element happens to share that number,
+    or nothing. Selection.SetReferences (Revit 2023+) with a link reference is
+    the API equivalent of Tab-picking into a link, and is the only route that
+    selects and highlights the linked element itself."""
+    ref = Reference(element)
+    if link_instance is not None:
+        ref = ref.CreateLinkReference(link_instance)
+    return ref
 
 
 def element_label(element, link_instance):
@@ -622,31 +762,9 @@ def clash_element_extent(doc, clash):
 
     This is the yardstick the coordinate modes are measured against: whatever
     coordinate system the report used, the clash point has to sit on top of the
-    elements the same row names. Only the box corners are transformed for link
-    elements, so a rotated link gives a slightly loose box -- irrelevant here,
-    where the wrong answers are out by kilometres."""
-    corners = []
-    for element_id in (clash["item1_id"], clash["item2_id"]):
-        element, _, link = resolve_element(doc, element_id)
-        if element is None:
-            continue
-        try:
-            bbox = element.get_BoundingBox(None)
-        except Exception:
-            bbox = None
-        if bbox is None:
-            continue
-        pair = [bbox.Min, bbox.Max]
-        if link is not None:
-            link_transform = link.GetTotalTransform()
-            pair = [link_transform.OfPoint(pair[0]), link_transform.OfPoint(pair[1])]
-        corners.extend(pair)
-
-    if not corners:
-        return None
-    low = XYZ(min(c.X for c in corners), min(c.Y for c in corners), min(c.Z for c in corners))
-    high = XYZ(max(c.X for c in corners), max(c.Y for c in corners), max(c.Z for c in corners))
-    return (low, high)
+    elements the same row names. A rotated link gives a slightly loose box --
+    irrelevant here, where the wrong answers are out by kilometres."""
+    return host_extent(list(resolve_clash_pair(doc, clash)))
 
 
 def distance_to_extent(point, extent):
@@ -777,43 +895,144 @@ def point_is_reachable(point, mode):
 # inside ClashEventHandler.Execute(), via queue() in the UI section below.
 # Each returns True only if it actually completed.
 
-def do_focus(clash):
+def select_clash_elements(uidoc, resolved):
+    """Selects (and so highlights) both clashing elements, linked ones
+    included. Returns True if the linked elements made it into the selection."""
+    refs = List[Reference]()
+    for element, link in resolved:
+        refs.Add(element_reference(element, link))
+    try:
+        uidoc.Selection.SetReferences(refs)
+        return True
+    except Exception as ex:
+        # Should not happen on 2024-2027, but a failed selection is no reason
+        # to throw away the section box that already committed.
+        logger.debug("SetReferences failed ({0}); selecting host elements only.".format(ex))
+    host_ids = List[ElementId]([el.Id for el, link in resolved if link is None])
+    uidoc.Selection.SetElementIds(host_ids)
+    return False
+
+
+def resolve_for_view(clash):
+    """Shared front half of Focus and Isolate: the active doc, a model view,
+    and the clash's resolved (element, link) pairs. None after alerting."""
     doc = require_doc()
     if doc is None:
-        return False
+        return None
 
-    el1, doc1, link1 = resolve_element(doc, clash["item1_id"])
-    el2, doc2, link2 = resolve_element(doc, clash["item2_id"])
-
-    ids = []
-    for el, link in ((el1, link1), (el2, link2)):
-        if el is None:
-            continue
-        # elements inside a link can't be isolated individually -- isolate the link instance
-        ids.append(link.Id if link is not None else el.Id)
-
-    if not ids:
+    resolved = [(el, link) for el, link in resolve_clash_pair(doc, clash) if el is not None]
+    if not resolved:
         forms.alert("Neither Item 1 nor Item 2 could be resolved in the host model or any loaded link.")
-        return False
+        return None
 
     view = doc.ActiveView
+    # CanUseTemporaryVisibilityModes doubles as a "this is a model view" test:
+    # sheets, schedules and legends all return False.
     if view is None or not view.CanUseTemporaryVisibilityModes():
-        forms.alert("The active view doesn't support temporary isolate. Switch to a plan, section or 3D view.")
-        return False
+        forms.alert("The active view can't show model elements this way. "
+                    "Switch to a plan, section or 3D view.")
+        return None
+    return doc, view, resolved
 
-    t = Transaction(doc, "Clash Navigator - Focus")
-    t.Start()
-    try:
-        # IsolateElementsTemporary wants a real .NET ICollection[ElementId] -- a plain
-        # Python list doesn't satisfy that interface here, so wrap it explicitly.
-        view.IsolateElementsTemporary(List[ElementId](ids))
-        t.Commit()
-    except Exception:
-        t.RollBack()
-        raise
 
-    get_uidoc().RefreshActiveView()
-    return True
+def section_box_blocker(view, extent):
+    """Why the section box can't be set in this view, or None if it can."""
+    if extent is None:
+        return "no section box (elements have no geometry extent)"
+    if not isinstance(view, View3D):
+        return "no section box (not a 3D view)"
+    if view.IsLocked:
+        return "no section box (3D view is locked)"
+    return None
+
+
+def isolate_ids_for(resolved):
+    """Host elements isolate directly; a linked element can only be isolated
+    through its whole link instance (deduplicated -- both items are often in
+    the same link)."""
+    ids = []
+    seen = set()
+    for element, link in resolved:
+        target = link.Id if link is not None else element.Id
+        key = id_value(target)
+        if key not in seen:
+            seen.add(key)
+            ids.append(target)
+    return ids
+
+
+def apply_isolate(view, resolved):
+    """Must run inside an open transaction. Clears any existing temporary
+    hide/isolate first, so the previous clash's isolate doesn't intersect with
+    this one and hide part of it."""
+    if view.IsTemporaryHideIsolateActive():
+        view.DisableTemporaryViewMode(TemporaryViewMode.TemporaryHideIsolate)
+    # IsolateElementsTemporary wants a real .NET ICollection[ElementId] -- a plain
+    # Python list doesn't satisfy that interface here, so wrap it explicitly.
+    view.IsolateElementsTemporary(List[ElementId](isolate_ids_for(resolved)))
+
+
+def do_focus(clash, isolate=False):
+    """Section-box, select and zoom onto the two clashing elements.
+
+    Focus (isolate=False) never isolates; instead it clears any temporary
+    hide/isolate left on the view, so a previous Isolate can't keep this
+    clash's elements hidden. Isolate (isolate=True) does the same thing plus a
+    fresh temporary isolate, inside the same transaction.
+
+    Returns a one-line summary, or None if nothing was done."""
+    context = resolve_for_view(clash)
+    if context is None:
+        return None
+    doc, view, resolved = context
+
+    padding_ft = UnitUtils.ConvertToInternalUnits(FOCUS_BOX_PADDING_M, UnitTypeId.Meters)
+    extent = host_extent(resolved, padding_ft)
+    box_note = section_box_blocker(view, extent)
+
+    clear_isolate = (not isolate) and view.IsTemporaryHideIsolateActive()
+
+    if box_note is None or isolate or clear_isolate:
+        t = Transaction(doc, "Clash Navigator - Isolate" if isolate else "Clash Navigator - Focus")
+        t.Start()
+        try:
+            if isolate:
+                apply_isolate(view, resolved)
+            elif clear_isolate:
+                view.DisableTemporaryViewMode(TemporaryViewMode.TemporaryHideIsolate)
+            if box_note is None:
+                bbox = BoundingBoxXYZ()
+                bbox.Min = extent[0]
+                bbox.Max = extent[1]
+                view.SetSectionBox(bbox)
+                view.IsSectionBoxActive = True
+            t.Commit()
+        except Exception:
+            t.RollBack()
+            raise
+
+    # Selection is UI state, not a model change, so it sits outside the
+    # transaction. It survives the section box (and the isolate), which is
+    # what keeps the two elements highlighted inside the cropped view.
+    uidoc = get_uidoc()
+    links_selected = select_clash_elements(uidoc, resolved)
+    uidoc.RefreshActiveView()
+    if extent is not None:
+        zoom_to_box(uidoc, view, extent[0], extent[1])
+
+    linked_count = len([1 for _el, link in resolved if link is not None])
+    parts = []
+    if isolate:
+        parts.append("isolated")
+    elif clear_isolate:
+        parts.append("isolation cleared")
+    parts.append(box_note or "section box set")
+    if linked_count and not links_selected:
+        parts.append("host element(s) selected -- linked selection failed")
+    else:
+        parts.append("{0} element(s) selected{1}".format(
+            len(resolved), " ({0} linked)".format(linked_count) if linked_count else ""))
+    return (u"Isolate: " if isolate else u"Focus: ") + u", ".join(parts) + u"."
 
 
 def do_clash_box(clash, box_size_m):
@@ -853,12 +1072,13 @@ def do_clash_box(clash, box_size_m):
 
     uidoc = get_uidoc()
     uidoc.RefreshActiveView()
-    zoom_to_box(uidoc, view, bbox)
+    zoom_to_box(uidoc, view, bbox.Min, bbox.Max)
     return True
 
 
-def zoom_to_box(uidoc, view, bbox):
-    """Zoom the view onto the section box that was just set.
+def zoom_to_box(uidoc, view, low, high):
+    """Zoom the view onto a host-coordinate box (the section box that was
+    just set, or the padded extent of the clashing elements).
 
     ZoomAndCenterRectangle needs the open UIView for this view, which only
     exists if the view is actually on screen -- GetOpenUIViews() is how you get
@@ -878,7 +1098,7 @@ def zoom_to_box(uidoc, view, bbox):
         return
 
     try:
-        target.ZoomAndCenterRectangle(bbox.Min, bbox.Max)
+        target.ZoomAndCenterRectangle(low, high)
     except Exception as ex:
         logger.debug("ZoomAndCenterRectangle failed ({0}); falling back to ZoomToFit.".format(ex))
         try:
@@ -941,8 +1161,16 @@ XAML = u"""
                 <TextBox x:Name="FilterBox" DockPanel.Dock="Top" Margin="0,0,0,8"
                          Background="#262626" Foreground="#F4F4F4" BorderBrush="#525252"
                          Padding="6" Tag="Filter clashes..."/>
+                <Border DockPanel.Dock="Top" Background="#393939" CornerRadius="4,4,0,0" Padding="4,5">
+                    <DockPanel>
+                        <TextBlock Text="Solved" Width="52" TextAlignment="Center"
+                                   Foreground="#A8A8A8" FontWeight="SemiBold"/>
+                        <TextBlock Text="Clash" Margin="6,0,0,0"
+                                   Foreground="#A8A8A8" FontWeight="SemiBold"/>
+                    </DockPanel>
+                </Border>
                 <ListBox x:Name="ClashList" Background="#262626" Foreground="#F4F4F4"
-                         BorderThickness="0"/>
+                         BorderThickness="0" HorizontalContentAlignment="Stretch"/>
             </DockPanel>
 
             <StackPanel Grid.Column="1">
@@ -952,7 +1180,17 @@ XAML = u"""
                 <TextBlock x:Name="Item2Label" Foreground="#A8A8A8" TextWrapping="Wrap" Margin="0,0,0,6"/>
                 <TextBlock x:Name="PointLabel" Foreground="#A8A8A8" TextWrapping="Wrap" Margin="0,0,0,16"/>
 
-                <Button x:Name="FocusButton" Content="Focus / Isolate" Style="{StaticResource RoundButton}"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="FocusButton" Grid.Column="0" Content="Focus"
+                            Style="{StaticResource RoundButton}"/>
+                    <Button x:Name="IsolateButton" Grid.Column="2" Content="Isolate"
+                            Style="{StaticResource RoundButton}"/>
+                </Grid>
 
                 <TextBlock Text="Clash Box Size (m)" Foreground="#A8A8A8" Margin="0,8,0,2"/>
                 <TextBox x:Name="BoxSizeBox" Background="#262626" Foreground="#F4F4F4"
@@ -966,6 +1204,78 @@ XAML = u"""
     </Grid>
 </Window>
 """
+
+
+# ---------------------------------------------------------------- solved state
+# Which clashes the user has ticked as solved, kept per report. The file sits
+# next to the report ("<report>.html.solved.json") so it travels with it and a
+# coordinator opening the same report from the shared folder sees the same
+# ticks. If that folder is read-only, it falls back to %APPDATA%, keyed by the
+# report's full path.
+#
+# A clash is identified by test + clash name + both element ids rather than by
+# its position in the list, so a re-exported report (same file name, clashes
+# added, removed or reordered) keeps the ticks of every clash still in it.
+# Keys of clashes that are no longer in the report are kept, not pruned -- a
+# clash that comes back in a later export comes back still ticked.
+
+SOLVED_SUFFIX = ".solved.json"
+
+
+def clash_key(entry):
+    return u"{0}||{1}||{2}||{3}".format(
+        entry.get("test"), entry.get("name"), entry.get("item1_id"), entry.get("item2_id"))
+
+
+def solved_state_paths(report_path):
+    """[sidecar, appdata] -- read in that order, written to the first that works."""
+    paths = [report_path + SOLVED_SUFFIX]
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        digest = hashlib.md5(os.path.abspath(report_path).lower().encode("utf-8")).hexdigest()
+        name = u"{0}_{1}{2}".format(os.path.basename(report_path), digest[:10], SOLVED_SUFFIX)
+        paths.append(os.path.join(appdata, "pyRevit", "ClashNavigator", name))
+    return paths
+
+
+def load_solved_keys(report_path):
+    """Returns (set_of_keys, path_it_came_from_or_None)."""
+    for path in solved_state_paths(report_path):
+        if not os.path.isfile(path):
+            continue
+        try:
+            f = open(path, "rb")
+            try:
+                data = json.loads(f.read().decode("utf-8"))
+            finally:
+                f.close()
+            return set(data.get("solved", [])), path
+        except Exception as ex:
+            logger.warning("Could not read solved state from {0}: {1}".format(path, ex))
+    return set(), None
+
+
+def save_solved_keys(report_path, keys):
+    """Writes the set to the first location that accepts it. Returns that path,
+    or None if neither did."""
+    payload = json.dumps({
+        "report": os.path.basename(report_path),
+        "solved": sorted(keys),
+    }, indent=2)
+    for path in solved_state_paths(report_path):
+        try:
+            folder = os.path.dirname(path)
+            if not os.path.isdir(folder):
+                os.makedirs(folder)
+            f = open(path, "wb")
+            try:
+                f.write(payload.encode("utf-8"))
+            finally:
+                f.close()
+            return path
+        except Exception as ex:
+            logger.debug("Could not write solved state to {0}: {1}".format(path, ex))
+    return None
 
 
 def build_flat_list(tests):
@@ -1035,19 +1345,27 @@ def run():
     item2_label = window.FindName("Item2Label")
     point_label = window.FindName("PointLabel")
     focus_button = window.FindName("FocusButton")
+    isolate_button = window.FindName("IsolateButton")
     box_size_box = window.FindName("BoxSizeBox")
     clash_box_button = window.FindName("ClashBoxButton")
     status_label = window.FindName("StatusLabel")
 
     box_size_box.Text = str(DEFAULT_BOX_SIZE_M)
-    focus_button.IsEnabled = False
-    focus_button.ToolTip = "Select a clash first."
+    for button in (focus_button, isolate_button):
+        button.IsEnabled = False
+        button.ToolTip = "Select a clash first."
 
     # mutable containers stand in for closures over primitives (IronPython 2.7 has no nonlocal)
     flat_items = [[]]
     visible_items = [[]]
     selected = [None]
     busy = [False]
+    report_path = [None]
+    solved_keys = [set()]
+
+    brushes = BrushConverter()
+    TEXT_BRUSH = brushes.ConvertFromString("#F4F4F4")
+    SOLVED_BRUSH = brushes.ConvertFromString("#6F6F6F")
 
     def set_status(text):
         status_label.Text = text
@@ -1059,15 +1377,81 @@ def run():
         enough that without this the window looks hung and users kill Revit."""
         window.Dispatcher.Invoke(DispatcherPriority.Background, Action(lambda: None))
 
-    def set_focus_enabled(enabled, reason):
-        """The greyed-out Focus button needs to say why, or it just looks broken."""
+    FOCUS_TIP = ("Clear any temporary isolation, then section-box, zoom to and "
+                 "select both clashing elements.")
+    ISOLATE_TIP = ("Same as Focus, plus temporarily isolate both elements. "
+                   "A linked element can only be isolated through its whole link.")
+
+    def set_focus_enabled(enabled, reason=None):
+        """Focus and Isolate share one enabled state. Greyed out, both need to
+        say why, or they just look broken; enabled, each explains itself."""
         focus_button.IsEnabled = enabled
-        focus_button.ToolTip = reason
+        isolate_button.IsEnabled = enabled
+        focus_button.ToolTip = FOCUS_TIP if enabled else reason
+        isolate_button.ToolTip = ISOLATE_TIP if enabled else reason
+
+    def solved_count():
+        return len([e for e in flat_items[0] if e["solved"]])
+
+    def style_row(entry):
+        """Solved clashes stay in the list, just greyed out."""
+        entry["row_text"].Foreground = SOLVED_BRUSH if entry["solved"] else TEXT_BRUSH
+
+    def make_row_handler(entry):
+        # one handler per row, bound to its entry -- a closure over the loop
+        # variable would leave every checkbox pointing at the last clash
+        def on_solved_click(sender, args):
+            entry["solved"] = bool(sender.IsChecked)
+            key = clash_key(entry)
+            if entry["solved"]:
+                solved_keys[0].add(key)
+            else:
+                solved_keys[0].discard(key)
+            style_row(entry)
+
+            saved_to = save_solved_keys(report_path[0], solved_keys[0])
+            if saved_to is None:
+                set_status(u"Couldn't save the solved state -- neither the report folder "
+                           u"nor %APPDATA% is writable.")
+            else:
+                set_status(u"{0} of {1} clashes solved.".format(solved_count(), len(flat_items[0])))
+        return on_solved_click
+
+    def build_row(entry):
+        """Built once per clash and reused: the filter only re-adds the same
+        rows, so a checkbox never loses its state to a keystroke. DockPanel
+        rather than a Grid, so no GridLength is needed from Python."""
+        check = CheckBox()
+        check.IsChecked = entry["solved"]
+        check.HorizontalAlignment = HorizontalAlignment.Center
+        check.VerticalAlignment = VerticalAlignment.Center
+        check.ToolTip = "Tick when this clash is solved."
+        check.Click += RoutedEventHandler(safe_handler(make_row_handler(entry)))
+
+        check_cell = Border()
+        check_cell.Width = 52
+        check_cell.Child = check
+        DockPanel.SetDock(check_cell, Dock.Left)
+
+        text = TextBlock()
+        text.Text = entry["label"]
+        text.Margin = Thickness(6, 2, 0, 2)
+        text.VerticalAlignment = VerticalAlignment.Center
+        text.TextTrimming = TextTrimming.CharacterEllipsis
+        text.ToolTip = entry["label"]
+
+        row = DockPanel()
+        row.Children.Add(check_cell)
+        row.Children.Add(text)
+
+        entry["row"] = row
+        entry["row_text"] = text
+        style_row(entry)
 
     def refresh_list():
         clash_list.Items.Clear()
         for entry in visible_items[0]:
-            clash_list.Items.Add(entry["label"])
+            clash_list.Items.Add(entry["row"])
 
     def on_filter_changed(sender, args):
         query = filter_box.Text.strip().lower()
@@ -1111,9 +1495,14 @@ def run():
             return
 
         report_dir = os.path.dirname(html_path)
+        keys, _source = load_solved_keys(html_path)
         for entry in items:
             entry["image_abs_path"] = resolve_image_path(report_dir, entry.get("image_path"))
+            entry["solved"] = clash_key(entry) in keys
+            build_row(entry)
 
+        report_path[0] = html_path
+        solved_keys[0] = keys
         flat_items[0] = items
         visible_items[0] = items
         filter_box.Text = ""
@@ -1127,8 +1516,9 @@ def run():
         refresh_list()
 
         with_points = len([e for e in items if e["clash_point"] is not None])
-        set_status(u"Loaded {0} clashes from {1} test(s); {2} have clash points.".format(
-            len(items), len(tests), with_points))
+        set_status(u"Loaded {0} clashes from {1} test(s); {2} have clash points; "
+                   u"{3} already marked solved.".format(
+                       len(items), len(tests), with_points, solved_count()))
 
     def on_selection_changed(sender, args):
         idx = clash_list.SelectedIndex
@@ -1168,8 +1558,7 @@ def run():
                 item2_label.Text = u"Item 2 (ID {0}): (no active document)".format(clash["item2_id"])
                 set_focus_enabled(False, "No active document.")
                 return
-            el1, _, link1 = resolve_element(doc, clash["item1_id"])
-            el2, _, link2 = resolve_element(doc, clash["item2_id"])
+            (el1, link1), (el2, link2) = resolve_clash_pair(doc, clash)
             item1_label.Text = u"Item 1 (ID {0}): {1}".format(
                 clash["item1_id"], element_label(el1, link1))
             item2_label.Text = u"Item 2 (ID {0}): {1}".format(
@@ -1178,7 +1567,7 @@ def run():
             # Isolating one of two elements is worse than not isolating at all --
             # it looks like it worked while hiding half of what you needed to see.
             if el1 is not None and el2 is not None:
-                set_focus_enabled(True, "Temporarily isolate both clashing elements.")
+                set_focus_enabled(True)
             else:
                 missing = []
                 if el1 is None:
@@ -1190,17 +1579,24 @@ def run():
 
         queue(fill_labels)
 
-    def on_focus_click(sender, args):
+    def queue_focus(isolate):
         if selected[0] is None:
             set_status("Select a clash first.")
             return
         clash = selected[0]
 
         def action():
-            if do_focus(clash):
-                set_status(u"Isolated the clashing elements.")
+            summary = do_focus(clash, isolate=isolate)
+            if summary:
+                set_status(summary)
 
         queue(action)
+
+    def on_focus_click(sender, args):
+        queue_focus(False)
+
+    def on_isolate_click(sender, args):
+        queue_focus(True)
 
     def on_clash_box_click(sender, args):
         if selected[0] is None:
@@ -1241,6 +1637,7 @@ def run():
 
     load_button.Click += RoutedEventHandler(safe_handler(on_load_click))
     focus_button.Click += RoutedEventHandler(safe_handler(on_focus_click))
+    isolate_button.Click += RoutedEventHandler(safe_handler(on_isolate_click))
     clash_box_button.Click += RoutedEventHandler(safe_handler(on_clash_box_click))
     filter_box.TextChanged += TextChangedEventHandler(safe_handler(on_filter_changed))
     clash_list.SelectionChanged += SelectionChangedEventHandler(safe_handler(on_selection_changed))
