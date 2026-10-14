@@ -4,6 +4,7 @@
 Read-only health report for every Revit link in the active document:
 
   * DWG links / imports living inside the link
+  * Revit links nested inside the link
   * Warning count stored in the link, grouped by warning type
   * Levels and Grids sitting on the wrong workset
   * Items left on Workset1, grouped by category
@@ -43,7 +44,8 @@ from Autodesk.Revit.DB import (BuiltInCategory, CADLinkType, CategoryType,
                                Element, ElementId, ElementWorksetFilter,
                                FilteredElementCollector,
                                FilteredWorksetCollector, ImportInstance,
-                               RevitLinkInstance, WorksetKind)
+                               ModelPathUtils, RevitLinkInstance,
+                               RevitLinkType, WorksetKind)
 from Autodesk.Revit.UI import TaskDialog
 
 try:
@@ -438,6 +440,63 @@ def scan_unused(target_doc):
 
 
 # ---------------------------------------------------------------------------
+# inspection 6 - Revit links living inside this document
+# ---------------------------------------------------------------------------
+
+def link_path(link_type):
+    """User visible path of a RevitLinkType, or a dash if unavailable."""
+    try:
+        reference = link_type.GetExternalFileReference()
+        text = ModelPathUtils.ModelPathToUserVisiblePath(
+            reference.GetAbsolutePath())
+        return text or DASH
+    except Exception:
+        return DASH
+
+
+def scan_rvt_links(target_doc):
+    """Return (link_count, [Entry, ...]) for the Revit links in a document.
+
+    One entry per link type, with its load status, how it is nested, how many
+    instances are placed, and the path it points at.
+    """
+    instance_counts = {}
+    for inst in FilteredElementCollector(target_doc).OfClass(RevitLinkInstance):
+        key = eid_value(inst.GetTypeId())
+        instance_counts[key] = instance_counts.get(key, 0) + 1
+
+    entries = []
+    for link_type in FilteredElementCollector(target_doc).OfClass(RevitLinkType):
+        name = elem_name(link_type)
+
+        try:
+            status = str(link_type.GetLinkedFileStatus())
+        except Exception:
+            status = "Unknown"
+
+        try:
+            attachment = str(link_type.AttachmentType)
+        except Exception:
+            attachment = DASH
+        try:
+            if link_type.IsNestedLink:
+                attachment = u"{0}, nested".format(attachment)
+        except Exception:
+            pass
+
+        count = instance_counts.get(eid_value(link_type.Id), 0)
+        path = link_path(link_type)
+
+        entries.append(Entry(
+            u"{0}   [{1}]   {2}   x{3}".format(name, status, attachment, count),
+            name.lower(),
+            (name, status, attachment, u"{0}".format(count), path)))
+
+    entries.sort(key=lambda e: e.SortKey)
+    return len(entries), entries
+
+
+# ---------------------------------------------------------------------------
 # row model
 # ---------------------------------------------------------------------------
 
@@ -453,6 +512,7 @@ class LinkRow(object):
         self.DwgImports = 0
         self.OtherCad = 0
         self.Warnings = 0
+        self.RvtLinks = 0
         self.BadLevels = None
         self.BadGrids = None
         self.Workshared = False
@@ -463,9 +523,12 @@ class LinkRow(object):
         self.WarningEntries = []
         self.WorksetEntries = []
         self.Workset1Entries = []
+        self.RvtLinkEntries = []
 
         self.ColDwgLinks = DASH
         self.ColDwgImports = DASH
+        self.ColDwg = DASH
+        self.ColRvtLinks = DASH
         self.ColWarnings = DASH
         self.ColLevelGrid = DASH
         self.ColWorkset1 = DASH
@@ -481,9 +544,12 @@ class LinkRow(object):
         (self.BadLevels, self.BadGrids, self.Workshared,
          self.WorksetEntries) = scan_levels_grids(target_doc)
         self.Workset1, self.Workset1Entries = scan_default_workset(target_doc)
+        self.RvtLinks, self.RvtLinkEntries = scan_rvt_links(target_doc)
 
         self.ColDwgLinks = str(self.DwgLinks)
         self.ColDwgImports = str(self.DwgImports)
+        self.ColDwg = "{0} / {1}".format(self.DwgLinks, self.DwgImports)
+        self.ColRvtLinks = str(self.RvtLinks)
         self.ColWarnings = str(self.Warnings)
         self.ColUnused = "?"
         if self.Workshared:
@@ -727,8 +793,8 @@ def html_doc_section(index, row):
     """One collapsible document block."""
     out = []
     anchor = "doc-{0}".format(index)
-    pills = u'<span class="pills">{0}{1}{2}{3}{4}</span>'.format(
-        badge(row.ColDwgLinks), badge(row.ColWarnings),
+    pills = u'<span class="pills">{0}{1}{2}{3}{4}{5}</span>'.format(
+        badge(row.ColDwg), badge(row.ColRvtLinks), badge(row.ColWarnings),
         badge(row.ColLevelGrid), badge(row.ColWorkset1),
         badge(row.ColUnused if row.Unused is not None else "not scanned"))
 
@@ -749,6 +815,14 @@ def html_doc_section(index, row):
                    row.DwgLinks, row.DwgImports, row.OtherCad))
     out.append(table(["File", "Kind", "Scope"], cad_rows,
                      "No CAD files in this document."))
+    out.append(u"</details>")
+
+    # Revit links inside this document
+    rvt_rows = [e.Fields for e in row.RvtLinkEntries if e.Fields]
+    out.append(u'<details class="sub"><summary>Revit links inside this model '
+               u'({0})</summary>'.format(row.RvtLinks))
+    out.append(table(["Link", "Status", "Nesting", "Instances", "Path"],
+                     rvt_rows, "This model links no other Revit models."))
     out.append(u"</details>")
 
     # Warnings
@@ -839,6 +913,7 @@ def build_report_html(rows):
     totals = {
         "docs": len(scanned),
         "dwg_links": sum([r.DwgLinks for r in scanned]),
+        "rvt_links": sum([r.RvtLinks for r in scanned]),
         "dwg_imports": sum([r.DwgImports for r in scanned]),
         "warnings": sum([r.Warnings for r in scanned]),
         "levels": sum([r.BadLevels for r in workshared]),
@@ -866,6 +941,7 @@ def build_report_html(rows):
                    esc(", ".join(VALID_LG_WORKSETS))))
 
     cards = [("Documents", totals["docs"]),
+             ("Nested RVT links", totals["rvt_links"]),
              ("DWG links", totals["dwg_links"]),
              ("DWG imports", totals["dwg_imports"]),
              ("Warnings", totals["warnings"]),
@@ -891,8 +967,8 @@ def build_report_html(rows):
 
     # overview table
     out.append(u'<table id="overview"><thead><tr>')
-    headers = [("Document", False), ("Status", False), ("DWG links", True),
-               ("DWG imports", True), ("Warnings", True),
+    headers = [("Document", False), ("Status", False), ("RVT links", True),
+               ("DWG links", True), ("DWG imports", True), ("Warnings", True),
                ("Bad lvl / grid", True), ("On Workset1", True),
                ("Unused fam / type", True)]
     for idx, pair in enumerate(headers):
@@ -920,7 +996,8 @@ def build_report_html(rows):
         out.append(u'<td class="doc" onclick="goDoc(\'doc-{0}\')">{1}</td>'
                    .format(index, esc(row.RawName)))
         out.append(u"<td>{0}</td>".format(esc(row.Status)))
-        for text in (row.ColDwgLinks, row.ColDwgImports, row.ColWarnings):
+        for text in (row.ColRvtLinks, row.ColDwgLinks, row.ColDwgImports,
+                     row.ColWarnings):
             out.append(u'<td data-sort="{0}">{1}</td>'.format(
                 sort_val(text), badge(text)))
 
@@ -1003,7 +1080,7 @@ XAML = u"""
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Link Inspector"
-        Height="720" Width="1300"
+        Height="730" Width="1380"
         WindowStartupLocation="CenterScreen"
         Background="#1E1E2E">
 
@@ -1218,7 +1295,7 @@ XAML = u"""
 
     <Grid Grid.Row="2">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="1.55*"/>
+        <ColumnDefinition Width="1.75*"/>
         <ColumnDefinition Width="12"/>
         <ColumnDefinition Width="1*"/>
       </Grid.ColumnDefinitions>
@@ -1233,10 +1310,10 @@ XAML = u"""
                               DisplayMemberBinding="{Binding Name}"/>
               <GridViewColumn Header="Status" Width="92"
                               DisplayMemberBinding="{Binding Status}"/>
-              <GridViewColumn Header="DWG Links" Width="72"
-                              DisplayMemberBinding="{Binding ColDwgLinks}"/>
-              <GridViewColumn Header="DWG Imports" Width="84"
-                              DisplayMemberBinding="{Binding ColDwgImports}"/>
+              <GridViewColumn Header="RVT Links" Width="74"
+                              DisplayMemberBinding="{Binding ColRvtLinks}"/>
+              <GridViewColumn Header="DWG L / I" Width="78"
+                              DisplayMemberBinding="{Binding ColDwg}"/>
               <GridViewColumn Header="Warnings" Width="68"
                               DisplayMemberBinding="{Binding ColWarnings}"/>
               <GridViewColumn Header="Bad Lvl / Grid" Width="92"
@@ -1261,6 +1338,8 @@ XAML = u"""
           <WrapPanel Grid.Row="0" Margin="0,0,0,8">
             <ToggleButton x:Name="TabCad" Content="DWG / CAD"
                           Style="{StaticResource TabToggle}" IsChecked="True"/>
+            <ToggleButton x:Name="TabRvt" Content="RVT Links"
+                          Style="{StaticResource TabToggle}"/>
             <ToggleButton x:Name="TabWarn" Content="Warnings"
                           Style="{StaticResource TabToggle}"/>
             <ToggleButton x:Name="TabWorkset" Content="Levels + Grids"
@@ -1361,6 +1440,7 @@ def show_window(rows):
     search_box = window.FindName("SearchBox")
     link_list = window.FindName("LinkList")
     tab_cad = window.FindName("TabCad")
+    tab_rvt = window.FindName("TabRvt")
     tab_warn = window.FindName("TabWarn")
     tab_workset = window.FindName("TabWorkset")
     tab_workset1 = window.FindName("TabWorkset1")
@@ -1376,15 +1456,17 @@ def show_window(rows):
     workshared = [r for r in scanned if r.Workshared]
     unreadable = len(rows) - len(scanned)
 
-    summary = ("{0} documents  |  {1} DWG links  |  {2} DWG imports  |  "
+    summary = ("{0} documents  |  {6} nested RVT links  |  {1} DWG links  |  "
+               "{2} DWG imports  |  "
                "{3} warnings  |  {4} levels + {5} grids on a wrong workset  |  "
-               "{6} items on Workset1"
+               "{7} items on Workset1"
                ).format(len(scanned),
                         sum([r.DwgLinks for r in scanned]),
                         sum([r.DwgImports for r in scanned]),
                         sum([r.Warnings for r in scanned]),
                         sum([r.BadLevels for r in workshared]),
                         sum([r.BadGrids for r in workshared]),
+                        sum([r.RvtLinks for r in scanned]),
                         sum([r.Workset1 for r in scanned
                              if r.Workset1 is not None]))
     if unreadable:
@@ -1454,6 +1536,9 @@ def show_window(rows):
             entries = row.CadEntries
             label = u"{0} DWG link(s), {1} import(s), {2} other CAD".format(
                 row.DwgLinks, row.DwgImports, row.OtherCad)
+        elif mode[0] == "rvt":
+            entries = row.RvtLinkEntries
+            label = u"{0} Revit link(s) inside this model".format(row.RvtLinks)
         elif mode[0] == "warn":
             entries = row.WarningEntries
             label = u"{0} warning(s)".format(row.Warnings)
@@ -1477,6 +1562,7 @@ def show_window(rows):
     def set_mode(key):
         mode[0] = key
         tab_cad.IsChecked = (key == "cad")
+        tab_rvt.IsChecked = (key == "rvt")
         tab_warn.IsChecked = (key == "warn")
         tab_workset.IsChecked = (key == "workset")
         tab_workset1.IsChecked = (key == "ws1")
@@ -1491,6 +1577,9 @@ def show_window(rows):
 
     def on_tab_cad(sender, args):
         set_mode("cad")
+
+    def on_tab_rvt(sender, args):
+        set_mode("rvt")
 
     def on_tab_warn(sender, args):
         set_mode("warn")
@@ -1544,6 +1633,7 @@ def show_window(rows):
     search_box.TextChanged += TextChangedEventHandler(on_search)
     link_list.SelectionChanged += SelectionChangedEventHandler(on_select)
     tab_cad.Click += RoutedEventHandler(on_tab_cad)
+    tab_rvt.Click += RoutedEventHandler(on_tab_rvt)
     tab_warn.Click += RoutedEventHandler(on_tab_warn)
     tab_workset.Click += RoutedEventHandler(on_tab_workset)
     tab_workset1.Click += RoutedEventHandler(on_tab_workset1)
