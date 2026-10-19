@@ -469,8 +469,7 @@ def restore_mode(tracker, doc):
             except Exception as e:
                 forms.alert("Reload Latest failed:\n\n{}".format(e), title=TITLE)
             reg.rescan(doc, "reload latest")
-            if reg.dirty:
-                reg.save()
+            reg.flush()
 
     cands = collect_candidates(doc, reg)
     if not cands:

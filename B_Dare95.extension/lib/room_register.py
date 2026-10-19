@@ -9,10 +9,12 @@ import re
 import json
 import hashlib
 import datetime
+import time
 import traceback
 
-from System import EventHandler, Guid, Int64
-from System.IO import File
+from System import EventHandler, Guid, Int64, DateTime
+from System.IO import File, FileInfo
+from System.Threading import Thread, ThreadStart
 from System.Text import UTF8Encoding
 from System.Collections.Generic import List
 
@@ -35,7 +37,7 @@ from pyrevit.coreutils import envvars
 
 
 ENV_KEY = "B_DARE95_ROOM_REGISTER_TRACKER"
-SCHEMA = 1
+SCHEMA = 2           # 2: parameter display names stored once per register, journal storage
 LIVE = ("Placed", "Unplaced")
 PROBE = 1.0          # ft above a location point when testing IsPointInRoom
 TOL = 1e-7           # tolerance when comparing stored doubles / points
@@ -45,6 +47,10 @@ REG_DIR = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")),
 # Create a register automatically for every saved project that has rooms, so tracking
 # doesn't depend on anyone Shift+Clicking. Set False to require the manual Shift+Click.
 AUTO_REGISTER = True
+
+# Live changes are appended to a journal; once it passes this size, a full snapshot is
+# written on a background thread and the journal starts over.
+JOURNAL_COMPACT_BYTES = 2 * 1024 * 1024
 
 
 # =============================================================== helpers
@@ -189,12 +195,16 @@ def doc_title(doc):
 
 
 def find_register(key):
+    """Path of the register's snapshot (.json). A register whose first snapshot hasn't
+    been written yet is found through its journal."""
     if not key or not os.path.isdir(REG_DIR):
         return None
-    suffix = "__{}.json".format(key)
+    snap, jour = "__{}.json".format(key), "__{}.journal.jsonl".format(key)
     for fn in os.listdir(REG_DIR):
-        if fn.endswith(suffix):
+        if fn.endswith(snap):
             return os.path.join(REG_DIR, fn)
+        if fn.endswith(jour):
+            return os.path.join(REG_DIR, fn[:-len(".journal.jsonl")] + ".json")
     return None
 
 
@@ -213,14 +223,18 @@ def param_key(p):
 
 
 def read_params(doc, el):
-    """Writable instance parameters only, stored as internal values."""
-    out = {}
+    """Writable instance parameters only, stored as internal values.
+
+    Returns (params, names): display names are kept once per register rather than
+    once per room, which roughly halves the register's size.
+    """
+    out, names = {}, {}
     for p in el.Parameters:
         try:
             if p.IsReadOnly:
                 continue
             st = p.StorageType
-            v = {"name": p.Definition.Name}
+            v = {}
             if st == StorageType.String:
                 v.update(t="S", v=p.AsString())
             elif st == StorageType.Integer:
@@ -237,14 +251,17 @@ def read_params(doc, el):
                     v.update(t="E", v=target.UniqueId if target is not None else None)
             else:
                 continue
-            out[param_key(p)] = v
+            key = param_key(p)
+            out[key] = v
+            names[key] = p.Definition.Name
         except Exception:
             continue
-    return out
+    return out, names
 
 
-def write_params(doc, room, stored):
+def write_params(doc, room, stored, names=None):
     """Returns (missing, failed) lists of parameter display names."""
+    names = names or {}
     live = {}
     for p in room.Parameters:
         try:
@@ -253,7 +270,7 @@ def write_params(doc, room, stored):
             pass
     missing, failed = [], []
     for key, sv in stored.items():
-        label = sv.get("name") or key
+        label = names.get(key) or sv.get("name") or key
         p = live.get(key)
         if p is None:
             missing.append(label)
@@ -314,44 +331,229 @@ def _same_point(a, b):
 
 
 # ============================================================== register
+def _dumps(obj):
+    # ensure_ascii=False avoids IronPython json's str->bytes decode, which fails on
+    # non-ASCII text; compact separators keep the files small
+    return json.dumps(obj, ensure_ascii=False, separators=(",", ":"), default=_json_default)
+
+
 class Register(object):
+    """One document's register.
+
+    Storage: <name>.json is a full snapshot; <name>.journal.jsonl holds one line per
+    changed record since then. A live edit appends a line (cost scales with the change,
+    not the model). Compaction writes a new snapshot on a background thread.
+
+    Records are copy-on-write: a record dict is never modified in place once stored,
+    edits replace it with a new dict. That is what lets the background thread serialize
+    a shallow copy of the rooms while Revit keeps editing.
+    """
+
     def __init__(self, path, data):
         self.path = path
         self.data = data
         data.setdefault("rooms", {})
+        data.setdefault("param_names", {})
         self.rooms = data["rooms"]
-        self.dirty = False
+        self.names = data["param_names"]
+        self.pending = set()          # uids changed since the last flush
+        self.pending_names = {}       # new parameter display names since the last flush
+        self.compacting = False
+        self.needs_compaction = False
         self.idmap = {}
         self.rebuild_idmap()
 
+    # -- paths
+    @property
+    def base(self):
+        return self.path[:-5] if self.path.endswith(".json") else self.path
+
+    def journal_path(self):
+        return self.base + ".journal.jsonl"
+
+    def rotated_journals(self):
+        folder, name = os.path.split(self.base)
+        prefix = name + ".journal."
+        try:
+            files = os.listdir(folder)
+        except Exception:
+            return []
+        return sorted(os.path.join(folder, f) for f in files
+                      if f.startswith(prefix) and f.endswith(".compacting.jsonl"))
+
+    @property
+    def dirty(self):
+        return bool(self.pending or self.pending_names)
+
+    # -- loading
     @classmethod
     def load(cls, path):
-        last_error = None
+        t0 = time.time()
+        data, last_error = None, None
         for candidate in (path, path + ".bak"):
             if not os.path.exists(candidate):
                 continue
             try:
-                text = File.ReadAllText(candidate, UTF8Encoding(False))
-                return cls(path, json.loads(text))
+                data = json.loads(File.ReadAllText(candidate, UTF8Encoding(False)))
+                break
             except Exception as e:
                 last_error = e
                 _log("Could not read {}: {}".format(candidate, e))
-        raise IOError("Register unreadable: {} ({})".format(path, last_error))
+        reg = cls(path, data if data is not None else {"schema": SCHEMA, "rooms": {}})
+        journals = [j for j in reg.rotated_journals() + [reg.journal_path()] if os.path.exists(j)]
+        if data is None and not journals:
+            raise IOError("Register unreadable: {} ({})".format(path, last_error))
+        replayed = reg._replay(journals)
+        converted = reg._normalize()
+        reg.rebuild_idmap()
+        _log("Loaded {} ({} rooms, {} journal entries) in {:.1f}s".format(
+            os.path.basename(path), len(reg.rooms), replayed, time.time() - t0))
+        # fold the journal (or the old format) into a fresh snapshot, in the background
+        reg.needs_compaction = bool(replayed or converted)
+        return reg
 
-    def save(self):
-        self.data["updated"] = _now()
-        tmp = self.path + ".tmp"
-        # ensure_ascii=False skips IronPython json's str->bytes decode, which fails on
-        # non-ASCII text (e.g. accented parameter names); .NET writes the UTF-8 file
-        text = json.dumps(self.data, indent=1, sort_keys=True,
-                          ensure_ascii=False, default=_json_default)
-        File.WriteAllText(tmp, text, UTF8Encoding(False))
-        if File.Exists(self.path):
-            File.Replace(tmp, self.path, self.path + ".bak")
-        else:
-            File.Move(tmp, self.path)
-        self.dirty = False
+    def _replay(self, journals):
+        n = 0
+        for jp in journals:
+            for line in File.ReadAllLines(jp, UTF8Encoding(False)):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except Exception:
+                    _log("Skipped an unreadable journal line in {}".format(os.path.basename(jp)))
+                    continue      # typically a half-written last line after a crash
+                if "names" in entry:
+                    self.names.update(entry["names"])
+                uid = entry.get("uid")
+                if uid:
+                    if entry.get("drop"):
+                        self.rooms.pop(uid, None)
+                    elif "rec" in entry:
+                        self.rooms[uid] = entry["rec"]
+                n += 1
+        return n
 
+    def _normalize(self):
+        """Schema 1 -> 2: move per-room parameter names into the register-wide table."""
+        changed = False
+        for rec in self.rooms.values():
+            for key, v in (rec.get("params") or {}).items():
+                if isinstance(v, dict) and "name" in v:
+                    self.names.setdefault(key, v["name"])
+                    del v["name"]           # in place is safe: nothing else holds it yet
+                    changed = True
+        if self.data.get("schema") != SCHEMA:
+            self.data["schema"] = SCHEMA
+            changed = True
+        return changed
+
+    # -- copy-on-write editing
+    def _put(self, uid, rec):
+        self.rooms[uid] = rec
+        self.pending.add(uid)
+
+    def edit(self, uid):
+        """A fresh copy of the record, already stored and marked for the journal."""
+        rec = dict(self.rooms[uid])
+        self._put(uid, rec)
+        return rec
+
+    def drop(self, uid):
+        rec = self.rooms.pop(uid, None)
+        if rec is not None:
+            self.pending.add(uid)
+        return rec
+
+    def _note_names(self, names):
+        for key, name in names.items():
+            if self.names.get(key) != name:
+                self.names[key] = name
+                self.pending_names[key] = name
+
+    # -- writing
+    def _write_pending(self):
+        if not self.dirty:
+            return
+        t0 = time.time()
+        lines = []
+        if self.pending_names:
+            lines.append(_dumps({"names": self.pending_names}))
+        for uid in self.pending:
+            rec = self.rooms.get(uid)
+            lines.append(_dumps({"uid": uid, "drop": True}) if rec is None
+                         else _dumps({"uid": uid, "rec": rec}))
+        File.AppendAllText(self.journal_path(), u"\n".join(lines) + u"\n", UTF8Encoding(False))
+        count = len(self.pending)
+        self.pending = set()                 # cleared only once the append succeeded
+        self.pending_names = {}
+        elapsed = time.time() - t0
+        if elapsed > 0.5:
+            _log("Journal: {} record(s) appended in {:.2f}s".format(count, elapsed))
+        try:
+            if FileInfo(self.journal_path()).Length > JOURNAL_COMPACT_BYTES:
+                self.needs_compaction = True
+        except Exception:
+            pass
+
+    def flush(self):
+        """Appends pending changes to the journal, then compacts if it's due."""
+        self._write_pending()
+        if self.needs_compaction:
+            self.compact()
+
+    save = flush      # older callers
+
+    def compact(self):
+        """Writes a full snapshot on a background thread. Revit never waits for it."""
+        if self.compacting:
+            return                           # still due: retried on a later flush
+        self._write_pending()                # everything must be in a journal first
+        jp = self.journal_path()
+        if os.path.exists(jp):
+            File.Move(jp, "{}.journal.{:020d}.compacting.jsonl".format(self.base, DateTime.Now.Ticks))
+        to_delete = self.rotated_journals()  # this one plus any left by a failed run
+
+        snapshot = dict(self.data)
+        snapshot["rooms"] = dict(self.rooms)          # records are copy-on-write
+        snapshot["param_names"] = dict(self.names)
+        snapshot["schema"] = SCHEMA
+        snapshot["updated"] = _now()
+        path = self.path
+        self.compacting = True
+        self.needs_compaction = False
+        reg = self
+
+        def work():
+            t0 = time.time()
+            try:
+                text = _dumps(snapshot)
+                tmp = path + ".tmp"
+                File.WriteAllText(tmp, text, UTF8Encoding(False))
+                if File.Exists(path):
+                    File.Replace(tmp, path, path + ".bak")
+                else:
+                    File.Move(tmp, path)
+                for f in to_delete:
+                    try:
+                        File.Delete(f)
+                    except Exception:
+                        pass
+                _log("Compacted {} ({} rooms, {:.1f} MB) in {:.1f}s".format(
+                    os.path.basename(path), len(snapshot["rooms"]),
+                    len(text) / 1048576.0, time.time() - t0))
+            except Exception:
+                # nothing is lost: the rotated journal stays and is replayed on next load
+                _log("Compaction failed, journal kept: " + traceback.format_exc())
+            finally:
+                reg.compacting = False
+
+        thread = Thread(ThreadStart(work))
+        thread.IsBackground = True           # never keeps Revit alive on exit
+        thread.Start()
+
+    # -- tracking
     def rebuild_idmap(self):
         self.idmap = {}
         for uid, rec in self.rooms.items():
@@ -371,12 +573,12 @@ class Register(object):
             location = [round(p.X, 9), round(p.Y, 9), round(p.Z, 9)]
         level_uid = _level_uid(room)
         phase_uid = _phase_uid(doc, room)
-        params = read_params(doc, room)
+        params, names = read_params(doc, room)
 
         rec = self.rooms.get(uid)
         if rec is None:
             tip = _tooltip(doc, room.Id) if source == "scan" else None
-            self.rooms[uid] = {
+            self._put(uid, {
                 "uid": uid, "element_id": eid, "status": status,
                 "level_uid": level_uid, "phase_uid": phase_uid, "location": location,
                 "created_by": user if source == "live" else ((tip.Creator if tip else None) or None),
@@ -385,25 +587,20 @@ class Register(object):
                 "deleted_by": None, "deleted_in": None,
                 "restored_from": None, "restored_to": None,
                 "params": params,
-            }
+            })
+            self._note_names(names)
             self.idmap[eid] = uid
-            self.dirty = True
             return True
 
-        changed = False
+        updates = {}
         old_eid = rec.get("element_id")
         if old_eid is None or int(old_eid) != eid:
             if old_eid is not None and self.idmap.get(int(old_eid)) == uid:
                 del self.idmap[int(old_eid)]
-            rec["element_id"] = eid
-            changed = True
+            updates["element_id"] = eid
         self.idmap[eid] = uid
         if rec.get("status") != status:
-            rec["status"] = status
-            rec["status_changed"] = _now()
-            rec["deleted_by"] = None
-            rec["deleted_in"] = None
-            changed = True
+            updates.update(status=status, status_changed=_now(), deleted_by=None, deleted_in=None)
 
         # Unplaced rooms are frozen: location, level, phase and parameters keep the
         # last placed state. Revit alters an unplaced room's height limits, so letting
@@ -411,29 +608,33 @@ class Register(object):
         data_changed = False
         if status != "Unplaced":
             if location is not None and not _same_point(rec.get("location"), location):
-                rec["location"] = location
+                updates["location"] = location
                 data_changed = True
             if level_uid and rec.get("level_uid") != level_uid:
-                rec["level_uid"] = level_uid
+                updates["level_uid"] = level_uid
                 data_changed = True
             if phase_uid and rec.get("phase_uid") != phase_uid:
-                rec["phase_uid"] = phase_uid
+                updates["phase_uid"] = phase_uid
                 data_changed = True
             if not _same_params(rec.get("params"), params):
-                rec["params"] = params
+                updates["params"] = params
                 data_changed = True
 
         if data_changed:
             # last_updated is the age of the stored snapshot, so only real data moves it
-            rec["last_updated"] = _now()
+            updates["last_updated"] = _now()
             if source == "live":
-                rec["last_modified_by"] = user
+                updates["last_modified_by"] = user
             else:
                 tip = _tooltip(doc, room.Id)
-                rec["last_modified_by"] = (tip.LastChangedBy if tip else None) or None
-        if changed or data_changed:
-            self.dirty = True
-        return changed or data_changed
+                updates["last_modified_by"] = (tip.LastChangedBy if tip else None) or None
+            self._note_names(names)
+        if not updates:
+            return False
+        new = dict(rec)
+        new.update(updates)
+        self._put(uid, new)
+        return True
 
     def mark_deleted(self, eid, user, tx):
         uid = self.idmap.pop(int(eid), None)
@@ -442,28 +643,28 @@ class Register(object):
         rec = self.rooms.get(uid)
         if rec is None or rec.get("status") not in LIVE:
             return False
-        rec["status"] = "Deleted"
-        rec["status_changed"] = _now()
-        rec["deleted_by"] = user
-        rec["deleted_in"] = tx
-        self.dirty = True
+        rec = self.edit(uid)
+        rec.update(status="Deleted", status_changed=_now(), deleted_by=user, deleted_in=tx)
         return True
 
     def rescan(self, doc, source):
+        t0 = time.time()
         seen = set()
+        changed = 0
         for room in _rooms(doc):
             seen.add(room.UniqueId)
-            self.upsert(doc, room, "scan")
-        for uid, rec in self.rooms.items():
-            if rec.get("status") in LIVE and uid not in seen:
-                # removed while untracked or by another user: deleter unknown,
-                # data is as of the last time this register saw the room
-                rec["status"] = "Deleted"
-                rec["status_changed"] = _now()
-                rec["deleted_by"] = None
-                rec["deleted_in"] = "Detected on {}".format(source)
-                self.dirty = True
+            if self.upsert(doc, room, "scan"):
+                changed += 1
+        for uid in [u for u, r in self.rooms.items() if r.get("status") in LIVE and u not in seen]:
+            # removed while untracked or by another user: deleter unknown,
+            # data is as of the last time this register saw the room
+            rec = self.edit(uid)
+            rec.update(status="Deleted", status_changed=_now(), deleted_by=None,
+                       deleted_in="Detected on {}".format(source))
+            changed += 1
         self.rebuild_idmap()
+        _log("Rescan ({}) of {}: {} rooms, {} changed, {:.1f}s".format(
+            source, os.path.basename(self.path), len(seen), changed, time.time() - t0))
 
 
 # =============================================================== tracker
@@ -524,18 +725,21 @@ class Tracker(object):
                 "created": _now(), "created_by": self.app.Username, "rooms": {}}
         reg = Register(path, data)
         reg.rescan(doc, "baseline")
-        reg.save()
+        # the baseline goes straight into a snapshot on a background thread rather than
+        # through the journal, so creating a register never blocks Revit on a full write
+        reg.pending, reg.pending_names = set(), {}
+        reg.needs_compaction = True
+        reg.compact()
         self.regs[key] = reg
         self.missing.discard(key)
         return reg
 
     def flush_all(self):
         for reg in self.regs.values():
-            if reg.dirty:
-                try:
-                    reg.save()
-                except Exception:
-                    _log(traceback.format_exc())
+            try:
+                reg.flush()
+            except Exception:
+                _log(traceback.format_exc())
 
     # -- arming
     def arm(self):
@@ -616,8 +820,7 @@ class Tracker(object):
             if reg is None:
                 return
             reg.rescan(doc, source)
-            if reg.dirty:
-                reg.save()
+            reg.flush()
         except Exception:
             _log("Rescan ({}): {}".format(source, traceback.format_exc()))
 
@@ -635,19 +838,23 @@ class Tracker(object):
         try:
             key = doc_key(args.Document)
             reg = self.regs.pop(key, None)
-            if reg is not None and reg.dirty:
-                reg.save()
+            if reg is not None:
+                # leave a fresh snapshot behind so the next open has no journal to replay
+                if reg.dirty or os.path.exists(reg.journal_path()):
+                    reg.needs_compaction = True
+                reg.flush()
         except Exception:
             _log("DocumentClosing: " + traceback.format_exc())
 
     def _on_idling(self, sender, args):
         for reg in self.regs.values():
-            if reg.dirty:
+            if reg.dirty or (reg.needs_compaction and not reg.compacting):
                 try:
-                    reg.save()
+                    reg.flush()
                 except Exception:
-                    reg.dirty = False     # retried on the next change, avoids log spam
-                    _log("Save failed: " + traceback.format_exc())
+                    # keep the pending changes; stop retrying until something new changes
+                    reg.needs_compaction = False
+                    _log("Journal write failed: " + traceback.format_exc())
 
 
 def get_tracker():
@@ -969,6 +1176,7 @@ def collect_candidates(doc, reg):
             c = Candidate(doc, uid, rec, "Deleted")
         else:
             continue
+        c.names = reg.names
         if c.number and (in_use.get(c.number, set()) - set([uid])):
             c.number_note = "number {} already in use".format(c.number)
         out.append(c)
@@ -1073,7 +1281,8 @@ def restore_one(doc, c, allow_unplaced):
                     placed, why = place_in_region(doc, room, level, phase, pt, limits)
             if not placed and not allow_unplaced:
                 raise _Skip("could not place: {}".format(why))
-            res["missing"], res["failed"] = write_params(doc, room, c.rec.get("params") or {})
+            res["missing"], res["failed"] = write_params(doc, room, c.rec.get("params") or {},
+                                                         getattr(c, "names", None))
             res.update(ok=True, placed=placed, uid=room.UniqueId,
                        msg="Rebuilt at its last location" if placed
                        else "Rebuilt unplaced ({}) - place it manually".format(why))
@@ -1142,13 +1351,15 @@ def remove_records(reg, uids, user=None):
     for uid in uids:
         rec = reg.rooms.get(uid)
         if rec is not None and rec.get("status") == "Deleted":
-            removed[uid] = reg.rooms.pop(uid)
+            removed[uid] = reg.drop(uid)
     if not removed:
         return 0
     try:
-        reg.save()
+        reg.flush()
     except Exception:
-        reg.rooms.update(removed)
+        for uid, rec in removed.items():     # put them back so memory matches the files
+            reg.rooms[uid] = rec
+            reg.pending.discard(uid)
         raise
     numbers = [((r.get("params") or {}).get("bip:ROOM_NUMBER") or {}).get("v") or "?"
                for r in removed.values()]
@@ -1168,20 +1379,17 @@ def update_register(doc, reg, results):
             continue
         reg.upsert(doc, room, "live", user)
         if c.kind == "Deleted":
-            new = reg.rooms.get(room.UniqueId)
-            if new is not None:
+            if room.UniqueId in reg.rooms:
+                new = reg.edit(room.UniqueId)
                 new["restored_from"] = c.uid
                 if not r["placed"]:
                     # keep the old location so it can be placed later as an Unplaced room
                     new["location"] = c.rec.get("location")
                     new["level_uid"] = new.get("level_uid") or c.rec.get("level_uid")
-            old = reg.rooms.get(c.uid)
-            if old is not None:
-                old["status"] = "Restored"
-                old["restored_to"] = room.UniqueId
-                old["status_changed"] = _now()
-    reg.dirty = True
+            if c.uid in reg.rooms:
+                old = reg.edit(c.uid)
+                old.update(status="Restored", restored_to=room.UniqueId, status_changed=_now())
     try:
-        reg.save()
+        reg.flush()
     except Exception:
-        _log("Save after restore: " + traceback.format_exc())
+        _log("Journal write after restore: " + traceback.format_exc())
