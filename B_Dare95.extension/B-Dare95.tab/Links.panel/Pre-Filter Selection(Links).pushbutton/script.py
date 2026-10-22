@@ -2,34 +2,22 @@
 __title__ = "Pre-Filter Selection (Links)"
 __author__ = "Mohamed Bedair"
 __version__ = '1.0.0'
-__doc__ = """
-Version = 1.0.0
-Date    = 08.09.2026
-
+__doc__ = """__________________________________________________
 Description:
-Linked-model counterpart of "Pre-Filter Selection".
-Restricts picking to chosen categories inside ANY loaded Revit link visible in the
-active view - no link has to be chosen beforehand. The resulting linked elements stay
-selected in the Revit UI. SHIFT click negates (pick everything EXCEPT the chosen
-categories).
 
+Lets you pick elements inside linked models while only the categories you chose can be picked. Works across every loaded link in the view, and the picked linked elements stay selected.
+Shift+Click flips it: everything except the chosen categories can be picked.
+__________________________________________________
 How-to:
--> Run the script
--> Pick the categories you want (the list is built from what actually exists in the
-   loaded links, with element counts)
--> Click elements in any link; only the chosen categories pre-highlight
--> Press Finish on the options bar - the picked linked elements stay selected
 
-Notes:
-- Requires Revit 2023+ (Selection.SetReferences).
-- Rectangle selection is NOT possible for linked elements - PickElementsByRectangle
-  ignores links entirely. Click-picking is the only route.
-
-Last update:
-- [08.09.2026] - 1.0.0 RELEASE
-
-Author: Mohamed Bedair,inspired by work of Stephane Rospars Dupin
-"""
+-> Open a view where the links are loaded and visible
+-> Click on the button (Shift+Click to exclude categories instead)
+-> Tick the categories you want (counts per category are shown)
+-> Click elements in any link, then press Finish on the Options Bar
+-> The picked linked elements stay selected
+__________________________________________________
+Author: Mohamed Bedair
+Inspired by the work of Stephane Rospars Dupin"""
 
 # IMPORTS
 import System

@@ -1,26 +1,21 @@
 # -*- coding: utf-8 -*-
-"""Callout Creator.
+__doc__ = """__________________________________________________
+Description:
 
-Pick a rectangular region in the active plan view, then place that same callout
-region across many plan views at once.
+Draw a callout box once and place the same callout in many plan views at the same spot in one go.
+Make new callout views (with your own names and view templates) or reference callouts that point to an existing plan or drafting view.
+__________________________________________________
+How-to:
 
-Two modes:
-    View Callout       - creates a new plan view per callout, using the same
-                         ViewFamilyType as the parent view. Name and view
-                         template are set per row.
-    Reference Callout  - points each callout at an existing plan or drafting
-                         view. Nothing new is created.
+-> Open a plan view
+-> Click on the button and drag a box for the callout area
+-> Choose View Callout or Reference Callout
+-> Tick the plan views to add it to
+-> Set the names and templates, or the views to reference
+-> Click Create Callouts
+__________________________________________________
+Author: Mohamed Bedair"""
 
-Views that cannot display the callout are flagged in the selection list and
-skipped on create:
-    CROP      - the region falls outside the view's active crop box
-    TEMPLATE  - the Callouts category is switched off on the view or its template
-
-Anything else is fair game - a view already placed on a sheet is treated as a
-normal target, not flagged.
-
-Target: Revit 2024 - 2027, IronPython 2.7.
-"""
 
 __title__ = "Callout\nCreator"
 __author__ = "Mohamed Bedair"

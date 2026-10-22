@@ -1,21 +1,21 @@
 # -*- coding: utf-8 -*-
 
 __title__   = "Shaft Function Tag"
-__doc__     = """
-________________________________________________________________
+__doc__ = """__________________________________________________
 Description:
-Reads the "Shaft Function" instance parameter from each Shaft
-Opening — in the ACTIVE model and in every LOADED LINKED model —
-and places a Text Note at the inner bottom-left corner of the
-shaft boundary in every selected Plan View.
 
-How to Use:
-1. Run the script
-2. Optionally toggle "Include shafts from linked models"
-3. Tick the target plan views
-4. Choose a Text Note Type from the dropdown
-5. Click Apply
-________________________________________________________________
+Writes each shaft's Shaft Function value as a text note in its bottom-left corner, in all the plan views you tick.
+Only shafts cut by the view's cut plane are tagged, from your model and from loaded links.
+__________________________________________________
+How-to:
+
+-> Click on the button
+-> Keep or untick Include shafts from linked models
+-> Tick the plan views to tag (search to filter)
+-> Pick a text note type
+-> Click Apply
+-> A summary shows how many notes were placed
+__________________________________________________
 Author: Mohamed Bedair"""
 
 # ─────────────────────────────────────────────────────────────────────

@@ -2,23 +2,19 @@
 __title__     = "Bulk Copy from Link"
 __author__    = "Mohamed Bedair"
 __version__   = 'Version = 1.0'
-__doc__       = """Version = 1.0
-Date    = 21.12.2023
-_____________________________________________________________________
+__doc__ = """__________________________________________________
 Description:
 
-Copies all elements of the same type from a link. 
-the copied elements will be pasted in project and pinned.
-_____________________________________________________________________
+Copies every element in a link that has the same category and type name as the one you click into your model. The copies are pinned.
+Copies land at the link's own coordinates, so they only line up if the link is placed origin to origin.
+__________________________________________________
 How-to:
 
--> Run the script
--> select an element from a link(no tab required)
--> all elements of the same type will be copied
-_____________________________________________________________________
-Last update:
-- [21.12.2023] - 1.0 RELEASE
-_____________________________________________________________________
+-> Make sure the link is placed origin to origin
+-> Click on the button
+-> Click one element in the link
+-> All matching elements in that link are copied and pinned
+__________________________________________________
 Author: Mohamed Bedair"""
 
 #IMPORTS

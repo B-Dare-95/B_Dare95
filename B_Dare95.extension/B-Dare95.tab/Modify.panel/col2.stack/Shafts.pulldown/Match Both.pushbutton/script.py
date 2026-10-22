@@ -1,6 +1,21 @@
 # -*- coding: utf-8 -*-
 
 #Imports
+
+__doc__ = """__________________________________________________
+Description:
+
+Copies the base and top settings (Base Constraint, Base Offset, Top Constraint and Top Offset) from one shaft to as many other shafts as you click.
+__________________________________________________
+How-to:
+
+-> Click on the button
+-> Pick the source shaft
+-> Click each shaft to match; it updates straight away
+-> Press Esc when you're done
+__________________________________________________
+Author: Mohamed Bedair"""
+
 from Autodesk.Revit.DB import *
 from Autodesk.Revit.UI import *
 from Autodesk.Revit.UI.Selection import *

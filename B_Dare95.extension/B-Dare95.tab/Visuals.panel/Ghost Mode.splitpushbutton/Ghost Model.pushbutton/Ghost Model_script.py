@@ -1,12 +1,18 @@
 # -*- coding: utf-8 -*-
 __title__   = "Ghost Model"
-__doc__     = """
-________________________________________________________________
+__doc__ = """__________________________________________________
 Description:
-- Run the script
-- Entire Model will be Transparent except for Lines
-- Press again to toggle Ghost Mode off
-________________________________________________________________
+
+Turns the whole active view see-through in one click (95% transparent, Shaded, model lines hidden), and back again with a second click.
+Handy for spotting what's hidden inside the building.
+__________________________________________________
+How-to:
+
+-> Open a view without a view template (3D works best)
+-> Click on the button
+-> Everything in the view turns see-through
+-> Click again to turn it off (this also clears the view's category overrides)
+__________________________________________________
 Author: Mohamed Bedair"""
 
 # Imports

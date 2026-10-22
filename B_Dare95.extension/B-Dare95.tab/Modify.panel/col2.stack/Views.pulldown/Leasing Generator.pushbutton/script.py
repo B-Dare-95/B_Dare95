@@ -1,20 +1,20 @@
 # -*- coding: utf-8 -*-
 __title__ = "Enlarged Plan Generator"
-__doc__   = """
-_____________________________________________________________________
+__doc__ = """__________________________________________________
 Description:
-Generates Enlarged Plan views and two cross-sections for selected
-rooms. Both sections are centred on each room:
-  - Section X  : cut plane is a YZ plane, camera looks along +X
-  - Section Y  : cut plane is an XZ plane, camera looks along +Y
 
-View names follow the pattern:
-  {Prefix}{RoomName}_{RoomNumber}{Suffix}
-  {Prefix}{RoomName}_{RoomNumber} - Section X{Suffix}
-  {Prefix}{RoomName}_{RoomNumber} - Section Y{Suffix}
+Creates an enlarged plan and two sections (one each way) for every room you tick, all cropped tightly around the room.
+Views are named from the room name and number with your prefix and suffix, and can get view templates.
+__________________________________________________
+How-to:
 
-All settings are configured in a single Catppuccin-themed WPF window.
-_____________________________________________________________________
+-> Click on the button
+-> Tick the rooms you want (search to filter the list)
+-> Choose view templates for the plans and the sections (optional)
+-> Set a prefix and suffix for the view names
+-> Click Generate Views
+-> The new views appear in the Project Browser
+__________________________________________________
 Author: Mohamed Bedair"""
 
 # ── Imports ──────────────────────────────────────────────────────────────────

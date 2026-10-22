@@ -1,19 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Shaft - Clean Boundary-Clashing Symbolic Lines (rectangle select)
+__doc__ = """__________________________________________________
+Description:
 
-Rubber-band (rectangle) select Shaft Openings, then delete the symbolic lines that
-are drawn over a boundary edge, keeping the rest (e.g. the X-mark diagonals).
+Deletes the symbolic lines drawn on top of a shaft opening's boundary, which cause overlap warnings, and keeps the rest, such as the X mark.
+Works on the shaft openings you box-select.
+__________________________________________________
+How-to:
 
-Sketch curves
-    ModelLine, category "<Sketch>":
-        style "<Sketch>"  -> profile boundary   (reference, never deleted)
-        style "<Lines>"   -> symbolic line      (deletion candidate)
+-> Open a plan view showing the shaft openings
+-> Click on the button
+-> Drag a box across the shaft openings to clean
+-> Lines on the boundary are deleted, other lines are kept
+-> A summary shows how many lines were removed
+__________________________________________________
+Author: Mohamed Bedair"""
 
-Deletion
-    Symbolic lines are sketch-internal: plain doc.Delete is tried first (unpinned),
-    then a SketchEditScope fallback. Each shaft and each line is isolated - a faulty
-    one is skipped and counted, never aborting the run.
-"""
 
 import clr
 clr.AddReference('RevitAPI')

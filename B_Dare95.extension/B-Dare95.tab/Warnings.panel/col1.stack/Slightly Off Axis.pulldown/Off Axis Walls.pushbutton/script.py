@@ -1,3 +1,18 @@
+__doc__ = """__________________________________________________
+Description:
+
+Straightens walls that Revit flags as "slightly off axis" by rotating them onto the nearest horizontal or vertical direction. You're asked before anything changes.
+__________________________________________________
+How-to:
+
+-> Unpin the walls you want fixed
+-> Click on the button
+-> Check how many flagged walls were found and click Yes
+-> Each wall is rotated around the start of its location line
+-> Fixed and skipped walls are listed in the output window
+__________________________________________________
+Author: Mohamed Bedair"""
+
 import clr
 import math
 

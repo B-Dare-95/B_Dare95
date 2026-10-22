@@ -2,29 +2,22 @@
 __title__ = "Pre-Filter by Parameter"
 __author__ = "Mohamed Bedair"
 __version__ = '1.5.0'
-__doc__ = """
-
+__doc__ = """__________________________________________________
 Description:
-Filters the Selection box to only the selected category.
-Optionally refines the selection by stacking parameter-value filter rows.
-Each row after the first carries an AND / OR / NOT operator that controls
-how it combines with the result of all previous rows.
 
-Operator semantics (left-to-right evaluation):
-  AND  — element must match both the previous result AND this filter
-  OR   — element matches if the previous result OR this filter is true
-  NOT  — element must match the previous result AND NOT this filter
-
+Makes your selection box pick only one category, optionally only elements whose parameters match values you choose.
+Combine several parameter rules with AND / OR / NOT for precise selections.
+__________________________________________________
 How-to:
--> Run the script
--> Select a single category from the list
--> (Optional) Pick a parameter and value from the filter row
--> (Optional) Click "+ Add Filter" — choose AND / OR / NOT on the
-   connector pill that appears between the rows, then fill in the row
--> Click "Make A Selection" and draw a rectangle
 
-Author: Mohamed Bedair
-"""
+-> Click on the button
+-> Pick one category from the list
+-> Optionally choose a parameter and value (NOT to exclude them)
+-> Click "+ Add Filter" for more rules and set AND / OR / NOT
+-> Click "Make A Selection" and drag a box in the view
+-> Only matching elements are selected
+__________________________________________________
+Author: Mohamed Bedair"""
 
 # ─── IMPORTS ──────────────────────────────────────────────────────────────────
 import System

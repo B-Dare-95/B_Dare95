@@ -1,5 +1,22 @@
 # -*- coding: utf-8 -*-
 
+__doc__ = """__________________________________________________
+Description:
+
+Changes the letter case of a room text parameter (usually Name) to UPPERCASE, lowercase or Title Case for every room in the model at once.
+You can add a prefix or suffix in the same go.
+__________________________________________________
+How-to:
+
+-> Click on the button
+-> Pick the room parameter (Name is chosen for you)
+-> Choose UPPERCASE, lowercase or Title Case
+-> Type a prefix or suffix if you need one
+-> Click Apply to update all rooms
+-> A message shows how many rooms were changed
+__________________________________________________
+Author: Mohamed Bedair"""
+
 import clr
 clr.AddReference('RevitAPI')
 clr.AddReference('RevitAPIUI')

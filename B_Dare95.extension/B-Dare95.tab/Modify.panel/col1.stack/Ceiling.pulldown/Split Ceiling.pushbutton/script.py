@@ -1,28 +1,21 @@
 # -*- coding: utf-8 -*-
 __title__  = "Split\nCeilings"
 __author__ = "Mohamed Bedair"
-__doc__    = """Version = 1.0
-Date    = 21.10.2026
-_____________________________________________________________________
+__doc__ = """__________________________________________________
 Description:
-Split Ceilings whose sketch has more than one outline into separate
-Ceilings, one per outline. Holes stay with the outline around them,
-islands inside holes become Ceilings of their own.
-Type, level and editable instance parameters (incl. Height Offset
-From Level) are carried over to every new Ceiling.
-_____________________________________________________________________
+
+Splits a ceiling drawn with several separate outlines into one ceiling per outline. Holes stay with the outline around them.
+Type, level, height offset and other instance values are copied to each new ceiling; Mark is left empty.
+__________________________________________________
 How-to:
--> Pre-select Ceilings, or click the button and pick them (Finish)
--> Click:        split and delete the originals
--> Shift+Click:  split and keep the originals
-_____________________________________________________________________
-Notes:
-- Mark and IfcGUID are not copied (they must stay unique)
-- Slope arrows are not carried over (new Ceilings are flat)
-- Elements hosted on an original (e.g. ceiling-hosted light fixtures)
-  are deleted with it - you are asked first. They are not re-hosted
-  when the originals are kept
-_____________________________________________________________________
+
+-> Select the ceilings, or click the button and pick them
+-> Click Finish to start the split
+-> Confirm if ceiling-hosted elements would be deleted
+-> Shift+Click the button to keep the original ceilings
+-> The new ceilings are selected for you
+__________________________________________________
+Author: Mohamed Bedair
 Based on "Split FilledRegion Boundaries" by Erik Frits"""
 
 #==================================================

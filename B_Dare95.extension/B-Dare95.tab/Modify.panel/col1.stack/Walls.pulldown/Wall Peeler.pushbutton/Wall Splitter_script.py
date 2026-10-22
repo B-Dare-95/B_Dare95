@@ -1,17 +1,21 @@
 # -*- coding: utf-8 -*-
 __title__   = "Wall Peeler"
-__doc__     = """Version = 6.0
-Date    = 2026
-________________________________________________________________
+__doc__ = """__________________________________________________
 Description:
-- Select a wall
-- Phase 1 : click layers to mark for splitting
-            link-button between adjacent split layers groups them
-- Phase 2 : pick which resulting wall hosts doors / openings
-- Phase 3 : rename each resulting wall type before creation
-- Walls land at geometrically correct positions
-________________________________________________________________
-Authors: Erik Frits / Mohamed Bedair / Joven Mark Gumana"""
+
+Splits a multi-layer wall into separate walls, one per layer or group of layers you choose. Each new wall sits exactly where its layers were.
+Doors and windows move onto the one wall you pick as host, and each new wall gets its own wall type.
+__________________________________________________
+How-to:
+
+-> Click on the button and pick a wall
+-> Click the layers to split, link neighbours to keep them together
+-> Pick which new wall hosts the doors and windows
+-> Name the new wall types, choose this wall or all of its type
+-> Click Confirm to create the walls
+__________________________________________________
+Author: Mohamed Bedair
+Co-authored with Erik Frits and Joven Mark Gumana"""
 
 # ╦╔╦╗╔═╗╔═╗╦═╗╔╦╗╔═╗
 # ║║║║╠═╝║ ║╠╦╝ ║ ╚═╗

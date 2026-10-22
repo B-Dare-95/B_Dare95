@@ -1,18 +1,19 @@
 # -*- coding: utf-8 -*-
-"""Elements per Level
-Expandable, per-level breakdown of model elements, with click-to-select links.
+__doc__ = """__________________________________________________
+Description:
 
-Rules:
-  * Only real model elements are counted (CategoryType.Model). This automatically
-    excludes annotation AND analytical elements (analytical cats are AnalyticalModel).
-  * Sub-elements / parts are excluded via EXCLUDED_CATS below -- this covers
-    Curtain Panels & Mullions (belong to Curtain Walls) plus stair/railing parts.
-  * Element types are excluded (WhereElementIsNotElementType).
-  * Each level is a collapsible block; every level and every category row carries a
-    link that selects those elements in Revit. Very long id lists are split into
-    numbered chunks so the revit:// link stays valid.
-Read-only: no transaction required.
-"""
+Counts the model elements on each level, broken down by category, from lowest level to highest.
+Every level and category has a link to select those elements, plus a list of elements with no level and whole-model totals.
+__________________________________________________
+How-to:
+
+-> Click on the button
+-> Wait while the whole model is scanned
+-> Click a level in the output window to expand it
+-> Click a "select" link to select those elements in Revit
+__________________________________________________
+Author: Mohamed Bedair"""
+
 
 import System
 from Autodesk.Revit.DB import (

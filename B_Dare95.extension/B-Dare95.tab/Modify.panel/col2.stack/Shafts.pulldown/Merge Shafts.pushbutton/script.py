@@ -1,20 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Shaft Merger
+__doc__ = """__________________________________________________
+Description:
 
-Groups every Shaft Opening in the project by:
-    - Shaft Function   (custom / shared instance parameter)
-    - Base Constraint  (WALL_BASE_CONSTRAINT)
-    - Base Offset      (WALL_BASE_OFFSET)
-    - Top Constraint   (WALL_HEIGHT_TYPE)
-    - Top Offset       (WALL_TOP_OFFSET)
-    - Unconnected Height (only when Top Constraint is <Unconnected>)
+Finds shafts in the project with the same Shaft Function, base and top settings, and merges each group into a single shaft.
+Overlapping outlines can be joined, values common to all of them are copied over, and the originals can be deleted.
+__________________________________________________
+How-to:
 
-Every group that holds more than one shaft can be merged into a single shaft
-element: one sketch that carries all the boundary loops of its members.
-Overlapping / touching loops can optionally be unioned into a clean outline.
+-> Click on the button
+-> Tick the groups you want to merge (search to filter)
+-> Choose whether to join outlines, delete originals and copy values
+-> Click Merge Selected
+-> A summary shows the result; details are in the output window
+__________________________________________________
+Author: Mohamed Bedair"""
 
-IronPython 2.7 / Revit 2024-2027.
-"""
 
 __title__ = "Merge\nShafts"
 __author__ = "B_Dare95"

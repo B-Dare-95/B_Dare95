@@ -1,15 +1,21 @@
 # -*- coding: utf-8 -*-
-"""Model Group Manager.
+__doc__ = """__________________________________________________
+Description:
 
-WPF tool that lists every Model Group type in the active document with its
-creator, instance count and contents, and adds two clean-up actions:
+Lists every model group in the model with who created it, how many copies are placed and what's inside.
+Two clean-up buttons ungroup groups placed only once and delete empty or unplaced groups.
+__________________________________________________
+How-to:
 
-    * Ungroup every model group that has exactly one placed instance.
-    * Delete every model group that contains no elements (empty definitions and
-      unplaced group types).
+-> Click on the button
+-> Search or click a group to see its contents
+-> Click Ungroup single-instance groups to ungroup them all
+-> Click Delete empty groups to remove empty and unplaced ones
+-> Confirm the list shown before anything changes
+-> Click Copy report to copy the full list
+__________________________________________________
+Author: Mohamed Bedair"""
 
-IronPython 2.7 / Revit 2024-2027.
-"""
 
 __title__ = "Model Group\nManager"
 __author__ = "Mohamed Bedair"

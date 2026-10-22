@@ -1,15 +1,19 @@
 # -*- coding: utf-8 -*-
-"""
-Split Walls at Columns - Select Only
---------------------------------------
-    1. User draws a rectangle (walls only are picked).
-    2. The script counts, AFTER selection, how many of the picked walls
-       actually need splitting and shows a Proceed / Cancel prompt.
-    3. If the user proceeds, those walls are split (columns can be in
-       the active document and/or linked documents, categories
-       "Columns" and "Structural Columns").
-    4. Once done, the user is asked to select again or exit.
-"""
+__doc__ = """__________________________________________________
+Description:
+
+Cuts walls where columns sit in them, so each wall becomes separate pieces that stop at the column faces.
+Columns and structural columns from your model and all loaded links are used.
+__________________________________________________
+How-to:
+
+-> Click on the button
+-> Draw a box around the walls to process
+-> Check how many walls will be split and click Yes
+-> Choose to select more walls or stop
+__________________________________________________
+Author: Mohamed Bedair"""
+
 
 __title__ = 'Split Walls\nat Columns\n(Select)'
 __author__ = 'B-Dare95'

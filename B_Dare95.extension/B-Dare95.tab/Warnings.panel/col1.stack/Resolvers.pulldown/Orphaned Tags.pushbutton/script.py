@@ -1,11 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Orphaned Tag Fixer
+__doc__ = """__________________________________________________
+Description:
 
-Scans every view in the document for orphaned tags and fixes them in one go:
-  - Tagged element still exists (host or link)  -> tag is re-attached to it
-  - Tagged element no longer exists             -> tag is deleted
-A per-category summary is shown before anything is changed.
-"""
+Finds orphaned tags in every view and fixes them in one go: tags whose element still exists (in your model or a link) are re-attached, and tags whose element is gone are deleted.
+You see a summary by tag category before anything changes.
+__________________________________________________
+How-to:
+
+-> Click on the button and wait for the scan
+-> Untick any tag categories you want to leave alone
+-> Choose Move to element or Keep position + leader
+-> Click Fix Selected
+-> Skipped tags are listed in the output window for review
+__________________________________________________
+Author: Mohamed Bedair"""
+
 __title__ = "Orphaned\nTags"
 __author__ = "Mohamed Bedair"
 

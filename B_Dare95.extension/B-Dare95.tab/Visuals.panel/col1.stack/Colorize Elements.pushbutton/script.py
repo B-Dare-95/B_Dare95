@@ -1,47 +1,21 @@
 # -*- coding: utf-8 -*-
-"""
-Universal Element Colorizer
-===========================
-Two colorize modes selectable via the MODE toggle at the top:
+__doc__ = """__________________________________________________
+Description:
 
-  * By View Filter      - creates ParameterFilterElement objects (WPC_ prefix)
-                          stored in the document and applied to the active view.
-  * By Graphic Override - applies per-element graphic overrides directly on each
-                          instance in the active view.
+Colours the elements in the active view by the value of a parameter, e.g. walls by Fire Rating or pipes by System Type.
+Choose view filters (stay correct as the model changes) or direct graphic overrides, and which surface, cut and line colours to set.
+__________________________________________________
+How-to:
 
-Every value gets four independent colours, one per channel:
-  SURF  - surface patterns (foreground and/or background)
-  CUT   - cut patterns (foreground and/or background)
-  PROJ  - projection lines
-  LINE  - cut lines
-The checkboxes at the bottom right decide which channels are written, and which
-pattern slot (foreground / background) each pattern colour lands in.
+-> Open the view you want to colour
+-> Click on the button and choose By View Filter or By Graphic Override
+-> Pick a category, then an instance or type parameter
+-> Adjust colours or turn values off, tick the override targets
+-> Click Apply
+-> Shift+Click the button to remove the tool's filters from the view
+__________________________________________________
+Author: Mohamed Bedair"""
 
-Workflow
---------
-1. Pick a MODE at the top (Filter or Override).
-2. Pick a category from the left list (search box narrows it).
-3. Toggle Instance / Type to control which parameters are listed.
-4. Pick a parameter (its own search box narrows it too).
-5. All unique values appear on the right with auto-assigned palette colours.
-   * Click any of the four swatches to open the colour picker.
-     With "Sync colours" ticked, one pick fills all four channels of that row.
-   * Click the ON / OFF pill to exclude that value.
-6. Tick the override targets you want, then press Apply.
-
-View template failsafe
-----------------------
-In Filter mode, if the active view is driven by a view template that controls
-V/G Overrides Filters, Revit will not accept any filter change on the view.
-The tool detects this up front and stops without creating anything, naming the
-template so it can be edited or detached manually.
-
-Reset button
-   Filter mode   -> removes all WPC_ filters from the active view.
-   Override mode -> clears overrides on every loaded element.
-
-Config-mode (right-click the button) also removes WPC_ filters.
-"""
 
 import clr
 clr.AddReference('PresentationCore')

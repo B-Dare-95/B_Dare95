@@ -1,32 +1,19 @@
 # -*- coding: utf-8 -*-
 __title__ = "Corner Guard Placer"
-__doc__ = """Version = 2.0
-_____________________________________________________________________
+__doc__ = """__________________________________________________
 Description:
-Places a non-hosted Corner Guard family at every convex corner of the
-picked columns (active document or linked model).
 
-Runs in 2D plan views only. Every guard is placed on the level of the
-ACTIVE VIEW, not the level the column happens to be associated with -
-so to guard a column on Level 3, open the Level 3 plan and run.
+Places a corner guard family at every outside corner of the columns you pick, turned to face outwards.
+Columns can be in your model or a linked model; guards go on the level of the open plan view.
+__________________________________________________
+How-to:
 
-Corner detection runs off the real column footprint, so rotated and
-non-rectangular columns are handled. Rotation is derived from each
-corner's outward bisector, calibrated against the family's home
-orientation (top-left corner at 0 degrees).
-
-Corners are numbered in the column's own frame:
-    1 = top-left, 2 = bottom-left, 3 = bottom-right, 4 = top-right
-walking counter-clockwise, so the numbering follows the column when it
-is rotated.
-
-How to use:
-
-1-Open the plan view of the level you want the guards on
-2-Choose Active document or Linked model
-3-Pick the guard family type
-4-Pick one or more columns
-_____________________________________________________________________
+-> Open the plan view of the level you want the guards on
+-> Click on the button and choose Active document or Linked model
+-> Pick the guard family type
+-> Click Pick columns and place, then pick the columns
+-> Click Finish to place the guards
+__________________________________________________
 Author: Mohamed Bedair"""
 
 import clr

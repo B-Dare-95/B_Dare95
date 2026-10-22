@@ -1,19 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Number stair treads up to the active view's cut plane.
+__doc__ = """__________________________________________________
+Description:
 
-Pick a stair run (active model or linked) in a plan view. Treads are walked
-up from the run's base elevation, one riser at a time; every tread is numbered
-until the first tread whose top is above the view cut plane - that tread is
-the last one numbered. Each number is a TextNote centred inside one
-full-circle detail curve. Keep picking runs until Esc.
+Numbers stair treads in a plan with a number inside a circle, from the bottom of the run up to the view's cut plane.
+Numbering follows the stair's start number, carries on across runs and landings, and works with linked stairs.
+__________________________________________________
+How-to:
 
-Numbers follow the stairs' "Tread/Riser Start Number" parameter and continue
-through the runs of the same stairs (runs below the picked run are counted).
-Bubbles sit on the left or right side of the run (as seen walking up), with
-a user offset between the run edge and the bubble edge.
-The landing at the top of the picked run counts as a tread and is numbered
-too, as long as the walk up hasn't already stopped at the cut plane.
-"""
+-> Open a plan view
+-> Click on the button
+-> Choose active or linked model, text type, circle line style and size
+-> Pick the bubble side (left, center or right) and the edge offset
+-> Click Start Numbering, then pick stair runs, Esc to finish
+__________________________________________________
+Author: Mohamed Bedair"""
+
 __title__ = "Stair Tread\nNumbering"
 
 import clr

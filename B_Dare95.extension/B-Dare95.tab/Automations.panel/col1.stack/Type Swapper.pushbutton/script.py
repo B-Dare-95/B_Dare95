@@ -1,12 +1,21 @@
 # -*- coding: utf-8 -*-
 __title__   = "Type\nSwapper"
-__doc__     = (
-    "Bulk-swap family types across the project by category.\n\n"
-    "1. Select a category from the left panel.\n"
-    "2. Build swap pairs: pick a FROM type (in use) and a TO type (any loaded).\n"
-    "3. Add more rows with '+ Add Row'.\n"
-    "4. Click CONFIRM SWAP to apply all changes in a single transaction."
-)
+__doc__ = """__________________________________________________
+Description:
+
+Changes the type of many elements at once across the whole project: every element of type A becomes type B.
+Pick a category, build one or more From -> To pairs, and apply them all together in one undo.
+__________________________________________________
+How-to:
+
+-> Click on the button
+-> Pick a category from the list on the left
+-> Choose a FROM type (placed) and a TO type (any loaded)
+-> Click "+ Add Row" for more swap pairs
+-> Click CONFIRM SWAP to apply all pairs
+-> The result shows at the bottom of the window
+__________________________________________________
+Author: Mohamed Bedair"""
 
 import clr
 clr.AddReference('RevitAPI')

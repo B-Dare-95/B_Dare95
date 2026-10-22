@@ -1,6 +1,22 @@
 # -*- coding: utf-8 -*-
 
 #Imports
+
+__doc__ = """__________________________________________________
+Description:
+
+Copies the Shaft Function value from one shaft to as many other shafts as you click.
+__________________________________________________
+How-to:
+
+-> Make sure the project has the Shaft Function parameter
+-> Click on the button
+-> Pick the source shaft
+-> Click each shaft to match; it updates straight away
+-> Press Esc when you're done
+__________________________________________________
+Author: Mohamed Bedair"""
+
 from Autodesk.Revit.DB import *
 from Autodesk.Revit.UI import *
 from Autodesk.Revit.UI.Selection import *

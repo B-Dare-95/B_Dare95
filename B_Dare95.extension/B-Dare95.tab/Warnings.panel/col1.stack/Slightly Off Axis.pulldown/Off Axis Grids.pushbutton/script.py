@@ -1,3 +1,18 @@
+__doc__ = """__________________________________________________
+Description:
+
+Straightens grids that Revit flags as "slightly off axis" by rotating them onto the nearest horizontal or vertical direction. You're asked before anything changes.
+__________________________________________________
+How-to:
+
+-> Unpin the grids you want fixed
+-> Click on the button
+-> Check how many flagged grids were found and click Yes
+-> Each grid is rotated around its start point
+-> Fixed and skipped grids are listed in the output window
+__________________________________________________
+Author: Mohamed Bedair"""
+
 import clr
 import math
 

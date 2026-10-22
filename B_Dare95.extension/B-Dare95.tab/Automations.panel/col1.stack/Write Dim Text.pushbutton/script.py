@@ -1,16 +1,21 @@
 # -*- coding: utf-8 -*-
-"""
-Dimension Text Writer
----------------------
-1. Enter the text for Top (Above), Bottom (Below), Prefix and Suffix.
-2. Pick dimensions one after another - text is written instantly on pick.
-3. Press ESC to finish. Everything happens inside ONE Transaction (one Undo).
-
-Target: Revit 2024-2027, IronPython 2.7 (pyRevit)
-"""
-
 __title__ = "Dim\nText"
-__doc__ = "Write Top / Bottom / Prefix / Suffix text into picked dimensions. ESC to finish."
+__doc__ = """__________________________________________________
+Description:
+
+Writes the same Top, Bottom, Prefix and/or Suffix text into many dimensions, one click per dimension.
+Only ticked fields are changed (an empty ticked field clears that text), and all changes are a single undo.
+__________________________________________________
+How-to:
+
+-> Open the view with the dimensions
+-> Click on the button
+-> Type your text and untick the fields to leave alone
+-> Choose All segments or Picked segment only
+-> Click Start Picking, then click dimensions one by one
+-> Press Esc to finish
+__________________________________________________
+Author: Mohamed Bedair"""
 
 import clr
 clr.AddReference("PresentationFramework")

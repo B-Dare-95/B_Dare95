@@ -1,8 +1,20 @@
 # -*- coding: utf-8 -*-
-"""
-Floor Opener (Linked Shafts) v5 - Cut openings in a floor around shaft
-openings from LINKS YOU CHOOSE.
-"""
+__doc__ = """__________________________________________________
+Description:
+
+Cuts holes in a floor wherever shaft openings from your linked models pass through it, following each shaft's exact shape.
+The floor is rebuilt with the holes in its sketch, so it becomes a new element; existing holes are kept.
+__________________________________________________
+How-to:
+
+-> Select one flat floor, or click the button and pick it
+-> Tick the links whose shafts you want to use
+-> Tick "Host document" too if your own shafts should cut
+-> Click Cut openings
+-> A summary shows how many shafts were cut
+__________________________________________________
+Author: Mohamed Bedair"""
+
 
 import clr
 clr.AddReference('RevitAPI')

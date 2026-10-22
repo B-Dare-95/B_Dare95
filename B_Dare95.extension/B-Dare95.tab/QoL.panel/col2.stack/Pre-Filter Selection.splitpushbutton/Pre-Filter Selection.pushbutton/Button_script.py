@@ -2,26 +2,21 @@
 __title__ = "Pre-Filter Selection"
 __author__ = "Mohamed Bedair"
 __version__ = '1.2.0'
-__doc__ = """
-Version = 1.2.0
-Date    = 01.05.2025
-
+__doc__ = """__________________________________________________
 Description:
-Filters the Selection box to only selected categories. Also allows negating selection with SHIFT click.
 
+Makes your selection box pick only the categories you choose, so you can drag over a busy area and get just what you need.
+Shift+Click to do the opposite: select everything except those categories.
+__________________________________________________
 How-to:
--> Run the script
--> Select desired categories from the menu
--> The selection box will only highlight selected categories
 
-Last update:
-- [01.05.2025] - 1.2.0 RELEASE
-  - Updated UI to Catppuccin dark theme
-- [19.02.2025] - 1.1.0 RELEASE
-  - Added Feature to Negate Selection with SHIFT Click
-
-Author: Mohamed Bedair
-"""
+-> Click on the button
+-> Tick the categories you want (use search or Select All)
+-> Click "Make A Selection"
+-> Drag a box in the view; only those categories are selected
+-> Shift+Click the button to select everything except them
+__________________________________________________
+Author: Mohamed Bedair"""
 
 # IMPORTS
 import System

@@ -1,21 +1,24 @@
 # -*- coding: utf-8 -*-
-"""WarChart - Warnings Pie Chart.
-
-Interactive, real-time pie chart of all Revit warnings in the active document.
-Every slice is one warning type; slice size = share of the total. Click a slice
-(or its legend row) to select every element involved in that warning type.
-
-Read-only tool: no transaction is ever opened.
-"""
-
 __title__ = "War\nChart"
 # Keeps the IronPython engine alive after the script returns, which a genuinely
 # modeless window requires.
 __persistentengine__ = True
 __author__ = "Mohamed Bedair"
-__doc__ = ("Interactive pie chart of project warnings.\n"
-           "Click a slice or a legend row to select the elements of that warning type.\n"
-           "The chart auto-refreshes as you fix warnings.")
+__doc__ = """__________________________________________________
+Description:
+
+Shows all the warnings in your model as a live pie chart, one slice per warning type. Click a slice or its row to select every element involved, and watch the chart update as you fix them.
+You can keep working in Revit while the window is open.
+__________________________________________________
+How-to:
+
+-> Click on the button to open the chart window
+-> Hover a slice to see the warning text and counts
+-> Click a slice or a list row to select its elements
+-> Turn on Isolate on click to also isolate them in the active view
+-> Use the gear for settings and the camera to save a PNG
+__________________________________________________
+Author: Mohamed Bedair"""
 
 import clr
 import os

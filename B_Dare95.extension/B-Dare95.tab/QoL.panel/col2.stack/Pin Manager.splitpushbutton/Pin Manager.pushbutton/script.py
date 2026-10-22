@@ -2,17 +2,20 @@
 __title__   = "Pin / Unpin Manager"
 __author__  = "Mohamed Bedair"
 __version__ = "2.0.0"
-__doc__     = """Version = 2.0.0
-
+__doc__ = """__________________________________________________
 Description:
-Unified Pin / Unpin Manager.
 
+Pins or unpins elements in bulk: in the current view, in views you choose, or in the whole project.
+You can limit it to certain model categories, and a summary shows how many elements were changed.
+__________________________________________________
 How-to:
-1. Select Action      ->  Pin  or  Unpin
-2. Select Scope       ->  Current View / Selected Views / Entire Project
-3. (Optional) Enable Category Filter and pick model categories
-4. Click Run
 
+-> Click on the button
+-> Choose Pin or Unpin
+-> Choose Current View, Selected Views or Entire Project
+-> Optionally turn on the category filter and tick categories
+-> Click "Run" and check the summary in the output window
+__________________________________________________
 Author: Mohamed Bedair"""
 
 # ─────────────────────────────────────────────────────────────────────────────

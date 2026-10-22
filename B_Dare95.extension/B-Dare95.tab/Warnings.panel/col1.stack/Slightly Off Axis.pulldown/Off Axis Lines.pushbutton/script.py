@@ -1,3 +1,18 @@
+__doc__ = """__________________________________________________
+Description:
+
+Straightens model and detail lines that Revit flags as "slightly off axis" by rotating them onto the nearest horizontal or vertical direction. You're asked before anything changes.
+__________________________________________________
+How-to:
+
+-> Unpin the lines you want fixed
+-> Click on the button
+-> Check how many flagged lines were found and click Yes
+-> Each line is rotated around its start point
+-> Fixed and skipped lines are listed in the output window
+__________________________________________________
+Author: Mohamed Bedair"""
+
 import clr
 import math
 

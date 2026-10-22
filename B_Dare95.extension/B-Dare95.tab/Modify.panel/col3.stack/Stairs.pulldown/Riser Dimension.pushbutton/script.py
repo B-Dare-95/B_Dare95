@@ -1,32 +1,22 @@
 # -*- coding: utf-8 -*-
-"""Stair Riser Chain Dimension
-
-Pick a stair (host model or linked model) in a section or elevation view and
-the tool places ONE multi-segment vertical dimension up the whole stair:
-
-    plane 0 : the base of the lowest run
-    plane 1 : the landing surface above it
-    ...
-    plane n : the surface the top run finishes on
-
-Each segment then gets its own text:
-
-    Prefix : "<N> EQ. RISERS @ <H>MM = "
-    Suffix : "MM"
-
-so a segment reads e.g.  11 EQ. RISERS @ 170MM = 1870 MM
-
-The intermediate planes are taken from the base face of the run ABOVE each
-landing rather than from the landing's own top face. Both sit at exactly the
-same elevation, but a run's base face is the one kind of reference that reads
-reliably out of stair geometry, host or linked.
-"""
-
 __title__ = "Stair Riser\nChain"
 __author__ = "Mohamed Bedair"
-__doc__ = ("Chain-dimension a stair's rise in section: base, each landing top, "
-           "then the finish level, with 'N EQ. RISERS @ HMM = ' / 'MM' written "
-           "into each segment's Prefix / Suffix.")
+__doc__ = """__________________________________________________
+Description:
+
+Places one chain dimension up the full height of a stair in a section, with a segment per run from the base to each landing and the top.
+Each segment gets text like '11 EQ. RISERS @ 170MM = 1870 MM'. Works with stairs in your model or in a link.
+__________________________________________________
+How-to:
+
+-> Open a section or elevation view
+-> Click on the button and choose host model or linked model
+-> Pick a stair
+-> Choose the dimension type, offset and text, then confirm
+-> Keep picking more stairs with the same settings, Esc to finish
+-> A summary shows the segments placed and any mismatches
+__________________________________________________
+Author: Mohamed Bedair"""
 
 import clr
 

@@ -1,26 +1,21 @@
 # -*- coding: utf-8 -*-
 __title__  = "Split\nFloors"
 __author__ = "Mohamed Bedair"
-__doc__    = """Version = 1.0
-Date    = 21.10.2026
-_____________________________________________________________________
+__doc__ = """__________________________________________________
 Description:
-Split Floors whose sketch has more than one outline into separate
-Floors, one per outline. Holes stay with the outline around them,
-islands inside holes become Floors of their own.
-Type, level, structural flag and editable instance parameters are
-carried over to every new Floor.
-_____________________________________________________________________
+
+Splits a floor drawn with several separate outlines into one floor per outline. Holes stay with the outline around them.
+Type, level, structural setting and other instance values are copied to each new floor; Mark is left empty.
+__________________________________________________
 How-to:
--> Pre-select Floors, or click the button and pick them (Finish)
--> Click:        split and delete the originals
--> Shift+Click:  split and keep the originals
-_____________________________________________________________________
-Notes:
-- Mark and IfcGUID are not copied (they must stay unique)
-- Slab shape edits and slope arrows are not carried over
-- Elements hosted on an original are deleted with it (asked first)
-_____________________________________________________________________
+
+-> Select the floors, or click the button and pick them
+-> Click Finish to start the split
+-> Confirm if shape edits or hosted elements would be lost
+-> Shift+Click the button to keep the original floors
+-> The new floors are selected for you
+__________________________________________________
+Author: Mohamed Bedair
 Based on "Split FilledRegion Boundaries" by Erik Frits"""
 
 #==================================================

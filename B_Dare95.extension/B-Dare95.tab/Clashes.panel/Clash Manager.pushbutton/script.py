@@ -1,12 +1,20 @@
 # -*- coding: utf-8 -*-
-"""
-Clash Navigator (single-file)
-Loads Navisworks HTML clash reports (one tab each), lets the user browse
-clashes, tick them Solved / Approved, export those results to HTML, and
-either focuses the two clashing elements (section box, zoom, selection --
-linked elements included; Isolate adds a temporary isolate on top) or
-marks/frames the clash point in the model.
-"""
+__doc__ = """__________________________________________________
+Description:
+
+Go through your Navisworks clash reports without leaving Revit: find each clash, fix it, and tick it off.
+Your Solved / Approved ticks are saved next to the report, so your team sees them too.
+__________________________________________________
+How-to:
+
+-> Click on the button
+-> Click Load HTML Reports and pick one or more reports
+-> Click a clash, then Focus (zoom to it) or Isolate (hide the rest)
+-> In a 3D view, Create Clash Box boxes in the clash point
+-> Tick Solved or Approved as you go
+-> Click Export Results for a progress report to share
+__________________________________________________
+Author: Mohamed Bedair"""
 
 __persistentengine__ = True
 

@@ -1,29 +1,20 @@
 # -*- coding: utf-8 -*-
 
 __title__   = "MEP Filters"
-__doc__     = """
-________________________________________________________________
+__doc__ = """__________________________________________________
 Description:
-- Creates View Filters for MEP for Visual Inspection
 
-How to Use:
-- Run the script
-- A configuration dialog opens with four discipline sections:
-    HVAC / Plumbing / Fire Protection / Electrical
-- Each section starts with pre-filled default rows.
-- Click "+" at the bottom of any section to add a new row.
-- Click "×" on a row to delete it.
-- For HVAC / Plumbing / Fire:
-    * Edit the filter name
-    * Pick a System Classification from the dropdown
-      (values are loaded from all linked Revit files)
-    * Choose a highlight color
-- For Electrical (Cable Trays / Conduits):
-    * Edit the filter name
-    * Type any match text (Type Name contains...)
-    * Choose a highlight color
-- Click "Apply Filters" to create/apply the filters
-________________________________________________________________
+Colours the MEP systems in the active view, so supply, return, drainage, fire and electrical services are easy to tell apart.
+Pipes and ducts are matched by System Classification, cable trays and conduits by text in their type name.
+__________________________________________________
+How-to:
+
+-> Open the view you want to colour
+-> Click on the button
+-> Rename, recolour, add or delete filters in each group
+-> Click Apply Filters
+-> Filters that already exist with the same name are reused
+__________________________________________________
 Author: Mohamed Bedair"""
 
 # ── Imports ───────────────────────────────────────────────────────────────────

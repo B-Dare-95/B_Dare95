@@ -1,14 +1,19 @@
 # -*- coding: utf-8 -*-
-"""Magic 3D Box
+__doc__ = """__________________________________________________
+Description:
 
-Drag a rectangle in a plan, section or elevation view and get a 3D view
-whose section box matches what you dragged.
+Draw a box around any area in a plan, section or elevation, and a 3D view opens showing just that area.
+The same 3D view is reused every time, so your project doesn't fill up with extra 3D views.
+__________________________________________________
+How-to:
 
-The same named 3D view is reused every run, so the project does not fill
-up with throwaway 3D views.
-
-Shift-click the button to reopen the settings window.
-"""
+-> Open a plan, section or elevation view
+-> Click on the button
+-> Drag a rectangle around the area you want to see
+-> A 3D view opens, boxed to that area
+-> Shift+Click to change the view template or 3D view name
+__________________________________________________
+Author: Mohamed Bedair"""
 
 __title__ = "Magic\n3D Box"
 __author__ = "Mohamed Bedair"

@@ -2,41 +2,21 @@
 __title__   = "What's This ID?"
 __author__  = "Mohamed Bedair"
 __version__ = "2.0.0"
-__doc__ = """
-Version = 2.0.0
-Date    = 05.10.2026
-
+__doc__ = """__________________________________________________
 Description:
-Type an Element ID and the tool looks for it in the host model AND in every
-loaded Revit link. The element is reported (category, family, type, level,
-phase, workset, mark, comments, bounding box) and selected in the Revit UI -
-linked elements stay selected the same way as in Pre-Filter Selection (Links).
 
-Element IDs are only unique inside one document, so the same number can exist
-in the host and in several links (or in several instances of the same link).
-When that happens a picker opens so you can choose which one you meant.
-
+Type an element ID and the tool finds it in your model and in every loaded link, selects it, zooms to it and shows its details (category, family, type, level, phase, workset, mark, comments).
+If the same ID exists in several places, you choose which one you meant.
+__________________________________________________
 How-to:
--> Run the script
--> Enter the Element ID
--> If the ID exists in more than one place, pick the one you want
-   (double-click or Enter also confirms)
--> The element is selected, the view zooms to it, and the report opens
 
-Notes:
-- Linked selection needs Revit 2023+ (Selection.SetReferences).
-- Unloaded links are skipped.
-- Zoom on a linked element only happens when its link instance is visible in
-  the active view. The bounding box of a linked element is reported in HOST
-  coordinates (link transform applied), so it matches host elements.
-
-Last update:
-- [05.10.2026] - 2.0.0 Linked elements: search all loaded links, picker for
-                 duplicate IDs, selection through SetReferences
-- 1.0.0 Host-only version
-
-Author: Mohamed Bedair
-"""
+-> Make sure the links you need are loaded
+-> Click on the button
+-> Type the element ID and confirm
+-> If the ID is found in more than one place, pick the one you want
+-> The element is selected and zoomed to, and its details are shown
+__________________________________________________
+Author: Mohamed Bedair"""
 
 # ─── IMPORTS ──────────────────────────────────────────────────────────────────
 import System

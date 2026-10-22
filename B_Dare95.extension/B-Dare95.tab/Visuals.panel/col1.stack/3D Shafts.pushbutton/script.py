@@ -1,31 +1,21 @@
 # -*- coding: utf-8 -*-
 
 __title__ = "3D Shafts"
-__doc__ = """
-________________________________________________________________
+__doc__ = """__________________________________________________
 Description:
-- Live, modeless 3D visualization of Shaft Openings, colored by
-  "Shaft Function", drawn with DirectContext3D.
 
-Nothing is created in the model:
-- No DirectShapes, no transaction, no worksets, no view overrides.
-- The overlay exists only while this window is open.
+Shows every Shaft Opening as a coloured, see-through 3D volume, coloured by its Shaft Function.
+It's a live, temporary overlay: it follows your edits and disappears when you close the window. Nothing is added to the model.
+__________________________________________________
+How-to:
 
-How to Use:
-- Activate a 3D View and run the tool.
-- Pick colors per Shaft Function, toggle visibility, set transparency.
-- Edit shafts in Revit; the overlay follows every change live.
-________________________________________________________________
-REQUIRES in bundle.yaml:
-
-    engine:
-      persistent: true
-      clean: false
-
-Without a persistent engine the IronPython scope is disposed while
-the DirectContext3D server is still registered, and Revit will crash
-on the next frame.
-________________________________________________________________
+-> Open a 3D view
+-> Click on the button
+-> Shafts appear coloured by Shaft Function
+-> Change colours, show/hide functions or set transparency
+-> Tick "Selected shafts only" to show just your selection
+-> Close the window to remove the overlay
+__________________________________________________
 Author: Mohamed Bedair"""
 
 # ---------------------------------------------------------------------------

@@ -2,41 +2,22 @@
 __title__   = "Renumber Rooms"
 __author__  = "B-Dare95"
 __version__ = "Version 3.0"
-__doc__     = """Version = 3.0
-Date    = 09.06.2026
-_____________________________________________________________________
+__doc__ = """__________________________________________________
 Description:
-Renumbers a chosen Room parameter using grid-line intersections and
-a nearest-to-corner reference system, with per-level or project-wide
-sequence control and support for both Text and Integer parameters.
 
-Workflow:
-  1. Collects all Grid Lines and computes every pairwise 2-D
-     intersection, then identifies the four outermost corner points
-     (TL / TR / BL / BR).
-  2. The user picks ONE corner tile as the numbering origin.
-  3. Rooms are grouped by Level (lowest elevation first).
-  4. Within each Level, rooms are sorted nearest → farthest from the
-     selected corner and numbered sequentially.
-  5. Sequence Mode:
-       Per Level    — counter resets to Start Number each new level.
-       Full Project — counter runs continuously across all levels.
-  6. Both Text (String) and Number (Integer) parameters are supported.
-     Choosing an Integer parameter restricts Prefix / Suffix to digits
-     only — a live error message appears if non-numeric characters are
-     entered.
-_____________________________________________________________________
+Renumbers all placed rooms level by level, starting from the room nearest a grid corner you choose and moving outwards.
+Add a prefix or suffix, and choose whether numbering restarts on each level or runs through the whole project.
+__________________________________________________
 How-to:
--> Select a Room Parameter from the left panel
-   (TEXT = accepts any string · INT = digits only)
--> Click a Reference Corner tile
--> Set Prefix, Suffix, Start Number, and Sequence Mode
--> Click RUN
-_____________________________________________________________________
-Last update:
-- [09.06.2026] - 3.0  Sequence mode toggle + Integer param support
-_____________________________________________________________________
-Author: B-Dare95"""
+
+-> Click on the button
+-> Pick the room parameter to fill (usually Number)
+-> Click one of the four grid corners as the starting point
+-> Set the prefix, suffix and start number
+-> Choose Per Level or Full Project, then click RUN
+-> A summary per level shows when it's done
+__________________________________________________
+Author: Mohamed Bedair"""
 
 # ╦╔╦╗╔═╗╔═╗╦═╗╔╦╗╔═╗
 # ║║║║╠═╝║ ║╠╦╝ ║ ╚═╗

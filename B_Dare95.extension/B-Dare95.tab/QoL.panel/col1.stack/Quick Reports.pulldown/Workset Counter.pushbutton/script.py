@@ -1,10 +1,19 @@
 # -*- coding: utf-8 -*-
-"""Workset Report.
+__doc__ = """__________________________________________________
+Description:
 
-Lists every workset in the project with its creator, owner, open/closed state,
-element count and a per-category breakdown. Worksets holding zero elements are
-still reported.
-"""
+Reports every user workset with its creator, current owner, open/closed state and how many elements it holds, with a breakdown by category.
+Empty worksets are listed too, and closed worksets are flagged.
+__________________________________________________
+How-to:
+
+-> Open a workshared model
+-> Make sure the worksets you care about are open
+-> Click on the button
+-> Read the summary table and category breakdown in the output window
+__________________________________________________
+Author: Mohamed Bedair"""
+
 
 from collections import defaultdict
 

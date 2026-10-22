@@ -1,24 +1,19 @@
 # -*- coding: utf-8 -*-
 __title__ = "Column Guard Generator"
-__doc__ = """Version = 3.0
-_____________________________________________________________________
+__doc__ = """__________________________________________________
 Description:
-Generates individual Column Guardrails around columns in a linked file.
 
-The railing path is an oriented rectangle built in each column's own
-coordinate system, so it works on any family - rectangular, circular,
-L-shaped, chamfered or in-place - without touching face geometry.
+Draws a rectangular guard railing around each column you pick from a linked model, set out from the column faces by the distance you choose.
+Railings are made in your model on the level of the open plan view.
+__________________________________________________
+How-to:
 
-The railing is hosted on the ACTIVE VIEW's level, not on a level guessed
-from the linked column.
-
-How to use:
-
-1-Open the plan view you want the guards on
-2-Select a Railing Type and an offset distance
-3-Select Columns from a link
-4-Done!!
-_____________________________________________________________________
+-> Open the plan view of the level you want the guards on
+-> Click on the button
+-> Choose a railing type, face and base offsets (cm) and direction
+-> Click Select Columns and pick columns in the link
+-> Click Finish to create the railings
+__________________________________________________
 Author: Mohamed Bedair"""
 
 import clr

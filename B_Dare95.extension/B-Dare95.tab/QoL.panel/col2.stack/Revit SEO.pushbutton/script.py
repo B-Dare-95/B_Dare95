@@ -2,31 +2,22 @@
 __title__ = "Revit SEO"
 __author__ = "Mohamed Bedair"
 __version__ = '2.1.0'
-__doc__ = """
-
+__doc__ = """__________________________________________________
 Description:
-Finds all Revit elements in the document matching a selected category
-and optional parameter-value filters. Each row after the first carries
-an AND / OR / NOT operator that controls how it combines with the
-result of all previous rows (left-to-right evaluation).
 
-Operator semantics:
-  AND  — element must match both the previous result AND this filter
-  OR   — element matches if the previous result OR this filter is true
-  NOT  — element must match the previous result AND NOT this filter
-
+Searches the whole model for elements of one category, optionally narrowed by parameter values combined with AND / OR / NOT.
+Results show in a clickable list with name, ID and level; click a row to jump to that element.
+__________________________________________________
 How-to:
--> Run the script
--> Select a single category from the list
--> (Optional) Pick a parameter and value from the filter row
--> (Optional) Click "+ Add Filter" — choose AND / OR / NOT on the
-   connector pill that appears between the rows, then fill in the row
--> Click "Find Elements"
--> Click any row in the results to navigate to that element in Revit
--> Click "Done" or close the results window when finished
 
-Author: Mohamed Bedair
-"""
+-> Click on the button
+-> Pick one category from the list
+-> Optionally choose a parameter and a value to match
+-> Click "+ Add Filter" for more rules and set AND / OR / NOT
+-> Click "Find Elements", then click a row to jump to it
+-> Click "Done" to keep the last clicked element selected
+__________________________________________________
+Author: Mohamed Bedair"""
 
 # ─── IMPORTS ──────────────────────────────────────────────────────────────────
 import System

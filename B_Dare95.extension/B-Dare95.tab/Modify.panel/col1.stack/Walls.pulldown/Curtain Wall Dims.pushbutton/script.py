@@ -1,27 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Curtain Wall Dimension
+__doc__ = """__________________________________________________
+Description:
 
-Pick curtain walls - from the host model or from a Revit link - in a plan,
-elevation or section view. Each wall gets two dimension strings:
-  1. Detailed - wall start -> every curtain grid -> wall end (closest to wall)
-  2. Overall  - wall start -> wall end (outer line)
+Adds two dimension strings to curtain walls: one through every curtain grid line, and an overall one end to end.
+Works in plan, elevation and section views, on walls in your model or in linked models.
+__________________________________________________
+How-to:
 
-The spacing between the wall and the two lines is estimated from the text
-size / text offset of the chosen Dimension Type and the view scale.
+-> Open a plan, elevation or section view
+-> Click on the button
+-> Choose a dimension type and Host model or Linked models
+-> Adjust the spacing factor if needed, then click Start Picking
+-> Click curtain walls one by one, press Esc to finish
+__________________________________________________
+Author: Mohamed Bedair"""
 
-Plan views ............. along the wall length (vertical grids),
-                         placed above the wall
-Elevation / Section .... along the wall height (horizontal grids),
-                         placed to the left of the wall
-
-Picking a panel or mullion selects its host curtain wall (in elevation the
-cursor lands on panels/mullions, not on the wall).
-
-Each grid's candidate references (every line in the grid's view geometry,
-the grid element, the mullion centre planes) are probed one by one with a
-test dimension; the first one Revit actually measures is kept. The final
-detailed string is checked against the expected grid spacing.
-"""
 __title__ = "Curtain Wall\nDimension"
 __author__ = "Mohamed Bedair"
 

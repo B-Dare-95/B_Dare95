@@ -1,12 +1,21 @@
 # -*- coding: utf-8 -*-
-"""Room Register - restore unplaced / deleted rooms from the room register.
+__doc__ = """__________________________________________________
+Description:
 
-Click        : restore unplaced / deleted rooms from this document's register.
-Shift+Click  : open the register's folder (or create the register if it doesn't exist).
+Brings back rooms that were deleted or became unplaced, with their number, name and other data, in the spot they used to be.
+Rooms are recorded automatically in the background, so you only pick the ones you want back.
+__________________________________________________
+How-to:
 
-Live tracking is armed by the extension's startup.py, so it runs in every session
-without clicking this button.
-"""
+-> Click on the button
+-> Choose Reload Latest if asked (shared models)
+-> Tick the rooms you want back, or click Select ready
+-> Click Restore selected
+-> A report shows the result for each room
+-> Shift+Click to open the register's folder, or create one
+__________________________________________________
+Author: Mohamed Bedair"""
+
 __title__ = "Room\nRegister"
 __author__ = "Mohamed Bedair"
 __persistentengine__ = True     # only matters if this button has to arm the tracker itself

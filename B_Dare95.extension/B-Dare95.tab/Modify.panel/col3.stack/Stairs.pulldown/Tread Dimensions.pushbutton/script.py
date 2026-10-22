@@ -1,21 +1,22 @@
 # -*- coding: utf-8 -*-
-"""Stair Run Dimension
-
-Pick a stair (host model or linked model) in a plan view, pick which run to
-dimension, and the tool creates a single linear dimension along the run's
-total going, then writes:
-
-    Prefix : "<N> EQ. TREADS @ <D>MM = "
-    Suffix : "MM"
-
-so the dimension reads e.g.  10 EQ. TREADS @ 275MM = 2750 MM
-"""
-
 __title__ = "Stair Run\nDimension"
 __author__ = "Mohamed Bedair"
-__doc__ = ("Dimension a stair run's total going and write "
-           "'N EQ. TREADS @ DMM = ' / 'MM' into the dimension Prefix / Suffix. "
-           "Works on host and linked stairs.")
+__doc__ = """__________________________________________________
+Description:
+
+Dimensions the total length of a stair run in plan and writes the text for you, like '10 EQ. TREADS @ 275MM = 2750 MM'.
+Works with stairs in your model or in a link.
+__________________________________________________
+How-to:
+
+-> Open a plan view
+-> Click on the button and choose host model or linked model
+-> Pick a stair run
+-> Choose the run, dimension type, offset and text, then confirm
+-> Keep picking more runs with the same settings, Esc to finish
+-> A summary shows how many dimensions were made
+__________________________________________________
+Author: Mohamed Bedair"""
 
 import clr
 

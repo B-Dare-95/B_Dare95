@@ -1,14 +1,19 @@
 # -*- coding: utf-8 -*-
-"""
-Create Shaft Function Parameter
---------------------------------
-Creates a Project Parameter named "Shaft Function" bound to
-Shaft Opening category as an Instance / Text / Identity Data parameter
-with "values can vary by group instances" enabled.
+__doc__ = """__________________________________________________
+Description:
 
-Uses a temporary shared-parameter file under the hood (required by
-the Revit API to create project parameters programmatically).
-"""
+Adds a "Shaft Function" text parameter to all shaft openings in the project, ready for the other shaft tools.
+It sits under Identity Data and can vary between group instances.
+__________________________________________________
+How-to:
+
+-> Click on the button
+-> Check the parameter details in the window
+-> Click OK - Create Parameter
+-> A message confirms it was created, or that it already exists
+__________________________________________________
+Author: Mohamed Bedair"""
+
 __title__   = "Create\nShaft Param"
 __author__  = "B_Dare95"
 __version__ = "1.0.0"

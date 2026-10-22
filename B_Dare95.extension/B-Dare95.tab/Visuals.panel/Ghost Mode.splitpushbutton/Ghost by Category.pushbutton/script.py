@@ -1,16 +1,20 @@
 # -*- coding: utf-8 -*-
 __title__   = "Ghost by Category"
-__doc__     = """
-________________________________________________________________
+__doc__ = """__________________________________________________
 Description:
-- Modeless window: pick the categories to dim in the active view
-- Stays open while you work and follows the active view
-- Negate mode (checkbox, or Shift+Click the button): everything
-  EXCEPT the checked categories goes transparent
-- "Restore View" clears ghost transparency on every model category
-- Existing colour / pattern / halftone overrides are preserved
-- Pressing the button again brings the open window to the front
-________________________________________________________________
+
+Makes the categories you choose see-through in the active view, or everything except them with Negate mode.
+The window stays open and follows the active view, and your existing colours, patterns and halftone are kept.
+__________________________________________________
+How-to:
+
+-> Open a view without a view template
+-> Click on the button
+-> Tick the categories and set the transparency
+-> Tick Negate mode to ghost everything except the ticked ones
+-> Click Apply; click Restore View to undo the ghosting
+-> Shift+Click the button to open with Negate mode on
+__________________________________________________
 Author: Mohamed Bedair"""
 
 __persistentengine__ = True

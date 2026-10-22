@@ -2,33 +2,22 @@
 __title__   = "Shaft Opening Manager"
 __author__  = "Mohamed Bedair"
 __version__ = "1.0.0"
-__doc__     = """
-
+__doc__ = """__________________________________________________
 Description:
-Collects every Shaft Opening in the project and presents them in a
-live-editable table with the following columns:
 
-  ID (read-only) · Base Constraint · Base Offset ·
-  Top Constraint · Top Offset · Shaft Function
-
-Prerequisite:
-  The custom parameter "Shaft Function" must already be bound to the
-  Openings category (Manage → Project Parameters). The script exits
-  with an explanatory message if it is absent.
-
+Lists every shaft opening in the project in one editable table: base and top level, offsets and Shaft Function.
+Edit values, delete shafts or jump to one in the model, then save everything in one go.
+__________________________________________________
 How-to:
--> Run the script
--> The Shaft Opening Manager window opens immediately
--> Edit any cell directly — ComboBox for levels, TextBox for offsets
-   and Shaft Function value
--> Use the search bar to filter rows by ID or Shaft Function text
--> Click an element's ID to select it and navigate Revit to that shaft
--> Click ✕ at the end of a row to mark that shaft for deletion
--> "Save Changes" commits all edits (and deletes) in a single transaction
--> "Cancel" discards all edits and closes the window
 
-Author: Mohamed Bedair
-"""
+-> Make sure the project has the Shaft Function parameter
+-> Click on the button
+-> Edit levels, offsets or Shaft Function right in the table
+-> Click an ID to select and show that shaft in the model
+-> Click x on a row to mark that shaft for deletion
+-> Click Save Changes to apply, or Cancel to discard
+__________________________________________________
+Author: Mohamed Bedair"""
 
 # ─── IMPORTS ───────────────────────────────────────────────────────────────────
 import System

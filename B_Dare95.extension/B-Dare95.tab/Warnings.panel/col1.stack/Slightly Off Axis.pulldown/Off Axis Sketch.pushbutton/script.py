@@ -1,40 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Fix "Line in Sketch is slightly off axis" warnings (whole project)
+__doc__ = """__________________________________________________
+Description:
 
-Collects every Revit warning whose text is
-    "Line in Sketch is slightly off axis and may cause inaccuracies."
-and works EXCLUSIVELY with the elements those warnings carry.
+Fixes "Line in Sketch is slightly off axis" warnings in floors, roofs, openings, filled regions and other sketches. Each flagged line is snapped straight and the connected lines follow, so the outline stays closed.
+Lines more than about 5 degrees off are left alone.
+__________________________________________________
+How-to:
 
-Each such warning references two elements:
-    - the host element (Floor / Opening / Roof / Filled Region / ... - has a Sketch)
-    - the offending sketch line (a CurveElement living inside that host's Sketch)
+-> Make sure you are not in sketch mode
+-> Click on the button
+-> Check how many lines and elements were found and click Yes
+-> Each sketch is edited and its flagged lines are straightened
+-> A summary shows how many lines were aligned
+__________________________________________________
+Author: Mohamed Bedair"""
 
-Strategy
-    1. Read doc.GetWarnings(), keep only the sketch off-axis warning.
-    2. For every offending sketch line, resolve the owning Sketch
-       (ModelCurve.SketchId, with a dependency-walk fallback via the host).
-    3. Group the lines by Sketch so each sketch is edited once.
-    4. Prompt the user: how many lines / elements were found - proceed or exit.
-    5. Per sketch: open a SketchEditScope, and for each flagged line align it
-       to the nearest sketch-plane axis by dropping the small perpendicular
-       component of its far endpoint. SetGeometryCurve(new, overrideJoins=False)
-       preserves the joins, so the adjacent (perpendicular) curve follows and the
-       loop stays closed.
-
-Alignment axes
-    The line is aligned to its own Sketch plane's X / Y vectors (Plane.XVec /
-    Plane.YVec), which is the correct frame for any sketch orientation - plan
-    sketches (floors, shafts, openings, regions) and vertical sketches alike.
-    Falls back to world X/Y if a sketch plane can't be read.
-
-Safety
-    - No warnings are suppressed: the SketchEditScope commit preprocessor returns
-      Continue, letting Revit handle any remaining warnings normally.
-    - Each line and each sketch is isolated; a faulty one is skipped and counted,
-      never aborting the run.
-    - Only lines already flagged by Revit are touched, and only if their off-axis
-      deviation is under ALIGN_MAX_SIN (guards against distorting a real diagonal).
-"""
 
 import clr
 clr.AddReference('RevitAPI')

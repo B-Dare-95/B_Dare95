@@ -3,17 +3,19 @@
 __title__ = "Room Area Lister"
 __author__ = "Mohamed Bedair"
 __version__ = '1.0.0'
-__doc__ = """
-
+__doc__ = """__________________________________________________
 Description:
- scans your entire Revit project and generates an instant, clickable report of every Room in the model
 
+Lists every room in the model with its name and area.
+Each line is a link: click it to select that room in Revit.
+__________________________________________________
 How-to:
->> Click the tool button
->> The output window will open automatically and populate with a list of all rooms found in the model.
 
-Author: Mohamed Bedair
-"""
+-> Click on the button
+-> The room list opens in the output window
+-> Click a line to select that room
+__________________________________________________
+Author: Mohamed Bedair"""
 
 #Imports
 from Autodesk.Revit.DB import *

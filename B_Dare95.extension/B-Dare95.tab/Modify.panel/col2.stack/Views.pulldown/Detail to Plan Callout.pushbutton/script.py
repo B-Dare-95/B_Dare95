@@ -1,12 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Rebuilds detail callouts that were drawn in floor plans as floor plan callouts.
+__doc__ = """__________________________________________________
+Description:
 
-Revit cannot change a callout's view family in place: a detail callout is a
-ViewSection and a floor plan callout is a ViewPlan. Each selected callout is
-therefore recreated with ViewSection.CreateCallout in the same parent plan, its
-settings / annotations / sheet placement / references are carried over, and the
-original detail view is deleted.
-"""
+Turns detail callouts that were drawn in floor plans into proper floor plan callouts.
+Each one is rebuilt in the same plan with its name, crop, scale, annotations, sheet placement and references kept, then the old detail view is deleted.
+__________________________________________________
+How-to:
+
+-> Click on the button
+-> Tick the detail callouts to convert (only ready ones can be ticked)
+-> Choose the floor plan type and the view template to use
+-> Click Convert selected
+-> A report lists each callout and anything that couldn't be kept
+__________________________________________________
+Author: Mohamed Bedair"""
+
 __title__ = "Detail to\nPlan Callout"
 
 import clr

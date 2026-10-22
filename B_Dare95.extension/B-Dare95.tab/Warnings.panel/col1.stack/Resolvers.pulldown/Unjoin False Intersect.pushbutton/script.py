@@ -1,12 +1,19 @@
 # -*- coding: utf-8 -*-
-"""Finds every "Highlighted elements are joined but do not intersect" warning
-in the active document and unjoins the reported element pairs.
+__doc__ = """__________________________________________________
+Description:
 
-Each pair is processed inside its own SubTransaction, so a pair that refuses
-to unjoin is rolled back on its own and the run continues. A live report is
-printed as the script works, followed by a summary listing the IDs of every
-pair that could not be unjoined.
-"""
+Clears the "elements are joined but do not intersect" warnings by unjoining every pair Revit reports, across the whole model.
+Pairs that can't be unjoined are listed so you can find them.
+__________________________________________________
+How-to:
+
+-> Click on the button
+-> Check how many element pairs were found
+-> Click Yes to unjoin them
+-> A report of unjoined, skipped and failed pairs shows in the output
+__________________________________________________
+Author: Mohamed Bedair"""
+
 
 __title__ = "Unjoin\nDisjoint"
 __author__ = "Mohamed Bedair"

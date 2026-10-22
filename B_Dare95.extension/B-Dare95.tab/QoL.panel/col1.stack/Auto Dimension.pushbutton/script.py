@@ -2,20 +2,22 @@
 __title__ = "Easy Dimension"
 __author__ = "Mohamed Bedair"
 __version__ = '1.0.0'
-__doc__ = """
-Version = 1.1.0
-Date    = 26.02.2026
-
+__doc__ = """__________________________________________________
 Description:
-Easily creates Dimensions using two points picked in space
 
+Dimensions the clear spaces between walls in a plan view: pick two points and every gap between the walls you cross gets its own face-to-face dimension.
+The line snaps horizontal or vertical, and wall thicknesses are skipped.
+__________________________________________________
 How-to:
--> Pick a point near the area you want to dimension
--> Pick the second point at the end of the area you want to dimension
--> A Dimension will be created crossing all the spaces between the two points
 
-Author: Mohamed Bedair
-"""
+-> Open a floor plan view
+-> Click on the button
+-> Pick a start point on one side of the walls
+-> Pick an end point across the walls you want to dimension
+-> Repeat for more strings, then press Esc to finish
+-> A message shows how many dimensions were made
+__________________________________________________
+Author: Mohamed Bedair"""
 
 from pyrevit import DB
 from Autodesk.Revit.UI import TaskDialog

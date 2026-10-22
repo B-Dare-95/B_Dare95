@@ -3,21 +3,20 @@
 __title__   = "Wipe Unplaced Elements"
 __author__  = "Mohamed Bedair"
 __version__ = "1.0.0"
-__doc__     = """
-Version = 1.0.0
-
+__doc__ = """__________________________________________________
 Description:
-Purges unplaced Rooms, Areas, and/or MEP Spaces from the active
-Revit document.  An element is considered "unplaced" when it has
-no location in any view and is not associated with a Level.
 
+Deletes unplaced rooms, areas and MEP spaces from the model. You choose which of the three to clean and confirm before anything is deleted.
+__________________________________________________
 How-to:
--> Run the script
--> Tick the categories you want to purge
--> Confirm the operation
 
-Author: Mohamed Bedair
-"""
+-> Click on the button
+-> Tick Rooms, Areas and/or MEP Spaces (counts appear when ticked)
+-> Click OK
+-> Confirm the list of elements to delete
+-> A summary shows how many were deleted
+__________________________________________________
+Author: Mohamed Bedair"""
 
 import clr
 clr.AddReference('RevitAPI')

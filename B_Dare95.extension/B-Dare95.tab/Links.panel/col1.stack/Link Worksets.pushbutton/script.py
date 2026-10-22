@@ -1,14 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Link Workset Assigner
+__doc__ = """__________________________________________________
+Description:
 
-Lists every RVT and DWG link/import in the project with its loading status and
-current workset, and lets the user assign a workset to each one from a dropdown.
+Lists every Revit link, DWG link and CAD import with its status and current workset, and lets you move each one to a new workset from a dropdown.
+The link type is moved, so closing that workset stops the link from loading; the placed links can be moved too.
+__________________________________________________
+How-to:
 
-Assigns the workset to the link TYPE element (this is what controls whether the
-link loads when a workset is closed) and, optionally, to all of its instances.
+-> Open a workshared project
+-> Click on the button
+-> Pick a workset for each link, or use Set all visible to
+-> Keep Also assign the link instances ticked to move them too
+-> Click Assign Worksets; a summary shows what was moved
+__________________________________________________
+Author: Mohamed Bedair"""
 
-IronPython 2.7 / Revit 2024-2027
-"""
 
 __title__ = "Link\nWorksets"
 __author__ = "Mohamed Bedair"

@@ -1,21 +1,22 @@
 # -*- coding: utf-8 -*-
-"""Stair Railing Manager
-
-Pick a Stairs element, choose a Railing Type for the inner side and another for
-the outer side, and generate the railings from the runs' footprint geometry.
-
-  Inner side : one single continuous open path chaining the inner edge of every
-               run, with straight connectors across the landings.
-  Outer side : one separate railing per run, following that run's outer edge.
-
-The path is taken exactly off the run's footprint edge and then offset by a
-user supplied value in millimetres (positive = inset towards the treads,
-negative = pushed away from the stair).
-"""
-
 __title__ = "Stair\nRailings"
 __author__ = "Mohamed Bedair"
-__doc__ = "Create inner / outer railings on a selected stair from a menu of railing types."
+__doc__ = """__________________________________________________
+Description:
+
+Adds railings to stairs from their run edges: one continuous railing along the inner side and a separate railing on the outer side of each run.
+Choose a railing type and offset for each side; works on several stairs and multistory stairs at once.
+__________________________________________________
+How-to:
+
+-> Select the stairs, or click the button and pick them
+-> Choose a railing type for the inner and/or outer side
+-> Set the offsets in mm (positive moves onto the treads)
+-> Optionally delete existing railings or flip the outer ones
+-> Click Create
+-> A summary lists the railings made and any notes
+__________________________________________________
+Author: Mohamed Bedair"""
 
 import clr
 import json

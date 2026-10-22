@@ -1,27 +1,22 @@
 # -*- coding: utf-8 -*-
 # Author: Mohamed Bedair
-"""3D Room Visualization by Sets (DirectContext3D).
+__doc__ = """__________________________________________________
+Description:
 
-Draws room solids as transient overlay geometry in 3D views, colored by
-user-defined Sets. Nothing is written to the model: no DirectShape, no
-transaction, no undo entries, no worksets. The geometry is unclickable and
-disappears the moment the window is closed.
+Shows your rooms as coloured, see-through 3D volumes in a 3D view, grouped into Sets that you name and colour.
+It's a temporary overlay: nothing is added to the model, and it disappears when you close the window.
+__________________________________________________
+How-to:
 
-Sets:
-- Check rooms on the left, then "New Set from Checked".
-- Sets can be renamed, recolored, deleted, and edited by adding or removing
-  checked rooms.
-- Membership is exclusive: a room lives in at most one Set, so two colors can
-  never fight over the same solid.
-- Only rooms belonging to a visible Set are drawn.
-- Sets are saved per document and restored on the next run.
+-> Open a 3D view
+-> Click on the button
+-> Tick rooms and click New Set from Checked Rooms
+-> Name the Set and pick a colour
+-> Adjust transparency, add or remove rooms as needed
+-> Close the window to remove the overlay
+__________________________________________________
+Author: Mohamed Bedair"""
 
-REQUIRES in bundle.yaml:
-
-    engine:
-      persistent: true
-      clean: false
-"""
 
 # ---------------------------------------------------------------------------
 # Duplicate-window guard -- must run BEFORE any heavy import

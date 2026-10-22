@@ -1,19 +1,21 @@
 # -*- coding: utf-8 -*-
-"""Convert Units - toggles the active document between Metric and Imperial.
+__doc__ = """__________________________________________________
+Description:
 
-Full-system conversion. A fresh Units object is built from the Revit
-UnitSystem default, which covers every spec in every discipline (Common,
-Structural, HVAC, Electrical, Piping, Energy, Infrastructure) in one shot.
-A small override table is then layered on top for the specs where the office
-standard differs from Revit's stock default.
+Switches the model's Project Units between Metric and Imperial in one click, for every discipline at once.
+Office standards are applied (e.g. millimetres for length, m2 for area). Elements keep their true size; only how numbers are shown changes.
+__________________________________________________
+How-to:
 
-The current state is read from the document itself, not from a stored toggle
-file, so the button icon can never disagree with the model, and two open
-models each report their own true state.
+-> Open the model you want to convert
+-> Make sure the model is not read-only
+-> Click on the button
+-> The units switch to the opposite system (Metric <-> Imperial)
+-> The button icon shows the current system
+-> Click again to switch back
+__________________________________________________
+Author: Mohamed Bedair"""
 
-Revit 2024+ / IronPython 2.7. No version guards - this will not run on older
-releases and is not intended to.
-"""
 
 import os
 

@@ -1,26 +1,21 @@
 # -*- coding: utf-8 -*-
 __title__  = "Split\nShafts"
 __author__ = "Mohamed Bedair"
-__doc__    = """Version = 1.0
-Date    = 21.10.2026
-_____________________________________________________________________
+__doc__ = """__________________________________________________
 Description:
-Split Shaft Openings whose sketch has more than one outline into
-separate Shafts, one per outline. Inner loops stay with the outline
-around them, islands inside them become Shafts of their own.
-Base/top constraints, offsets, unconnected height, phases and other
-editable instance parameters are carried over to every new Shaft.
-_____________________________________________________________________
+
+Splits shafts whose sketch has several separate outlines into one shaft per outline; holes stay with the outline around them.
+Base and top settings, phases and other values are copied over, and the new shafts are selected for you.
+__________________________________________________
 How-to:
--> Pre-select Shafts, or click the button and pick them (Finish)
--> Click:        split and delete the originals
--> Shift+Click:  split and keep the originals
-_____________________________________________________________________
-Notes:
-- Mark and IfcGUID are not copied (they must stay unique)
-- Symbolic lines drawn in the shaft sketch are not carried over
-- The new Shafts cut the same hosts automatically
-_____________________________________________________________________
+
+-> Select the shafts to split, or pick them after clicking
+-> Click on the button to split and delete the originals
+-> Shift+Click the button to split and keep the originals
+-> If you're picking, click Finish when done
+-> The new shafts are selected for you
+__________________________________________________
+Author: Mohamed Bedair
 Based on "Split FilledRegion Boundaries" by Erik Frits"""
 
 #==================================================

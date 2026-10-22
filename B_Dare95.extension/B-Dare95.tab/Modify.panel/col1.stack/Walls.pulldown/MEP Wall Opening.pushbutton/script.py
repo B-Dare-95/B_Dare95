@@ -1,31 +1,21 @@
 # -*- coding: utf-8 -*-
-"""MEP Wall Openings.
-
-Finds clashes between MEP curves (Pipes, Ducts, Cable Trays) and Basic Walls in
-the active document, then cuts a rectangular opening in the wall for each one.
-
-MEP elements are read from the active document AND every loaded Revit link.
-Walls are only ever modified in the active document.
-
-Openings are created with Document.Create.NewOpening(wall, p1, p2), which hosts
-a rectangular Opening element on the wall. The wall's profile sketch is never
-opened. SketchEditScope was tried first and abandoned: on walls whose sketch
-state is inconsistent, Wall.SketchId returns invalidElementId while
-StartWithNewSketch() reports that a sketch already exists, leaving no usable
-way in. NewOpening has no such entry condition and works on 2020-2027.
-
-Trade-off worth knowing: an Opening is a separate element hosted by the wall,
-not a modification of the wall's own profile. That makes the results
-schedulable, selectable and deletable in bulk, but it also means they can be
-moved independently of the MEP that justified them.
-
-IronPython 2.7 / Revit 2024-2027.
-"""
-
 __title__ = "MEP Wall\nOpenings"
 __author__ = "Mohamed Bedair"
-__doc__ = ("Creates rectangular openings in Basic Walls where Pipes / Ducts / "
-           "Cable Trays clash with them, in the host model and in links.")
+__doc__ = """__________________________________________________
+Description:
+
+Finds where pipes, ducts and cable trays pass through Basic walls and cuts a rectangular opening in the wall for each one.
+The pipes, ducts and trays can be in your model or any loaded link; openings get the clearance you set.
+__________________________________________________
+How-to:
+
+-> Click on the button
+-> Tick the wall types to check
+-> Set the clearance for pipes, ducts and cable trays (mm)
+-> Click Find clashes and review the report
+-> Click Create openings and confirm
+__________________________________________________
+Author: Mohamed Bedair"""
 
 # The window is modeless, so it outlives this script run. The engine has to
 # survive with it, and the window/handler/event are parked in envvars so a

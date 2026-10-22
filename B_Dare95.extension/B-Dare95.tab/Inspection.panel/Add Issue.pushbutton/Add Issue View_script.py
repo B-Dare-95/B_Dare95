@@ -1,19 +1,20 @@
 # -*- coding: utf-8 -*-
-"""
-Issue Logger  ·  pyRevit / IronPython 2.7
-==========================================
-Normal click   → issue logger  (left: input  |  right: scrollable preview + delete)
-Shift+click    → configure save folder
+__doc__ = """__________________________________________________
+Description:
 
-Replaces:
-  WinForms UI  → WPF  (XamlReader.Parse, Catppuccin Mocha)
-  COM / Excel  → zero-dependency xlsx  (ZipArchive + raw XML)
-  PIL          → WinForms Clipboard + GDI+  (fixes transparent-alpha bug)
-  subprocess   → System.Diagnostics.Process
-  waiting      → DispatcherTimer on the UI thread (never a worker thread —
-                 see the "Take Screenshot" section for why)
-  Dispatcher.PushFrame → modeless Show()  (see show_modeless() for why)
-"""
+Log model issues with screenshots and comments straight into an Excel file, without leaving Revit.
+Excel doesn't need to be installed. Screenshots need Snipaste (free on the Microsoft Store).
+__________________________________________________
+How-to:
+
+-> Click on the button
+-> Click Take Screenshot and capture part of your screen
+-> Fill in the Comment and any extra fields
+-> Click Save Issue to add it to the .xlsx file
+-> Click a saved issue to edit it again
+__________________________________________________
+Author: Mohamed Bedair"""
+
 __persistentengine__ = True
 
 import clr

@@ -2,32 +2,21 @@
 
 __title__   = "Shafts\nOpen Above"
 __author__  = "Mohamed Bedair"
-__doc__     = """
-________________________________________________________________
+__doc__ = """__________________________________________________
 Description:
-Batch-annotates "open above" shafts in the selected plan views,
-from the host model AND from loaded Revit links.
 
-For every selected Floor / Structural Plan the tool collects the
-Shaft Openings that:
-  - use the view's Associated Level as their Base Constraint
-      host  -> same Level element
-      link  -> link level at the same elevation (after the link
-               transform) as the view's level
-  - have a positive Base Offset
-  - start above the view's Cut Plane
+Draws "open above" graphics in plan views for shafts that sit on the view's level but start above the cut plane: an outline, an X mark, a label and the Shaft Function value.
+Works with shafts in your model and in loaded links.
+__________________________________________________
+How-to:
 
-For each of those shafts it draws, in that view (all pinned):
-  - the shaft boundary + X mark as Detail Lines (one line style)
-  - a label text note centred below the shaft ("OPEN ABOVE")
-  - the "Shaft Function" value inside the bottom-left corner
-
-How to Use:
-1. Run the script
-2. Tick the plan views to annotate (search box filters the list)
-3. Choose host / linked sources, line style, text types and label
-4. Click Draw
-________________________________________________________________
+-> Click on the button
+-> Tick the floor or structural plans to annotate
+-> Choose your own and/or linked shafts
+-> Pick the line style, text types and label text
+-> Click Draw
+-> A summary shows how many shafts were marked per view
+__________________________________________________
 Author: Mohamed Bedair"""
 
 # ─────────────────────────────────────────────────────────────────────

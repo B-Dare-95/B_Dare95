@@ -1,26 +1,19 @@
 # -*- coding: utf-8 -*-
-"""
-MEP Branch Tracer  (v7 — Selection-based highlighting)
-=================================================================
-Traces the complete connected branch of a selected MEP element residing
-in a Revit linked file, then:
-  1. Applies a section box to the active 3D view isolating the branch.
-  2. Selects every traced element in the Revit UI — host elements and
-     linked elements together — via Selection.SetReferences().
-  3. Prints a short category summary (no element IDs).
+__doc__ = """__________________________________________________
+Description:
 
-Change (v7):  Generic Model DirectShape bounding boxes replaced with a real
-              Revit selection. Linked elements are converted to host-context
-              references with Reference.CreateLinkReference() and pushed
-              through Selection.SetReferences(), so the branch stays
-              highlighted natively — nothing is created, nothing to clean up,
-              and no transaction is needed for the highlight itself.
-              The overlay dialog and its Remove Highlights logic are gone
-              along with the geometry they existed to manage.
+Shows the whole connected branch of a pipe, duct, cable tray or conduit from a linked model, even where it carries on into other links or into your own model.
+The branch gets a section box around it and stays selected, so it's easy to see.
+__________________________________________________
+How-to:
 
-Compatible with: pyRevit 4.x, IronPython 2.7, Revit 2023–2027+
-                 (Selection.SetReferences was added in the Revit 2023 API)
-"""
+-> Open a 3D view
+-> Click on the button
+-> Pick a pipe, duct, cable tray or conduit in a linked model
+-> The branch is boxed in and highlighted
+-> A count by category shows in the output window
+__________________________________________________
+Author: Mohamed Bedair"""
 
 import clr
 clr.AddReference('RevitAPI')

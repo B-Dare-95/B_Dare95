@@ -1,9 +1,21 @@
 # -*- coding: utf-8 -*-
 __title__ = "Viewport\nTitle Aligner"
-__doc__ = ("Places viewport titles under the bottom-left corner of their "
-           "viewport and fits the title line to the text length plus an "
-           "offset. Works on selected viewports, the active sheet, or "
-           "picked sheets. Revit 2022+.")
+__doc__ = """__________________________________________________
+Description:
+
+Neatens viewport titles on sheets: moves each title just under the bottom-left corner of its viewport and trims the title line to fit the text.
+Works on selected viewports, the active sheet or sheets you pick, with offsets in paper mm.
+__________________________________________________
+How-to:
+
+-> Select viewports on a sheet first if you want to work on just those
+-> Click on the button
+-> Choose Selection, Active Sheet or Pick Sheets
+-> Set the title position and line extension, or untick either option
+-> Click Apply
+-> A summary shows what was updated and what was skipped
+__________________________________________________
+Author: Mohamed Bedair"""
 
 import clr
 clr.AddReference("PresentationFramework")

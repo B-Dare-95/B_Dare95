@@ -1,8 +1,20 @@
 # -*- coding: utf-8 -*-
-"""
-Family Tree Investigator  -  B_Dare95.extension
-Builds a visual HTML family-nesting tree for selected Revit families.
-"""
+__doc__ = """__________________________________________________
+Description:
+
+Shows what is nested inside a family, level by level, as a colour-coded report in your web browser.
+For each family and nested family it lists the number of types and its instance and type parameters, with custom parameters marked.
+__________________________________________________
+How-to:
+
+-> Click on the button
+-> Pick a category and click Next
+-> Pick one or more families (Ctrl+Click for several)
+-> Click Investigate
+-> A report opens in your browser for each family
+__________________________________________________
+Author: Mohamed Bedair"""
+
 import clr
 clr.AddReference("RevitAPI")
 clr.AddReference("RevitServices")

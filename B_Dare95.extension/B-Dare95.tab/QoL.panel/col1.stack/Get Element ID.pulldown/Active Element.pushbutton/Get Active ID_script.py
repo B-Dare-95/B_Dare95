@@ -1,22 +1,18 @@
 __title__     = "Active Element"
 __author__    = "Mohamed Bedair"
 __version__   = 'Version = 1.0'
-__doc__       = """Version = 1.0
-Date    = 21.12.2023
-_____________________________________________________________________
+__doc__ = """__________________________________________________
 Description:
 
-Gets Element ID.
-_____________________________________________________________________
+Shows the name and ID of the elements you pick in your model, ready to copy from the output window.
+__________________________________________________
 How-to:
 
--> Run the script
--> select an element
--> copy and paste the resulting IDs
-_____________________________________________________________________
-Last update:
-- [19.9.2024] - 1.0 RELEASE
-_____________________________________________________________________
+-> Click on the button
+-> Pick one or more elements
+-> Click "Finish" (or press Enter)
+-> Copy the names and IDs from the output window
+__________________________________________________
 Author: Mohamed Bedair"""
 
 #IMPORTS

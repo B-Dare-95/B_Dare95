@@ -1,15 +1,20 @@
 # -*- coding: utf-8 -*-
-"""
-Split Walls at Beams & Slabs
-Fits walls to the structure around them, using structural slabs and beams
-from the active model and/or loaded links:
-  - base offset moves so the wall rests on the structural slab below,
-  - top offset moves so the wall stops at the slab soffit above
-    (several slabs: lowest slab top below, highest soffit above),
-  - a beam right under the slab lowers the top; a beam mid-height cuts it.
-Base and top constraints never change - only the offsets.
-The original wall keeps the largest piece (Id, tags and schedules survive).
-"""
+__doc__ = """__________________________________________________
+Description:
+
+Fits walls to the structure: the base sits on the structural slab below, the top stops under the slab above, and walls are cut where beams pass through.
+Slabs and beams can come from your model and loaded links; only the offsets change.
+__________________________________________________
+How-to:
+
+-> Click on the button
+-> Choose slabs and/or beams, and your model and/or links
+-> Choose to pick walls or use all walls in the active view
+-> Draw a box around the walls to process
+-> Check the summary and click Yes to apply
+__________________________________________________
+Author: Mohamed Bedair"""
+
 
 __title__ = 'Split Walls\nat Beams\n& Slabs'
 __author__ = 'B-Dare95'

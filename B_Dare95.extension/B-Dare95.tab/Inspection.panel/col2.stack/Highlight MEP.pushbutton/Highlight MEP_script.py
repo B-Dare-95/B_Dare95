@@ -1,11 +1,18 @@
 # -*- coding: utf-8 -*-
 __title__   = "Highlight MEP"
-__doc__     = """Version = 1.0
-________________________________________________________________
+__doc__ = """__________________________________________________
 Description:
-- Press the Button to Highlight all MEP Elements
-- Press again to Turn Off
-________________________________________________________________
+
+Makes MEP stand out in the active view by turning walls, floors, doors, structure, furniture and similar categories almost fully transparent.
+Pipes, ducts, cable trays, equipment and fixtures stay as they are.
+__________________________________________________
+How-to:
+
+-> Open the view (3D views work best)
+-> Click on the button
+-> The view switches to Shaded and the building fades out
+-> Click again to turn it off (this also clears the view's category overrides)
+__________________________________________________
 Author: Mohamed Bedair"""
 
 #Imports

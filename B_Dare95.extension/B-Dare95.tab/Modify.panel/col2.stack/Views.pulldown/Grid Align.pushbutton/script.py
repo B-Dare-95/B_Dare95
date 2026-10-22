@@ -1,9 +1,21 @@
 # -*- coding: utf-8 -*-
 __title__ = "Grid Head\nAligner"
-__doc__ = ("Sets which view side shows grid bubbles and aligns grid ends "
-           "to the crop region with a per-side offset (mm, model distance). "
-           "Works on the active view, the active sheet, selected viewports or "
-           "views, or picked sheets.")
+__doc__ = """__________________________________________________
+Description:
+
+Tidies grids in your views: choose which sides show grid bubbles and line up all grid ends at a set distance from the crop region.
+Changes apply only to the chosen views, on the active view, active sheet, selected views or picked sheets.
+__________________________________________________
+How-to:
+
+-> Select viewports or views first if you want to work on just those
+-> Click on the button
+-> Choose: active view, active sheet, selected views or picked sheets
+-> Pick the bubble sides and the offset from the crop edge in mm
+-> Check the preview and click Apply
+-> A summary shows how many grids were updated and any skipped
+__________________________________________________
+Author: Mohamed Bedair"""
 
 import clr
 clr.AddReference("PresentationFramework")

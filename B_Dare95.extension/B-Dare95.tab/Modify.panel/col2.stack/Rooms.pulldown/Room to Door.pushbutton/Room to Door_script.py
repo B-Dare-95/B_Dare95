@@ -1,10 +1,21 @@
 # -*- coding: utf-8 -*-
-"""
-Room → Door Parameter Transfer
-Transfers parameter values from room (ToRoom/FromRoom) to door parameters.
-Supports single-param and combine (multi-param with separator) modes.
-Supports designator suffixes for doors sharing the same room, with per-level reset.
-"""
+__doc__ = """__________________________________________________
+Description:
+
+Copies a value from each door's room (From Room or To Room) into a door parameter, for every door in the model.
+You can combine several room parameters with a separator, and add A, B, C or 1, 2, 3 when several doors share the same room.
+__________________________________________________
+How-to:
+
+-> Click on the button
+-> Choose From Room or To Room
+-> Pick a room parameter, or several in Combine mode
+-> Pick the door parameter to fill
+-> Tick Add Designator for doors that share a room, if needed
+-> Click Run Transfer and check the status line
+__________________________________________________
+Author: Mohamed Bedair"""
+
 
 import clr
 clr.AddReference('PresentationFramework')

@@ -2,34 +2,20 @@
 __title__     = "Copy Selected from Link"
 __author__    = "Mohamed Bedair"
 __version__   = 'Version = 2.0'
-__doc__       = """Version = 2.0
-Date    = 23.06.2026
-_____________________________________________________________________
+__doc__ = """__________________________________________________
 Description:
 
-Copies selected linked elements into the active document at the same
-location. Selection uses PickObjects(ObjectType.LinkedElement), which
-lets you box-drag and/or ctrl-click multiple linked elements in one
-pick session - click "Finish" on the options bar when done. Only the
-picked elements are copied (no type-matching). Copied elements are
-pinned.
-
-Note: Revit's PickElementsByRectangle API only returns elements from
-the ACTIVE document - it has no ObjectType.LinkedElement overload, so
-it cannot be used to box-select linked geometry. PickObjects(Linked
-Element) is the correct API for this; Revit's own pick-session UI
-still allows a rectangle drag while it is active.
-_____________________________________________________________________
+Copies only the linked elements you pick into your model, pinned. You can click and box-select, even across several links.
+Copies land at the link's own coordinates, so they only line up if the link is placed origin to origin.
+__________________________________________________
 How-to:
 
--> Run the script
--> Box-drag and/or ctrl-click the Linked Elements you want to copy
--> Click "Finish" on the options bar to confirm the selection
-_____________________________________________________________________
-Last update:
-- [23.06.2026] - 2.0 Multi-select linked elements via PickObjects
-- [21.12.2023] - 1.0 RELEASE
-_____________________________________________________________________
+-> Make sure the link is placed origin to origin
+-> Click on the button
+-> Click or drag a box over the linked elements you want
+-> Press Finish on the Options Bar
+-> The elements are copied, pinned, and a count is shown
+__________________________________________________
 Author: Mohamed Bedair"""
 
 #IMPORTS

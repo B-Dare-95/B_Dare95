@@ -1,16 +1,22 @@
 # -*- coding: utf-8 -*-
-"""Duplicate Views
-Select a view, choose how many duplicates and which duplicate mode
-(Duplicate View / Duplicate with Detailing / Duplicate as Dependent),
-optionally assign a Scope Box + naming pattern to each dependent view,
-then create them and show a brief report.
-
-Author: Mohamed Bedair (B-Dare95)
-"""
 __title__ = 'Duplicate\nViews'
 __author__ = 'Mohamed Bedair (B-Dare95)'
-__doc__ = 'Batch-duplicate a view as Duplicate / With Detailing / As Dependent, ' \
-          'with per-dependent Scope Box assignment and Prefix-Serial-Suffix naming.'
+__doc__ = """__________________________________________________
+Description:
+
+Makes several copies of a view in one go, as plain duplicates, duplicates with detailing, or dependent views.
+For dependent views you can give each one its own scope box and a name pattern.
+__________________________________________________
+How-to:
+
+-> Click on the button
+-> Pick the view to copy (search or filter by view type)
+-> Enter how many copies and choose the duplicate option
+-> For dependents, pick a scope box for each and a prefix/suffix
+-> Click Create Views
+-> A short report shows how many views were made
+__________________________________________________
+Author: Mohamed Bedair"""
 
 import clr
 clr.AddReference('RevitAPI')

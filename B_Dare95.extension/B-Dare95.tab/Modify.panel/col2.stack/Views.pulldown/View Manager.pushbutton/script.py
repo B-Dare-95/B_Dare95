@@ -1,21 +1,20 @@
 # -*- coding: utf-8 -*-
-"""View Manager
+__doc__ = """__________________________________________________
+Description:
 
-Modeless browser / editor for every view in the project.
+Opens a table of every view in the project where you can filter, search and edit view names, view templates, Title on Sheet, detail numbers and sheet number/name.
+Nothing changes until you click Apply, and the window stays open while you work.
+__________________________________________________
+How-to:
 
-  * Filter by View Type, by "on sheet / not on sheet", and by name (live search).
-  * Edit View Name, View Template (dropdown), Title on Sheet, Detail Number and the
-    host sheet's Number / Name directly in the grid; nothing touches the model until
-    you press Apply.
-  * "Open View" / "Open Sheet" jump to the selected row's view, or to the sheet it
-    is placed on.
-  * Extra columns: append a spec dict to default_columns() with kind "param" and the
-    parameter name as "header".
+-> Click on the button
+-> Filter by view type, on sheet / not on sheet, or search by name
+-> Edit the cells you want to change
+-> Click Apply to save all edits at once
+-> Use Open View or Open Sheet to jump to the selected row
+__________________________________________________
+Author: Mohamed Bedair"""
 
-Modeless: every Revit API call is queued through an IExternalEventHandler, and the
-window / handler / event are parked in pyrevit env vars so a second button press
-just re-focuses the open window.
-"""
 
 __title__ = "View\nManager"
 __author__ = "Mohamed Bedair"

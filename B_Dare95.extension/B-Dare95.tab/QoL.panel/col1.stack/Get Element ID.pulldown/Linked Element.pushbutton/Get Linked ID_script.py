@@ -2,24 +2,20 @@
 __title__     = "Linked Element"
 __author__    = "Mohamed Bedair"
 __version__   = 'Version = 1.2'
-__doc__       = """Version = 1.2
-Date    = 21.12.2023
-_____________________________________________________________________
+__doc__ = """__________________________________________________
 Description:
 
-Gets Linked Element ID.
-_____________________________________________________________________
+Shows the names and IDs of elements you pick inside linked models, grouped by link.
+Each link ends with a comma-separated ID list, ready to paste into Select by ID in that linked model.
+__________________________________________________
 How-to:
 
--> Run the script
--> select an element from a link(no tab required)
--> copy and paste the resulting IDs
-_____________________________________________________________________
-Last update:
-- [27.09.2026] - 1.2 Report grouped per link, each link with its own ID list
-- [16.08.2026] - 1.1 Added comma separated ID list at the end of the report
-- [21.12.2023] - 1.0 RELEASE
-_____________________________________________________________________
+-> Make sure the links are loaded
+-> Click on the button
+-> Pick elements in one or more links (no Tab needed)
+-> Click "Finish" (or press Enter)
+-> Copy the IDs per link from the output window
+__________________________________________________
 Author: Mohamed Bedair"""
 
 #IMPORTS

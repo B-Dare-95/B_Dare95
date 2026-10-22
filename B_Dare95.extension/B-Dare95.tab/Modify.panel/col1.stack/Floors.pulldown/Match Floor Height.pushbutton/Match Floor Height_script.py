@@ -1,6 +1,23 @@
 # -*- coding: utf-8 -*-
 
 #Imports
+
+__doc__ = """__________________________________________________
+Description:
+
+Copies the Height Offset From Level of one floor onto as many other floors as you click.
+Only the offset changes; each floor keeps its own level, type and sketch.
+__________________________________________________
+How-to:
+
+-> Click on the button
+-> Pick the floor that has the right height
+-> Click the other floors one by one
+-> Each one takes the new height straight away
+-> Press Esc when you are done
+__________________________________________________
+Author: Mohamed Bedair"""
+
 from Autodesk.Revit.DB import *
 from Autodesk.Revit.UI import *
 from Autodesk.Revit.UI.Selection import *

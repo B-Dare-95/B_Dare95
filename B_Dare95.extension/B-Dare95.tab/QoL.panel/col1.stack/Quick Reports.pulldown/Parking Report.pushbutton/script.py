@@ -3,17 +3,18 @@
 __title__ = "Parking Count Lister"
 __author__ = "Mohamed Bedair"
 __version__ = '1.0.0'
-__doc__ = """
-
+__doc__ = """__________________________________________________
 Description:
-Generates a quick report of Parking Types used in the project and their count along with their percentages
 
+Lists every parking type used in the model with how many are placed and their share of the total, in a quick table.
+__________________________________________________
 How-to:
->> Click the tool button*
->> Done!!
 
-Author: Mohamed Bedair
-"""
+-> Click on the button
+-> The table opens in the output window
+-> Read the count and share of each parking type, and the total
+__________________________________________________
+Author: Mohamed Bedair"""
 
 # Imports
 from Autodesk.Revit.DB import *

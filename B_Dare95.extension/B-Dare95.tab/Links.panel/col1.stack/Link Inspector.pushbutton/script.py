@@ -1,24 +1,21 @@
 # -*- coding: utf-8 -*-
-"""Link Inspector.
-
-Read-only health report for every Revit link in the active document:
-
-  * DWG links / imports living inside the link
-  * Revit links nested inside the link
-  * Warning count stored in the link, grouped by warning type
-  * Levels and Grids sitting on the wrong workset
-  * Items left on Workset1, grouped by category
-  * Unused families and types, per category
-
-The report exports as a self-contained interactive HTML page.
-No transaction is opened. Nothing is modified.
-"""
-
 __title__ = "Link\nInspector"
 __author__ = "Mohamed Bedair"
-__doc__ = ("Inspects every linked Revit document for DWG imports/links, "
-           "warnings, Levels/Grids on the wrong workset, and unused "
-           "families/types per category.")
+__doc__ = """__________________________________________________
+Description:
+
+Gives a health check of your model and every loaded Revit link in one window: CAD links and imports, nested links, warnings, levels and grids on the wrong workset, items left on Workset1, and unused families and types.
+Nothing is changed. You can export the results as an HTML report.
+__________________________________________________
+How-to:
+
+-> Click on the button
+-> Pick a model in the list to see its details
+-> Switch tabs to see DWG, links, warnings, worksets and unused items
+-> Click Scan All Unused to check unused families in every model
+-> Click Export HTML Report to open a shareable report
+__________________________________________________
+Author: Mohamed Bedair"""
 
 import clr
 

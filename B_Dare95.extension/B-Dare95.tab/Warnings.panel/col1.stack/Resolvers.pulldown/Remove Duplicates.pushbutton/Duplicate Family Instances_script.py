@@ -1,20 +1,19 @@
 # -*- coding: utf-8 -*-
-"""Finds every "There are identical instances in the same place" warning in the
-active document and deletes the duplicates, keeping the element with the oldest
-(lowest) ElementId in each cluster.
+__doc__ = """__________________________________________________
+Description:
 
-Warnings that share an element are merged into a single cluster first, so a set
-of three identical instances reported as three separate warnings still ends up
-with exactly one survivor.
+Clears the "identical instances in the same place" warnings by deleting the extra copies and keeping the oldest element in each group.
+Pinned duplicates are unpinned and deleted; ones owned by another user are skipped.
+__________________________________________________
+How-to:
 
-Per element, in order:
-  - owned by another user  -> skipped, owner recorded
-  - pinned                 -> unpinned, then deleted
-  - deletion refused       -> skipped, reason recorded
+-> Click on the button
+-> Check how many duplicates will be deleted
+-> Click Yes to delete them
+-> A report of deleted and skipped elements shows in the output window
+__________________________________________________
+Author: Mohamed Bedair"""
 
-Every deletion runs in its own SubTransaction, so a refusal rolls back only
-that element (including its unpin) and the run carries on.
-"""
 
 __title__ = "Delete\nDuplicates"
 __author__ = "Mohamed Bedair"

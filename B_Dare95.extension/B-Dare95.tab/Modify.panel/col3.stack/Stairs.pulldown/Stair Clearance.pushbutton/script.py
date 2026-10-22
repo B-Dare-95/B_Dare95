@@ -1,24 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Stair Clearance
+__doc__ = """__________________________________________________
+Description:
 
-Draws the clear-height reference line above a stair run in a Section or
-Elevation view.
+Draws the clear-height line above stair runs in a section: a detail line through the step nosings, raised by your offset (2100 mm by default).
+Works with stairs in your model or in a link, and the whole session is a single undo.
+__________________________________________________
+How-to:
 
-Workflow
---------
-1. Choose whether the stair is in the host model or in a link (Revit needs a
-   different pick mode for each, so it has to be settled before picking).
-2. Pick the line style + vertical offset (default 2100 mm) once at the start.
-3. Keep picking stair runs until Esc. Nothing is written to the model while
-   picking - every run is measured, then all lines are created together in a
-   single transaction and a report window is shown at the end.
+-> Open a section or elevation view
+-> Click on the button and choose active model or linked model
+-> Choose a line style, the offset and whether to include the nosing
+-> Pick stairs or stair runs one by one, Esc to finish
+-> Each line appears as you pick, then a report window opens
+__________________________________________________
+Author: Mohamed Bedair"""
 
-Each point on the line is the nosing tip of one step: the top of riser i,
-taken from the riser positions rather than from the ends of the run path, so a
-run whose last tread carries on past the final riser still stops on the riser.
-
-IronPython 2.7 / Revit 2024-2027.
-"""
 
 __title__ = "Stair\nClear Height"
 __author__ = "Mohamed Bedair"
