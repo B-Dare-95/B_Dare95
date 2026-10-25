@@ -26,6 +26,15 @@ every pyRevit Reload). No user interaction.
     any tracker from a previous load, so a pyRevit Reload never subscribes its
     events twice.
 
+4. Native-tab panels
+    Moves chosen B-Dare95 panels (e.g. B95-Monitoring) into Revit's own tabs
+    such as Collaborate. Before pyRevit rebuilds the ribbon on a Reload, the
+    panels are sent back to the B-Dare95 tab so pyRevit can update and colour
+    them; on Revit's first idle moment they move out again.
+    Panels listed as contextual (e.g. B95-Selection) live in the Modify tab
+    and only show while something is selected, optionally only for chosen
+    categories, driven by UIApplication.SelectionChanged (Revit 2023+).
+
 Placement:
     B_Dare95.extension/startup.py
     B_Dare95.extension/resources/logo.png        (required)
@@ -450,6 +459,209 @@ def _log_room_register_failure(err):
     except Exception:
         pass
 
+# ---------------------------------------------------------------------------
+# native-tab panels + contextual panels
+# ---------------------------------------------------------------------------
+# Everything lives inside one uniquely named function, so none of its helper
+# names can overwrite the module-level helpers above (e.g. the logo's
+# _find_tab, which its delayed retries look up by name).
+
+def _b95_panel_mover(uiapp):
+    """Moves B-Dare95 panels into Revit's native tabs, and shows contextual
+    panels only while something is selected."""
+    from System.Collections.Generic import List
+    from Autodesk.Revit.DB import (BuiltInCategory, ElementId,
+                                   ElementMulticategoryFilter,
+                                   FilteredElementCollector)
+
+    # (panel folder name without ".panel", native tab to move it into)
+    panel_moves = [
+        ('B95-Monitoring', 'Collaborate'),
+        ('B95-Selection', 'Modify'),
+    ]
+
+    # Panels that only show while elements are selected. They must be moved
+    # into 'Modify' above: Revit merges the Modify tab into every
+    # "Modify | <Category>" tab it shows for a selection.
+    #   None                        -> any selection
+    #   ['OST_Walls', 'OST_Floors'] -> only when the selection holds one of these
+    contextual_panels = {
+        'B95-Selection': None,
+    }
+
+    env_key = 'BDARE95_CONTEXT_PANELS'
+    state = {'done': False}
+
+    def find_tab(name):
+        ribbon = ComponentManager.Ribbon
+        if ribbon is None:
+            return None
+        for tab in ribbon.Tabs:
+            if tab.Id == name or tab.Title == name:
+                return tab
+        return None
+
+    def find_panel(tab, title):
+        for panel in tab.Panels:
+            if panel.Source is not None and panel.Source.Title == title:
+                return panel
+        return None
+
+    # -- moving panels ------------------------------------------------------
+
+    def send_home():
+        # startup.py runs before pyRevit rebuilds the ribbon. On a Reload, put
+        # moved panels back in our tab so pyRevit can find, update and colour
+        # them. On a cold start the ribbon isn't built yet: nothing to return.
+        source = find_tab(TAB_NAME)
+        if source is None:
+            return
+        for panel_title, target_name in panel_moves:
+            target = find_tab(target_name)
+            if target is None:
+                continue
+            panel = find_panel(target, panel_title)
+            if panel is None:
+                continue
+            target.Panels.Remove(panel)
+            source.Panels.Add(panel)
+
+    def move_out():
+        source = find_tab(TAB_NAME)
+        if source is None:
+            return
+        for panel_title, target_name in panel_moves:
+            target = find_tab(target_name)
+            if target is None or find_panel(target, panel_title) is not None:
+                continue
+            panel = find_panel(source, panel_title)
+            if panel is None:
+                continue
+            source.Panels.Remove(panel)
+            target.Panels.Add(panel)
+
+    # -- contextual visibility ---------------------------------------------
+
+    def build_category_filters():
+        filters = {}
+        for title, names in contextual_panels.items():
+            if names is None:
+                filters[title] = None
+                continue
+            cats = List[BuiltInCategory]()
+            for name in names:
+                try:
+                    cats.Add(getattr(BuiltInCategory, name))
+                except Exception:
+                    logger.debug('contextual panels: unknown category %s', name)
+            filters[title] = ElementMulticategoryFilter(cats) if cats.Count else False
+        return filters
+
+    category_filters = build_category_filters()
+
+    def selection_matches(doc, ids, cat_filter):
+        if cat_filter is None:
+            return True                  # any selection
+        if cat_filter is False:
+            return False                 # no valid categories configured
+        try:
+            hit = (FilteredElementCollector(doc, List[ElementId](ids))
+                   .WherePasses(cat_filter)
+                   .FirstElementId())
+            return hit != ElementId.InvalidElementId
+        except Exception as err:
+            logger.debug('contextual panels: category check failed: %s', err)
+            return False
+
+    def refresh(doc, ids):
+        modify_tab = find_tab('Modify')
+        if modify_tab is None:
+            return
+        has_selection = doc is not None and ids is not None and ids.Count > 0
+        for title, cat_filter in category_filters.items():
+            panel = find_panel(modify_tab, title)
+            if panel is None:
+                continue                 # not moved yet (startup / reload)
+            show = has_selection and selection_matches(doc, ids, cat_filter)
+            if panel.IsVisible != show:
+                panel.IsVisible = show
+
+    def current_selection():
+        try:
+            uidoc = uiapp.ActiveUIDocument
+        except Exception:
+            uidoc = None
+        if uidoc is None:
+            return None, None
+        return uidoc.Document, uidoc.Selection.GetElementIds()
+
+    def on_selection_changed(sender, args):
+        try:
+            doc = args.GetDocument()
+            ids = args.GetSelectedElements()
+        except Exception:
+            doc, ids = current_selection()
+        try:
+            refresh(doc, ids)
+        except Exception as err:
+            logger.debug('contextual panels: refresh failed: %s', err)
+
+    def watch_selection():
+        # Drop the handler from a previous load first, so a pyRevit Reload
+        # never stacks a second listener. The handler is parked in envvars so
+        # it outlives this script engine, like the logo's handlers.
+        old = envvars.get_pyrevit_env_var(env_key)
+        if old:
+            try:
+                old['uiapp'].SelectionChanged -= old['handler']
+            except Exception:
+                pass
+            envvars.set_pyrevit_env_var(env_key, None)
+        if not contextual_panels:
+            return
+        try:
+            from Autodesk.Revit.UI.Events import SelectionChangedEventArgs
+            handler = EventHandler[SelectionChangedEventArgs](on_selection_changed)
+            uiapp.SelectionChanged += handler
+            envvars.set_pyrevit_env_var(env_key,
+                                        {'uiapp': uiapp, 'handler': handler})
+        except Exception as err:
+            logger.debug('contextual panels: SelectionChanged unavailable: %s', err)
+
+    # -- wiring -------------------------------------------------------------
+
+    def on_idling(sender, args):
+        # pyRevit has built the ribbon by Revit's first idle moment.
+        if state['done']:
+            return
+        state['done'] = True
+        try:
+            uiapp.Idling -= on_idling
+        except Exception:
+            pass
+        try:
+            move_out()
+        except Exception as err:
+            logger.debug('panel mover: move failed: %s', err)
+        try:
+            doc, ids = current_selection()
+            refresh(doc, ids)            # hide contextual panels right away
+        except Exception as err:
+            logger.debug('contextual panels: first refresh failed: %s', err)
+
+    try:
+        send_home()
+    except Exception as err:
+        logger.debug('panel mover: return home failed: %s', err)
+
+    try:
+        watch_selection()
+    except Exception as err:
+        logger.debug('contextual panels: setup failed: %s', err)
+
+    uiapp.Idling += on_idling
+
+
 
 # ---------------------------------------------------------------------------
 # entry point
@@ -494,3 +706,9 @@ except Exception:
         change_tracker.log_error("startup arming (links)")
     except Exception:
         pass
+
+# --- Native-tab panels: move B-Dare95 panels into Revit's own tabs ---
+try:
+    _b95_panel_mover(__revit__)          # noqa: F821 - injected by pyRevit
+except Exception as err:
+    logger.debug('panel mover: startup failed: %s', err)
