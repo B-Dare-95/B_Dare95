@@ -17,7 +17,6 @@ __________________________________________________
 Author: Mohamed Bedair"""
 
 
-__title__ = "Model Group\nManager"
 __author__ = "Mohamed Bedair"
 
 import traceback

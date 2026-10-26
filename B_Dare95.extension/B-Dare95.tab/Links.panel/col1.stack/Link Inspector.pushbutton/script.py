@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-__title__ = "Link\nInspector"
 __author__ = "Mohamed Bedair"
 __doc__ = """__________________________________________________
 Description:

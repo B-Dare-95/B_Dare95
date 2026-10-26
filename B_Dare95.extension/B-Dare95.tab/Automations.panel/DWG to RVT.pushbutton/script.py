@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-__title__ = "DWG to\nRevit"
 __doc__ = """Turns a linked or imported DWG plan into real Revit elements: walls, railings, doors, windows, columns and grids.
 
 You tell the tool which DWG layer holds which category and which family type to use. Walls and railings can be drawn along each single line in the DWG, or along the centerline between two parallel lines. In Single mode every element on the layer gets one type. In Multiple mode you add size rules, such as "Equal 100 mm -> 100 mm wall type", and each element gets the type of the first rule its size matches. For walls and railings drawn from two lines the size is the distance between them, for doors and windows it's the opening width, and for columns you enter width and length, or one size for square and round columns.

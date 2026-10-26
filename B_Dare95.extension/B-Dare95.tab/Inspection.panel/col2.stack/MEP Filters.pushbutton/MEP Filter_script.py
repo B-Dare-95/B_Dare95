@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-__title__   = "MEP Filters"
+TOOL_NAME   = "MEP Filters"
 __doc__ = """__________________________________________________
 Description:
 
@@ -672,7 +672,7 @@ if result_sections is None:
     script.exit()
 
 # 3. Create / apply all filters in one transaction
-with Transaction(doc, __title__) as t:
+with Transaction(doc, TOOL_NAME) as t:
     t.Start()
     for sec in result_sections:
         for f in sec["filters"]:

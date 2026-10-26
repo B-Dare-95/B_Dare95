@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-__title__   = "Type\nSwapper"
 __doc__ = """__________________________________________________
 Description:
 

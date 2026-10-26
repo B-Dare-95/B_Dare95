@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-__title__   = "What's This ID?"
 __author__  = "Mohamed Bedair"
 __version__ = "2.0.0"
 __doc__ = """__________________________________________________

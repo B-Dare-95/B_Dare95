@@ -1,4 +1,3 @@
-__title__     = "Active Element"
 __author__    = "Mohamed Bedair"
 __version__   = 'Version = 1.0'
 __doc__ = """__________________________________________________

@@ -15,7 +15,6 @@ How-to:
 __________________________________________________
 Author: Mohamed Bedair"""
 
-__title__ = "Magic\n3D Box"
 __author__ = "Mohamed Bedair"
 
 import json

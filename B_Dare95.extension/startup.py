@@ -92,6 +92,7 @@ logger = script.get_logger()
 
 # Must match the .tab folder name (or its bundle.yaml title).
 TAB_NAME = 'B-Dare95'
+MULTI_CATEGORY = 'multi-category'   # contextual panel rule, see _b95_panel_mover
 
 ICON_TAG = 'BDare95.RibbonTabIcon'
 ICON_SIZE = 16.0        # displayed size; ship the PNG at 32 or 64 px
@@ -469,6 +470,7 @@ def _log_room_register_failure(err):
 def _b95_panel_mover(uiapp):
     """Moves B-Dare95 panels into Revit's native tabs, and shows contextual
     panels only while something is selected."""
+    from System import Array
     from System.Collections.Generic import List
     from Autodesk.Revit.DB import (BuiltInCategory, ElementId,
                                    ElementMulticategoryFilter,
@@ -476,18 +478,35 @@ def _b95_panel_mover(uiapp):
 
     # (panel folder name without ".panel", native tab to move it into)
     panel_moves = [
-        ('B95-Monitoring', 'Collaborate'),
-        ('B95-Selection', 'Modify'),
+        ('Monitoring', 'Collaborate'),
+        ('B95-Walls', 'Modify'),
+        ('B95-Floors', 'Modify'),
+        ('B95-Shafts', 'Modify'),
+        ('B95-Ceilings', 'Modify'),
+        ('B95-Rooms', 'Modify'),
     ]
 
-    # Panels that only show while elements are selected. They must be moved
-    # into 'Modify' above: Revit merges the Modify tab into every
+    # Panels that only show while elements are selected. They live in the
+    # Modify tab while shown: Revit merges the Modify tab into every
     # "Modify | <Category>" tab it shows for a selection.
     #   None                        -> any selection
-    #   ['OST_Walls', 'OST_Floors'] -> only when the selection holds one of these
+    #   ['OST_Walls', 'OST_Floors'] -> when the selection holds one of these
+    #   MULTI_CATEGORY              -> when the selection holds 2+ categories
+    # Several panels can show at once, e.g. a wall + a door shows B95-Walls
+    # and the multi-category panel together.
     contextual_panels = {
-        'B95-Selection': None,
+        'B95-Walls': ['OST_Walls'],
+        'B95-Floors': ['OST_Floors'],
+        'B95-Shafts': ['OST_ShaftOpening'],
+        'B95-Ceilings': ['OST_Ceilings'],
+        'B95-Rooms': ['OST_Rooms'],
+        'B95-Selection': MULTI_CATEGORY,
     }
+
+    # contextual panels are always moved into 'Modify'; no need to repeat them
+    # in panel_moves above
+    panel_moves = panel_moves + [(title, 'Modify') for title in contextual_panels
+                                 if (title, 'Modify') not in panel_moves]
 
     env_key = 'BDARE95_CONTEXT_PANELS'
     state = {'done': False}
@@ -531,6 +550,8 @@ def _b95_panel_mover(uiapp):
         if source is None:
             return
         for panel_title, target_name in panel_moves:
+            if panel_title in contextual_panels:
+                continue                 # placed by refresh(), see below
             target = find_tab(target_name)
             if target is None or find_panel(target, panel_title) is not None:
                 continue
@@ -545,8 +566,8 @@ def _b95_panel_mover(uiapp):
     def build_category_filters():
         filters = {}
         for title, names in contextual_panels.items():
-            if names is None:
-                filters[title] = None
+            if names is None or names == MULTI_CATEGORY:
+                filters[title] = names
                 continue
             cats = List[BuiltInCategory]()
             for name in names:
@@ -559,9 +580,25 @@ def _b95_panel_mover(uiapp):
 
     category_filters = build_category_filters()
 
+    def spans_categories(doc, ids):
+        # True as soon as two different categories are found
+        first = None
+        for eid in ids:
+            el = doc.GetElement(eid)
+            cat = el.Category if el is not None else None
+            if cat is None:
+                continue
+            if first is None:
+                first = cat.Id
+            elif cat.Id != first:
+                return True
+        return False
+
     def selection_matches(doc, ids, cat_filter):
         if cat_filter is None:
             return True                  # any selection
+        if cat_filter == MULTI_CATEGORY:
+            return spans_categories(doc, ids)
         if cat_filter is False:
             return False                 # no valid categories configured
         try:
@@ -574,17 +611,35 @@ def _b95_panel_mover(uiapp):
             return False
 
     def refresh(doc, ids):
+        # Revit's "Modify | <Category>" tab ignores IsVisible on the Modify
+        # tab's panels (the debug log showed them hidden while Revit still drew
+        # them). So a contextual panel is shown by moving it INTO the Modify
+        # tab, and hidden by moving it back to our tab and hiding it there,
+        # where IsVisible is respected.
         modify_tab = find_tab('Modify')
-        if modify_tab is None:
+        home_tab = find_tab(TAB_NAME)
+        if modify_tab is None or home_tab is None:
             return
         has_selection = doc is not None and ids is not None and ids.Count > 0
         for title, cat_filter in category_filters.items():
-            panel = find_panel(modify_tab, title)
+            in_modify = find_panel(modify_tab, title)
+            at_home = find_panel(home_tab, title)
+            panel = in_modify or at_home
             if panel is None:
-                continue                 # not moved yet (startup / reload)
+                continue                 # not built yet (startup / reload)
             show = has_selection and selection_matches(doc, ids, cat_filter)
-            if panel.IsVisible != show:
-                panel.IsVisible = show
+            if show:
+                if in_modify is None:
+                    home_tab.Panels.Remove(panel)
+                    modify_tab.Panels.Add(panel)
+                if not panel.IsVisible:
+                    panel.IsVisible = True
+            else:
+                if in_modify is not None:
+                    modify_tab.Panels.Remove(panel)
+                    home_tab.Panels.Add(panel)
+                if panel.IsVisible:
+                    panel.IsVisible = False
 
     def current_selection():
         try:
@@ -595,36 +650,48 @@ def _b95_panel_mover(uiapp):
             return None, None
         return uidoc.Document, uidoc.Selection.GetElementIds()
 
-    def on_selection_changed(sender, args):
+    def deferred_refresh():
         try:
-            doc = args.GetDocument()
-            ids = args.GetSelectedElements()
-        except Exception:
             doc, ids = current_selection()
-        try:
             refresh(doc, ids)
         except Exception as err:
             logger.debug('contextual panels: refresh failed: %s', err)
+
+    def on_selection_changed(sender, args):
+        # Place the panels now, so Revit merges the right ones into the
+        # "Modify | <Category>" tab it is about to build, and once more after
+        # Revit has finished (ContextIdle) in case it reshuffled anything.
+        deferred_refresh()
+        try:
+            from System.Windows.Threading import Dispatcher
+            Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.ContextIdle,
+                                                     Action(deferred_refresh))
+        except Exception as err:
+            logger.debug('contextual panels: could not schedule refresh: %s', err)
 
     def watch_selection():
         # Drop the handler from a previous load first, so a pyRevit Reload
         # never stacks a second listener. The handler is parked in envvars so
         # it outlives this script engine, like the logo's handlers.
-        old = envvars.get_pyrevit_env_var(env_key)
-        if old:
+        # pyRevit's envvars did not survive a Reload here (the debug log showed
+        # every reload adding one more listener), so the handler is parked in
+        # the AppDomain itself, which lives as long as Revit.
+        from System import AppDomain
+        domain = AppDomain.CurrentDomain
+        old = domain.GetData(env_key)
+        if old is not None:
             try:
-                old['uiapp'].SelectionChanged -= old['handler']
+                old[0].SelectionChanged -= old[1]
             except Exception:
                 pass
-            envvars.set_pyrevit_env_var(env_key, None)
+            domain.SetData(env_key, None)
         if not contextual_panels:
             return
         try:
             from Autodesk.Revit.UI.Events import SelectionChangedEventArgs
             handler = EventHandler[SelectionChangedEventArgs](on_selection_changed)
             uiapp.SelectionChanged += handler
-            envvars.set_pyrevit_env_var(env_key,
-                                        {'uiapp': uiapp, 'handler': handler})
+            domain.SetData(env_key, Array[Object]([uiapp, handler]))
         except Exception as err:
             logger.debug('contextual panels: SelectionChanged unavailable: %s', err)
 

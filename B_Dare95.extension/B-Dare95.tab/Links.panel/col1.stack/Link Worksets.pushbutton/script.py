@@ -16,7 +16,6 @@ __________________________________________________
 Author: Mohamed Bedair"""
 
 
-__title__ = "Link\nWorksets"
 __author__ = "Mohamed Bedair"
 
 import clr

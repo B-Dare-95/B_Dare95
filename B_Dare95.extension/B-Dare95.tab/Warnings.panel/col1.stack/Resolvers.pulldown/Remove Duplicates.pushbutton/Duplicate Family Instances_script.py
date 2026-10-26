@@ -15,7 +15,6 @@ __________________________________________________
 Author: Mohamed Bedair"""
 
 
-__title__ = "Delete\nDuplicates"
 __author__ = "Mohamed Bedair"
 
 from Autodesk.Revit.DB import (

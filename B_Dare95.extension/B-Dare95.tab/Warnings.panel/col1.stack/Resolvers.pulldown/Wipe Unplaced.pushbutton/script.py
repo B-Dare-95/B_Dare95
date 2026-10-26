@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-__title__   = "Wipe Unplaced Elements"
+TOOL_NAME   = "Wipe Unplaced"
 __author__  = "Mohamed Bedair"
 __version__ = "1.0.0"
 __doc__ = """__________________________________________________
@@ -308,7 +308,7 @@ if chk_spaces.IsChecked:
 if not to_delete:
     MessageBox.Show(
         "No categories were selected. Nothing to purge.",
-        __title__,
+        TOOL_NAME,
         MessageBoxButton.OK,
         MessageBoxImage.Information
     )
@@ -346,7 +346,7 @@ if answer != MessageBoxResult.OK:
 #  Execute deletions
 # ─────────────────────────────────────────────────────────────
 
-tgrp = TransactionGroup(doc, __title__)
+tgrp = TransactionGroup(doc, TOOL_NAME)
 tgrp.Start()
 
 deleted_count = 0
@@ -379,7 +379,7 @@ summary = (
 
 MessageBox.Show(
     summary,
-    __title__,
+    TOOL_NAME,
     MessageBoxButton.OK,
     MessageBoxImage.Information
 )

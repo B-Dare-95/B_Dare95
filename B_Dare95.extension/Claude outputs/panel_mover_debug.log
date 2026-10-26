@@ -1,0 +1,3 @@
+12:09:16.269 selection changed (engine 266)
+12:09:16.272 deferred refresh: None selected ['? (iteration over non-sequence of type NoneType)']
+12:09:16.273 after refresh: Monitoring@Collaborate[vis=True,id=63668587]  B95-Ceilings@B-Dare95[vis=False,id=48301797]  B95-Floors@B-Dare95[vis=False,id=46507478]  B95-Shafts@B-Dare95[vis=False,id=47118145]  B95-Walls@B-Dare95[vis=False,id=56046601]  B95-Rooms@B-Dare95[vis=False,id=54823065]

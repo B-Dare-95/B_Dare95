@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-__title__ = "War\nChart"
 # Keeps the IronPython engine alive after the script returns, which a genuinely
 # modeless window requires.
 __persistentengine__ = True

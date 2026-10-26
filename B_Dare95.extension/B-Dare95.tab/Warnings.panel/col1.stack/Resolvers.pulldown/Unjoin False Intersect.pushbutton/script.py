@@ -15,7 +15,6 @@ __________________________________________________
 Author: Mohamed Bedair"""
 
 
-__title__ = "Unjoin\nDisjoint"
 __author__ = "Mohamed Bedair"
 
 from Autodesk.Revit.DB import (

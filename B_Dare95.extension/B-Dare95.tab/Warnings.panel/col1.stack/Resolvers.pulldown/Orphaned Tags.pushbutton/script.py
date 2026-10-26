@@ -15,7 +15,6 @@ How-to:
 __________________________________________________
 Author: Mohamed Bedair"""
 
-__title__ = "Orphaned\nTags"
 __author__ = "Mohamed Bedair"
 
 import clr

@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-__title__   = "Highlight MEP"
 __doc__ = """__________________________________________________
 Description:
 

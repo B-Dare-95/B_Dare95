@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-__title__ = "Revit SEO"
 __author__ = "Mohamed Bedair"
 __version__ = '2.1.0'
 __doc__ = """__________________________________________________

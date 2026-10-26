@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-__title__     = "Linked Element"
 __author__    = "Mohamed Bedair"
 __version__   = 'Version = 1.2'
 __doc__ = """__________________________________________________

@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-__title__ = "Parking Count Lister"
 __author__ = "Mohamed Bedair"
 __version__ = '1.0.0'
 __doc__ = """__________________________________________________

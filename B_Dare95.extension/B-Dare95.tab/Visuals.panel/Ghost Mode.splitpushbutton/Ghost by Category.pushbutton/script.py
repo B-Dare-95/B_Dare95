@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-__title__   = "Ghost by Category"
 __doc__ = """__________________________________________________
 Description:
 

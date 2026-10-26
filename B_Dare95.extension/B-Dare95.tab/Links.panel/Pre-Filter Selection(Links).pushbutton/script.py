@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__title__ = "Pre-Filter Selection (Links)"
+TOOL_NAME = "Pre-Filter Selection(Links)"
 __author__ = "Mohamed Bedair"
 __version__ = '1.0.0'
 __doc__ = """__________________________________________________
@@ -546,14 +546,14 @@ if rvt_year < 2023:
         "Keeping linked elements selected needs Selection.SetReferences(), "
         "which was added in the Revit 2023 API.\n\n"
         "This Revit is {0}.".format(rvt_year),
-        title=__title__, exitscript=True)
+        title=TOOL_NAME, exitscript=True)
 
 link_instances = get_link_instances()
 
 if not link_instances:
     forms.alert(
         "No loaded Revit links are visible in the active view.",
-        title=__title__, exitscript=True)
+        title=TOOL_NAME, exitscript=True)
 
 LINK_MAP = {}
 for li in link_instances:
@@ -564,7 +564,7 @@ cat_counts = scan_link_categories(link_instances)
 if not cat_counts:
     forms.alert(
         "The loaded links contain no model elements to pick.",
-        title=__title__, exitscript=True)
+        title=TOOL_NAME, exitscript=True)
 
 names_chosen = show_category_picker(cat_counts, INVERT_MODE, len(link_instances))
 
@@ -591,6 +591,6 @@ final_refs, per_link, skipped = build_link_references(picked_refs, LINK_MAP)
 if final_refs.Count == 0:
     forms.alert(
         "None of the picked references could be resolved back to linked elements.",
-        title=__title__, exitscript=True)
+        title=TOOL_NAME, exitscript=True)
 
 uidoc.Selection.SetReferences(final_refs)
