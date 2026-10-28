@@ -492,15 +492,16 @@ def _b95_panel_mover(uiapp):
     #   None                        -> any selection
     #   ['OST_Walls', 'OST_Floors'] -> when the selection holds one of these
     #   MULTI_CATEGORY              -> when the selection holds 2+ categories
-    # Several panels can show at once, e.g. a wall + a door shows B95-Walls
-    # and the multi-category panel together.
+    #                                  (kept available, not used right now)
+    # Several panels can show at once, e.g. selecting a wall shows B95-Walls
+    # and B95-Selection together.
     contextual_panels = {
         'B95-Walls': ['OST_Walls'],
         'B95-Floors': ['OST_Floors'],
         'B95-Shafts': ['OST_ShaftOpening'],
         'B95-Ceilings': ['OST_Ceilings'],
         'B95-Rooms': ['OST_Rooms'],
-        'B95-Selection': MULTI_CATEGORY,
+        'B95-Selection': None,
     }
 
     # contextual panels are always moved into 'Modify'; no need to repeat them
