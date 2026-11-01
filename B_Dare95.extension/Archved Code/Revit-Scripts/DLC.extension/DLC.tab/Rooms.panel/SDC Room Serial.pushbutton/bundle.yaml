@@ -1,0 +1,14 @@
+title: |-
+  Room
+  Serial
+tooltip: >-
+  Writes a room serial onto every room: SDC_Room_Serial =
+  SDC_G_BUILDING CODE . SDC_G_LEVEL CODE . Number.
+
+  Creates SDC_Room_Serial (instance, text) in the firm main shared-parameter
+  file and binds it to Rooms. Scope: whole model / active view / selection.
+  Modes: full overwrite / fill blanks only / preview. Rooms live inside the
+  building links, so run this inside each building model.
+author: SDC (Sedki Sustainable Architecture)
+highlight: new
+min_revit_version: 2025

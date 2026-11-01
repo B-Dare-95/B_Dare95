@@ -1,0 +1,6 @@
+title: "Find Link\nDuplicates"
+tooltip: >-
+  Finds host walls, floors and ceilings that duplicate elements in the
+  structural link (80%+ of their volume inside link geometry) and colours
+  them red in the active view. Then offers to delete all, selected or ticked.
+author: DLC

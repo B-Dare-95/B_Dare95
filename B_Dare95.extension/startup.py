@@ -27,13 +27,12 @@ every pyRevit Reload). No user interaction.
     events twice.
 
 4. Native-tab panels
-    Moves chosen B-Dare95 panels (e.g. B95-Monitoring) into Revit's own tabs
+    Moves chosen B-Dare95 panels (e.g. Monitoring) into Revit's own tabs
     such as Collaborate. Before pyRevit rebuilds the ribbon on a Reload, the
     panels are sent back to the B-Dare95 tab so pyRevit can update and colour
     them; on Revit's first idle moment they move out again.
-    Panels listed as contextual (e.g. B95-Selection) live in the Modify tab
-    and only show while something is selected, optionally only for chosen
-    categories, driven by UIApplication.SelectionChanged (Revit 2023+).
+    Contextual panels (shown only while something is selected, optionally
+    only for chosen categories) are supported but none are set right now.
 
 Placement:
     B_Dare95.extension/startup.py
@@ -479,11 +478,21 @@ def _b95_panel_mover(uiapp):
     # (panel folder name without ".panel", native tab to move it into)
     panel_moves = [
         ('Monitoring', 'Collaborate'),
+        ('Modify Elements', 'Modify'),
+        ('Selection', 'Modify'),
+    ]
+
+    # Panels that no longer exist in the extension but may still sit in a
+    # native tab from before a Reload. They are sent back to our tab so
+    # pyRevit can remove them.
+    retired_panels = [
+        ('B-95 Modify', 'Modify'),
         ('B95-Walls', 'Modify'),
         ('B95-Floors', 'Modify'),
         ('B95-Shafts', 'Modify'),
         ('B95-Ceilings', 'Modify'),
         ('B95-Rooms', 'Modify'),
+        ('B95-Selection', 'Modify'),
     ]
 
     # Panels that only show while elements are selected. They live in the
@@ -493,16 +502,9 @@ def _b95_panel_mover(uiapp):
     #   ['OST_Walls', 'OST_Floors'] -> when the selection holds one of these
     #   MULTI_CATEGORY              -> when the selection holds 2+ categories
     #                                  (kept available, not used right now)
-    # Several panels can show at once, e.g. selecting a wall shows B95-Walls
-    # and B95-Selection together.
-    contextual_panels = {
-        'B95-Walls': ['OST_Walls'],
-        'B95-Floors': ['OST_Floors'],
-        'B95-Shafts': ['OST_ShaftOpening'],
-        'B95-Ceilings': ['OST_Ceilings'],
-        'B95-Rooms': ['OST_Rooms'],
-        'B95-Selection': None,
-    }
+    # Several panels can show at once.
+    # Example: {'My Panel': ['OST_Walls'], 'Other Panel': None}
+    contextual_panels = {}
 
     # contextual panels are always moved into 'Modify'; no need to repeat them
     # in panel_moves above
@@ -536,7 +538,7 @@ def _b95_panel_mover(uiapp):
         source = find_tab(TAB_NAME)
         if source is None:
             return
-        for panel_title, target_name in panel_moves:
+        for panel_title, target_name in panel_moves + retired_panels:
             target = find_tab(target_name)
             if target is None:
                 continue

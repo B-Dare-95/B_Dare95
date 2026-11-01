@@ -1,0 +1,10 @@
+title: Room Doctor
+tooltip: >-
+  States WHY each unbounded room is Not Enclosed - and proves it.
+  Scope: selected rooms (or room tags) / one level / whole model.
+  Checks gaps, Room Bounding off, walls too low/high for Computation Height,
+  wrong phase, secondary design options, links not room bounding or unloaded,
+  redundant rooms, room points inside walls or in open space, Revit warnings.
+  Confirms each cause with rolled-back tests (nothing saved).
+  Markers: green = confirmed fix, red = gap, orange = not bounding, magenta X = room.
+author: DLC

@@ -1,0 +1,7 @@
+title: "Room\nAreas"
+tooltip: >-
+  Calculates GLA and GFA for rooms and writes them to DLC_GLA / DLC_GFA.
+  GLA: interior walls to centreline, exterior walls to inner face, leasable rooms only (DLC_Is_Leasable).
+  GFA: interior walls to centreline, exterior walls to outer face.
+  Preview first, then Apply. Optional Excel report with level totals and QA.
+author: DLC

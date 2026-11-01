@@ -1,0 +1,9 @@
+title: Room Fixer
+tooltip: >-
+  Automatically fixes unbounded rooms - and verifies every fix.
+  Each fix is kept only if Revit shows the room is now bounded AND no
+  already-enclosed room changed. You choose the allowed fixes: separation
+  lines across gaps / along non-bounding elements, tick Room Bounding,
+  move room points out of walls, split or delete duplicate rooms.
+  At the end you KEEP or ROLL BACK everything (one Undo).
+author: DLC

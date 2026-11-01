@@ -1,0 +1,9 @@
+title: |-
+  Write
+  Door Data
+tooltip: >-
+  RUN INSIDE A BUILDING MODEL. Door number with a/b/c suffixes for multi-door
+  rooms; DOOR TYPE uses Type Mark. Optional DOOR SCHEDULE + Excel report.
+author: SDC (Sedki Sustainable Architecture)
+highlight: new
+min_revit_version: 2025

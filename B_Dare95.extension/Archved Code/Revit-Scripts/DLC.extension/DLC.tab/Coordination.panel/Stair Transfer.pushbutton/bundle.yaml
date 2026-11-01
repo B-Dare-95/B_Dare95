@@ -1,0 +1,8 @@
+title: "Stair\nTransfer"
+tooltip: >-
+  Copy (multistorey) stairs from the architecture model into this structure
+  model. Each flight becomes its own stair, hosted on the structural slab
+  levels and dropped by that floor's finish thickness (slab to slab).
+author: DLC
+engine:
+  clean: true

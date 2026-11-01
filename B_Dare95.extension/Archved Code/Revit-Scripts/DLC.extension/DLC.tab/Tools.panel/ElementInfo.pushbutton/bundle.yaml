@@ -1,0 +1,7 @@
+title: Element Info
+tooltip: >-
+  Click an element in the host model or any linked model to see its
+  Element Name, Link, Level and ID in a window, with a copyable summary line.
+  Tip: for rooms or other elements you can't click, select the element first,
+  then click this button.
+author: DLC

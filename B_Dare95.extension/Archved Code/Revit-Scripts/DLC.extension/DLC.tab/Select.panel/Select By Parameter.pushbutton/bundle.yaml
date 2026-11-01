@@ -1,0 +1,7 @@
+title: "Select By\nParameter"
+tooltip: >-
+  Select elements by category, optionally filtered by one or more values of a
+  parameter (e.g. all Rooms on Level L01, or Offices in Admin).
+  Look in the active view, the whole model, or the current selection.
+  Zooms to the result.
+author: DLC

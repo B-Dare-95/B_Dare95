@@ -1,0 +1,5 @@
+title: "Tab\nDesigner"
+tooltip: >-
+  Rename this tab and arrange its buttons (large, small stacked, or in a
+  More menu). Applies the design and refreshes pyRevit - no Revit restart.
+author: DLC
