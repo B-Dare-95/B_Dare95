@@ -4,10 +4,11 @@ Description:
 
 Log model issues with screenshots and comments straight into an Excel file, without leaving Revit.
 Excel doesn't need to be installed. Screenshots need Snipaste (free on the Microsoft Store).
+The tool won't open while one of its Excel files is open in Excel, and while the tool is open those files can't be opened in Excel.
 __________________________________________________
 How-to:
 
--> Click on the button
+-> Close your issue files in Excel, then click on the button
 -> Click Take Screenshot and capture part of your screen
 -> Fill in the Comment and any extra fields
 -> Click Save Issue to add it to the .xlsx file
@@ -49,7 +50,10 @@ from System.Windows.Threading     import (
 from System.Windows.Input         import Cursors
 
 # ── I/O ─────────────────────────────────────────────────────────────────────
-from System.IO            import File, FileStream, FileMode, MemoryStream, StreamReader
+from System.IO            import (
+    File, FileStream, FileMode, FileAccess, FileShare, SeekOrigin,
+    MemoryStream, StreamReader, IOException
+)
 from System.IO.Compression import ZipArchive, ZipArchiveMode
 
 # ── Clipboard (WinForms path avoids WPF transparent-alpha bug) ───────────────
@@ -62,7 +66,9 @@ from System.Drawing.Imaging import ImageFormat, PixelFormat
 
 # ── Process / Misc ───────────────────────────────────────────────────────────
 from System.Diagnostics import Process, ProcessStartInfo
-from System             import Array, Byte, Action, DateTime, TimeSpan, IntPtr
+from System             import (
+    Array, Byte, Action, DateTime, TimeSpan, IntPtr, UnauthorizedAccessException
+)
 from System.Text        import Encoding
 import System.Xml as SysXml
 
@@ -664,6 +670,151 @@ def _read_xlsx(path):
     if not columns:
         columns = [u'Comment']
     return columns, issues
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  EXCEL FILE GUARD
+#
+#  1. Before the window opens, every tracked .xlsx is checked. If one is open
+#     in Excel the tool refuses to start (it would otherwise read an empty
+#     file and could overwrite the workbook on the next save).
+#  2. While the window is open, the tool keeps every tracked .xlsx open with
+#     FileShare.None, so Excel cannot open it. All saves go through that same
+#     handle (_write_xlsx). The handles are released when the window closes or
+#     a tab is closed.
+# ═══════════════════════════════════════════════════════════════════════════
+
+_ENVVAR_LOCKS = u'B_DARE95_ISSUE_LOGGER_LOCKS'
+_LOCKS        = [{}]           # {normcase path: FileStream} for this window
+_SHARE_NONE   = getattr(FileShare, 'None')   # 'None' is a keyword in Python 3 linters
+
+
+def _lock_key(path):
+    return os.path.normcase(os.path.normpath(path))
+
+
+def _excel_owner_file_exists(path):
+    """Excel writes a hidden '~$name.xlsx' owner file next to an open
+    workbook (for long names it replaces the first two characters)."""
+    folder = os.path.dirname(path)
+    name   = os.path.basename(path)
+    for owner in (u'~$' + name, u'~$' + name[2:]):
+        try:
+            if File.Exists(os.path.join(folder, owner)):
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def _excel_running():
+    try:
+        return len(Process.GetProcessesByName(u'EXCEL')) > 0
+    except Exception:
+        return False
+
+
+def is_open_elsewhere(path):
+    """True if another program (normally Excel) has *path* open."""
+    if not path or not File.Exists(path):
+        return False
+    if _lock_key(path) in _LOCKS[0]:
+        return False                       # that's our own handle
+    try:
+        fs = FileStream(path, FileMode.Open, FileAccess.ReadWrite, _SHARE_NONE)
+        fs.Dispose()
+    except IOException:
+        return True                        # sharing violation: someone holds it
+    except UnauthorizedAccessException:
+        return False                       # read-only file, not an open workbook
+    except Exception:
+        return False
+    # Excel normally keeps the file handle; the owner file is a second check
+    # for the cases where it doesn't (e.g. some synced folders).
+    return _excel_owner_file_exists(path) and _excel_running()
+
+
+def lock_file(path):
+    """Hold *path* open with no sharing so Excel can't open it. Returns
+    True when the file is locked by this tool (or there is nothing to lock)."""
+    if not path or not File.Exists(path):
+        return True
+    key = _lock_key(path)
+    if key in _LOCKS[0]:
+        return True
+    try:
+        _LOCKS[0][key] = FileStream(path, FileMode.Open, FileAccess.ReadWrite, _SHARE_NONE)
+        return True
+    except Exception:
+        return False
+
+
+def unlock_file(path):
+    if not path:
+        return
+    fs = _LOCKS[0].pop(_lock_key(path), None)
+    if fs is not None:
+        try:
+            fs.Dispose()
+        except Exception:
+            pass
+
+
+def unlock_all():
+    for key in list(_LOCKS[0].keys()):
+        fs = _LOCKS[0].pop(key, None)
+        try:
+            if fs is not None:
+                fs.Dispose()
+        except Exception:
+            pass
+
+
+def release_stale_locks():
+    """Close handles left by an earlier run (e.g. after an error), so they
+    can't keep the files locked until Revit restarts. Then park this run's
+    lock table so the next run can do the same."""
+    try:
+        from pyrevit import script
+        old = script.get_envvar(_ENVVAR_LOCKS)
+    except Exception:
+        old = None
+    if old:
+        for key in list(old.keys()):
+            try:
+                old.pop(key).Dispose()
+            except Exception:
+                pass
+    try:
+        from pyrevit import script
+        script.set_envvar(_ENVVAR_LOCKS, _LOCKS[0])
+    except Exception:
+        pass
+
+
+def _write_xlsx(path, data):
+    """Save workbook bytes. Uses the tool's own lock handle when the file is
+    locked (a second handle would be refused), otherwise writes the file and
+    then locks it."""
+    fs = _LOCKS[0].get(_lock_key(path))
+    if fs is not None:
+        fs.Seek(0, SeekOrigin.Begin)
+        fs.Write(data, 0, data.Length)
+        fs.SetLength(data.Length)
+        fs.Flush(True)
+        return
+    File.WriteAllBytes(path, data)
+    lock_file(path)
+
+
+def _excel_open_message(open_paths):
+    lines = []
+    for p in open_paths:
+        lines.append(u'  \u2022  {0}\n      {1}'.format(os.path.basename(p), os.path.dirname(p)))
+    return (u'An Excel file used by Add Issue is already open:\n\n'
+            + u'\n'.join(lines)
+            + u'\n\nClose it in Excel (save it first if you changed anything), '
+              u'then click Add Issue again.')
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1601,7 +1752,7 @@ def run_logger():
                         load_field_values(values)
                     rebuild_preview()
                     try:
-                        File.WriteAllBytes(
+                        _write_xlsx(
                             state[u'path'], _build_xlsx(state[u'columns'], state[u'issues']))
                     except Exception as ex:
                         set_status(u'Field removed, but re-saving the file failed: ' + unicode(ex), _BR_WARN)
@@ -1709,14 +1860,19 @@ def run_logger():
             if _same_path(t[u'path'], path):
                 activate_tab(i)
                 return
+        if File.Exists(path) and is_open_elsewhere(path):
+            set_status(u'\u201c{0}\u201d is open in Excel \u2014 close it there first, '
+                       u'then add it again.'.format(os.path.basename(path)), _BR_WARN)
+            return
         if File.Exists(path):                         # exists → open (don't wipe)
             cols, iss = _read_xlsx(path)
+            lock_file(path)
             tab = {u'path': path, u'columns': cols or [u'Comment'], u'issues': iss}
             msg = u'Opened existing \u201c{0}\u201d.'.format(os.path.basename(path))
         else:                                         # new → create empty workbook
             tab = {u'path': path, u'columns': [u'Comment'], u'issues': []}
             try:
-                File.WriteAllBytes(path, _build_xlsx(tab[u'columns'], tab[u'issues']))
+                _write_xlsx(path, _build_xlsx(tab[u'columns'], tab[u'issues']))
             except Exception as ex:
                 set_status(u'Could not create file: ' + unicode(ex), _BR_WARN)
                 return
@@ -1748,7 +1904,7 @@ def run_logger():
         if _same_path(new, src):
             # Same target -> just re-save the current file in place.
             try:
-                File.WriteAllBytes(new, _build_xlsx(state[u'columns'], state[u'issues']))
+                _write_xlsx(new, _build_xlsx(state[u'columns'], state[u'issues']))
                 set_status(u'Saved in place \u2192 ' + new, _BR_SUCCESS)
             except Exception as ex:
                 set_status(u'Save failed \u2014 is the file open in Excel?  ' + unicode(ex),
@@ -1763,10 +1919,11 @@ def run_logger():
                 return
 
         try:
-            File.WriteAllBytes(new, _build_xlsx(state[u'columns'], state[u'issues']))
+            _write_xlsx(new, _build_xlsx(state[u'columns'], state[u'issues']))
         except Exception as ex:
             set_status(u'Save As failed: ' + unicode(ex), _BR_WARN)
             return
+        unlock_file(src)          # the original stays on disk, no longer tracked
 
         # Relocate the active tab to the new file (original stays on disk).
         state[u'tabs'][state[u'active']][u'path'] = new
@@ -1782,6 +1939,7 @@ def run_logger():
             return
         name = os.path.basename(state[u'tabs'][idx][u'path'])
         sync_column_names()
+        unlock_file(state[u'tabs'][idx][u'path'])
         del state[u'tabs'][idx]
         if not state[u'tabs']:
             state[u'active'] = 0
@@ -1798,7 +1956,7 @@ def run_logger():
         deleted = state[u'issues'][idx]
         state[u'issues'].pop(idx)
         try:
-            File.WriteAllBytes(state[u'path'], _build_xlsx(state[u'columns'], state[u'issues']))
+            _write_xlsx(state[u'path'], _build_xlsx(state[u'columns'], state[u'issues']))
             if state[u'editing_index'] == idx:
                 reset_editing_state()
             elif state[u'editing_index'] is not None and state[u'editing_index'] > idx:
@@ -1845,6 +2003,13 @@ def run_logger():
     # ── Initial population ───────────────────────────────────────
     update_path_chip()
     rebuild_preview()
+
+    # ── Lock every tracked workbook so Excel can't open it meanwhile ──
+    not_locked = [t[u'path'] for t in state[u'tabs'] if not lock_file(t[u'path'])]
+    if not_locked:
+        set_status(u'Could not lock {0} \u2014 avoid opening it in Excel while '
+                   u'this window is open.'.format(
+                       u', '.join(os.path.basename(p) for p in not_locked)), _BR_WARN)
 
     # ── Get Snipaste from Microsoft Store ────────────────────────
     def on_get_snipaste(s, e):
@@ -2033,6 +2198,7 @@ def run_logger():
     # ticking against a dead window after the script has ended.
     def on_window_closed(s, e):
         _snip_stop_timer()
+        unlock_all()              # Excel can open the files again
 
     window.Closed += on_window_closed
 
@@ -2081,7 +2247,7 @@ def run_logger():
             state[u'issues'].append((ts, values, pngs))
 
         try:
-            File.WriteAllBytes(state[u'path'], _build_xlsx(state[u'columns'], state[u'issues']))
+            _write_xlsx(state[u'path'], _build_xlsx(state[u'columns'], state[u'issues']))
             n = len(state[u'issues'])
             reset_editing_state()
             rebuild_preview()
@@ -2132,4 +2298,11 @@ if _existing is not None and focus_existing_window(_existing):
     pass
 else:
     _set_session_window(None)
-    run_logger()
+    release_stale_locks()
+    _tracked, _ = load_config()
+    _open_in_excel = [p for p in _tracked if is_open_elsewhere(p)]
+    if _open_in_excel:
+        from pyrevit import forms
+        forms.alert(_excel_open_message(_open_in_excel), title=u'Add Issue')
+    else:
+        run_logger()
