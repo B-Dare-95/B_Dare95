@@ -40,6 +40,7 @@ from Autodesk.Revit.DB import (Arc, BasePoint, BoundingBoxXYZ, BuiltInCategory,
                                ViewType, XYZ)
 from Autodesk.Revit.UI import TaskDialog
 from pyrevit import script
+from bd_combo_search import enable_combo_search
 
 uiapp = __revit__
 doc = __revit__.ActiveUIDocument.Document
@@ -1229,5 +1230,6 @@ def on_closed(sender, args):
 
 
 window.Closed += EventHandler(on_closed)
+enable_combo_search(window)
 window.Show()
 Dispatcher.PushFrame(frame)
