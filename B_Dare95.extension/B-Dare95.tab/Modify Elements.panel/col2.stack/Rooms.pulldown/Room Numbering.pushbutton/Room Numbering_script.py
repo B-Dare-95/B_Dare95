@@ -42,6 +42,7 @@ clr.AddReference("System")
 
 from System.Windows import Visibility
 from System.Windows.Markup import XamlReader
+from bd_combo_search import enable_combo_search
 
 # ╦  ╦╔═╗╦═╗╦╔═╗╔╗ ╦  ╔═╗╔═╗
 # ╚╗╔╝╠═╣╠╦╝║╠═╣╠╩╗║  ║╣ ╚═╗
@@ -919,6 +920,7 @@ class RoomGridUI(object):
             btn.Checked += self._on_mode_changed
         self._level_combo.SelectionChanged += self._on_level_selected
 
+        enable_combo_search(self._win)
         self._win.ShowDialog()
 
     # ── Populate helpers ──────────────────────────────────────────────

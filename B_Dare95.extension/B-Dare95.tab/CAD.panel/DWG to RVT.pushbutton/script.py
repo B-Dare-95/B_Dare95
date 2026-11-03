@@ -42,6 +42,7 @@ from Autodesk.Revit.DB.Architecture import Railing, RailingType
 from Autodesk.Revit.DB.ExtensibleStorage import (Schema, SchemaBuilder, Entity,
                                                  AccessLevel, ExtensibleStorageFilter)
 from Autodesk.Revit.UI import TaskDialog
+from bd_combo_search import enable_combo_search
 
 uidoc = __revit__.ActiveUIDocument
 doc = uidoc.Document
@@ -2036,6 +2037,7 @@ def show_window(imports, type_opts, store):
             start = i
     cb_dwg.SelectedIndex = start
 
+    enable_combo_search(win)
     win.Show()
     Dispatcher.PushFrame(frame)
     return result[0]

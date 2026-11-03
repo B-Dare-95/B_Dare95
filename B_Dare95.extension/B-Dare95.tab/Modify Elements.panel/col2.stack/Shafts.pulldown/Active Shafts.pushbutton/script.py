@@ -54,6 +54,7 @@ from Autodesk.Revit.DB import (
 )
 
 from pyrevit import forms
+from bd_combo_search import enable_combo_search
 
 # ─────────────────────────────────────────────────────────────────────
 # Revit handles
@@ -1200,6 +1201,7 @@ def show_dialog(rows, line_styles, text_types, n_host, n_linked, n_links, no_geo
         frame.Continue = False
 
     window.Closed += EventHandler(on_closed)
+    enable_combo_search(window)
     window.Show()
     Dispatcher.PushFrame(frame)
 

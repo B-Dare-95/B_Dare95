@@ -32,6 +32,7 @@ from Autodesk.Revit.UI import TaskDialog
 
 from System.Windows.Markup import XamlReader
 from System.Windows.Threading import Dispatcher, DispatcherFrame
+from bd_combo_search import enable_combo_search
 
 doc = __revit__.ActiveUIDocument.Document
 uidoc = __revit__.ActiveUIDocument
@@ -89,6 +90,7 @@ def show_dialog(window):
         frame.Continue = False
 
     window.Closed += on_closed
+    enable_combo_search(window)
     window.Show()
     Dispatcher.PushFrame(frame)
 

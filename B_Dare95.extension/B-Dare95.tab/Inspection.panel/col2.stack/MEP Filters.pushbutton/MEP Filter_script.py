@@ -30,6 +30,7 @@ import System.Drawing as Drawing
 from Autodesk.Revit.DB import *
 from Autodesk.Revit.UI import *
 from pyrevit import script
+from bd_combo_search import enable_winforms_combo_search
 
 # ── Revit Variables ───────────────────────────────────────────────────────────
 uidoc       = __revit__.ActiveUIDocument
@@ -292,6 +293,7 @@ def _classification_combo(items, preselect=None):
         cb.SelectedItem = preselect
     elif cb.Items.Count > 0:
         cb.SelectedIndex = 0
+    enable_winforms_combo_search(cb)
     return cb
 
 

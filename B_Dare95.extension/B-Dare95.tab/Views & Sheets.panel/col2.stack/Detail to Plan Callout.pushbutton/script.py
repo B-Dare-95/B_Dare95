@@ -43,6 +43,7 @@ from Autodesk.Revit.DB import (
     WorksharingUtils, XYZ)
 
 from pyrevit import forms, script
+from bd_combo_search import enable_combo_search
 
 doc = __revit__.ActiveUIDocument.Document
 INVALID = ElementId.InvalidElementId
@@ -963,6 +964,7 @@ def show_picker(rows, vft_items, tpl_items):
     def on_closed(s, e):
         frame.Continue = False
     win.Closed += EventHandler(on_closed)
+    enable_combo_search(win)
     win.Show()
     Dispatcher.PushFrame(frame)
 

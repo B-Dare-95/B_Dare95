@@ -48,6 +48,7 @@ from Autodesk.Revit.UI import IExternalEventHandler, ExternalEvent
 
 from pyrevit import forms, script
 from pyrevit.coreutils import envvars
+from bd_combo_search import enable_combo_search
 
 
 STR_TYPE = clr.GetClrType(String)
@@ -1292,4 +1293,5 @@ window.Closed += EventHandler(on_window_closed)
 reload_data(__revit__)
 
 envvars.set_pyrevit_env_var(ENV_WINDOW, window)
+enable_combo_search(window)
 window.Show()

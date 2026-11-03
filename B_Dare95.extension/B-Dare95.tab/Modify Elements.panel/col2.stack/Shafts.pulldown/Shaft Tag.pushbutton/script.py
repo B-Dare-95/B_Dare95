@@ -41,6 +41,7 @@ from Autodesk.Revit.DB import (
     RevitLinkInstance, Transform
 )
 from pyrevit import forms, script
+from bd_combo_search import enable_combo_search
 
 # ─────────────────────────────────────────────────────────────────────
 # Revit handles
@@ -519,6 +520,7 @@ def show_form(plan_views, text_note_types, link_count, linked_shaft_count):
     select_all_btn.Click += on_select_all
     clear_all_btn.Click  += on_clear_all
 
+    enable_combo_search(window)
     window.ShowDialog()
     return result
 

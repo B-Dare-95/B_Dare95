@@ -69,6 +69,7 @@ from System.Windows.Media import BrushConverter
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 
 from pyrevit import forms, script
+from bd_combo_search import enable_combo_search
 
 doc = __revit__.ActiveUIDocument.Document
 uidoc = __revit__.ActiveUIDocument
@@ -1288,6 +1289,7 @@ class CalloutCreatorWindow(object):
         except Exception:
             pass
 
+        enable_combo_search(self.window)
         self.window.Show()
         Dispatcher.PushFrame(frame)
         return self.result[0]

@@ -42,6 +42,7 @@ from System.Windows import (
     Thickness, CornerRadius, GridLength, GridUnitType, Visibility
 )
 from System.Windows.Markup import XamlReader
+from bd_combo_search import enable_combo_search
 
 # ─── REVIT HANDLES ────────────────────────────────────────────────────────────
 doc   = __revit__.ActiveUIDocument.Document
@@ -1114,6 +1115,7 @@ def show_category_picker(all_categories):
 
     create_filter_row()
     update_confirm()
+    enable_combo_search(window)
     window.ShowDialog()
     return result_holder[0]
 

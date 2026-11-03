@@ -43,6 +43,7 @@ from System.Windows import (
 )
 from System.Windows.Media import SolidColorBrush, Color
 import System
+from bd_combo_search import enable_combo_search
 
 doc = revit.doc
 
@@ -655,4 +656,5 @@ confirm_btn.Click += _on_confirm
 # ══════════════════════════════════════════════════════════════════════════════
 #  Launch
 # ══════════════════════════════════════════════════════════════════════════════
+enable_combo_search(win)
 win.ShowDialog()

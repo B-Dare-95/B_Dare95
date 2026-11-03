@@ -65,6 +65,7 @@ from System.Windows.Controls import (
 from System.Windows.Markup import XamlReader
 from System.Windows.Media import BrushConverter
 from System.Windows.Threading import Dispatcher, DispatcherFrame
+from bd_combo_search import enable_combo_search
 
 doc = __revit__.ActiveUIDocument.Document
 
@@ -711,6 +712,7 @@ def main():
         frame.Continue = False
 
     window.Closed += EventHandler(on_closed)
+    enable_combo_search(window)
     window.Show()
     Dispatcher.PushFrame(frame)
 

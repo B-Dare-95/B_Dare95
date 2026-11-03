@@ -20,7 +20,7 @@ Select elements by category, optionally filtered by parameter values.
 
 Switching scope keeps your category, parameter and ticks.
 
-## Settings (top of `script.py`)
+## Settings (top of `bd_combo_search.py`)
 | Key | Default | Meaning |
 |---|---|---|
 | `ZOOM_TO_SELECTION` | True | Zoom to selected elements visible in the active view |

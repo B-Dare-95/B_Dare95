@@ -44,6 +44,7 @@ from System.Windows import (
     VerticalAlignment, HorizontalAlignment, TextTrimming
 )
 from System.Windows.Markup import XamlReader
+from bd_combo_search import enable_combo_search
 
 # ─── REVIT HANDLES ─────────────────────────────────────────────────────────────
 doc   = __revit__.ActiveUIDocument.Document
@@ -802,6 +803,7 @@ def show_shaft_browser(shafts, levels):
 
     # Non-blocking: Show() + PushFrame keeps the Revit main thread alive
     # so the user can pan/zoom while editing.
+    enable_combo_search(window)
     window.Show()
     Threading.Dispatcher.PushFrame(frame[0])
 

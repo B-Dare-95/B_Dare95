@@ -36,6 +36,7 @@ from System.Windows.Media import SolidColorBrush, Color
 from System.Windows.Markup import XamlReader
 from System import Array
 import System.Windows
+from bd_combo_search import enable_combo_search
 
 doc   = __revit__.ActiveUIDocument.Document
 uidoc = __revit__.ActiveUIDocument
@@ -357,4 +358,5 @@ btnCancel.Click += on_cancel
 
 # ── show ──────────────────────────────────────────────────────────────────────
 
+enable_combo_search(win)
 win.ShowDialog()

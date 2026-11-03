@@ -35,6 +35,7 @@ from System.Windows        import MessageBox, MessageBoxButton, Visibility
 from System.Windows.Controls import CheckBox, ListBoxItem, ComboBoxItem
 from System.Windows.Markup   import XamlReader
 from System.Windows.Media    import SolidColorBrush, Color
+from bd_combo_search import enable_combo_search
 
 # ── Revit handles ─────────────────────────────────────────────────────────────
 uidoc = __revit__.ActiveUIDocument
@@ -656,6 +657,7 @@ class EnlargedPlanUI(object):
     # ── Entry Point ───────────────────────────────────────────────────────────
 
     def show(self):
+        enable_combo_search(self.window)
         self.window.ShowDialog()
         if self.confirmed[0]:
             return self.window.Tag
