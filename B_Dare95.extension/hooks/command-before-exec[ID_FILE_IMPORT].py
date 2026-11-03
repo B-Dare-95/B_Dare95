@@ -3,7 +3,8 @@
 # HOOK  --  B_Dare95.extension
 # File location : B_Dare95.extension/hooks/command-before-exec[ID_FILE_IMPORT].py
 # Bound event   : command-before-exec for ID_FILE_IMPORT (Insert > Import CAD)
-# Purpose       : Block Import CAD and point the user to Link CAD instead.
+# Purpose       : Block Import CAD in projects and point the user to Link CAD
+#                 instead. Import CAD is allowed inside families (Family Editor).
 # Author        : Mohamed Bedair
 #
 # Reload pyRevit after adding/renaming this file so the hook registers.
@@ -286,8 +287,35 @@ def open_link_cad():
 # =====================================================================
 # 3. GUARD CLAUSES
 # =====================================================================
+def active_document():
+    try:
+        doc = EXEC_PARAMS.event_args.ActiveDocument
+        if doc is not None:
+            return doc
+    except Exception:
+        pass
+    try:
+        return HOST_APP.uiapp.ActiveUIDocument.Document
+    except Exception:
+        return None
+
+
+def is_family_document():
+    doc = active_document()
+    try:
+        return doc is not None and doc.IsFamilyDocument
+    except Exception:
+        log("Could not tell if the active document is a family: {0}".format(traceback.format_exc()))
+        return False
+
+
 def should_run():
-    return ENABLED
+    if not ENABLED:
+        return False
+    if is_family_document():
+        log("Import CAD allowed: the active document is a family.")
+        return False
+    return True
 
 
 # =====================================================================
