@@ -4,14 +4,15 @@ __version__ = '2.1.0'
 __doc__ = """__________________________________________________
 Description:
 
-Searches the whole model for elements of one category, optionally narrowed by parameter values combined with AND / OR / NOT.
+Searches the whole model for elements of one category, optionally narrowed by parameter rules (equals, contains, greater than, is empty and more) combined with AND / OR / NOT.
 Results show in a clickable list with name, ID and level; click a row to jump to that element.
 __________________________________________________
 How-to:
 
 -> Click on the button
 -> Pick one category from the list
--> Optionally choose a parameter and a value to match
+-> Optionally choose a parameter, a rule and a value to match
+-> Equals / does not equal pick from the model's own values; contains, begins with, greater than and less than take typed text; is empty / has a value need no value
 -> Click "+ Add Filter" for more rules and set AND / OR / NOT
 -> Click "Find Elements", then click a row to jump to it
 -> Click "Done" to keep the last clicked element selected
@@ -19,6 +20,7 @@ __________________________________________________
 Author: Mohamed Bedair"""
 
 # ─── IMPORTS ──────────────────────────────────────────────────────────────────
+import re
 import System
 import clr
 clr.AddReference("PresentationFramework")
@@ -75,6 +77,60 @@ BG_BRUSH      = _brush(BG)
 CARD_BRUSH    = _brush(CARD)
 HOVER_BRUSH   = _brush(HOVER)
 
+
+# ─── COMPARISON RULES ─────────────────────────────────────────────────────────
+RULES = ["equals", "does not equal", "contains", "does not contain",
+         "begins with", "greater than", "less than", "is empty", "has a value"]
+PICK_RULES  = ("equals", "does not equal")   # value picked from the model's values
+NO_VALUE    = ("is empty", "has a value")    # no value needed
+MAX_VALUES  = 500                            # longest value list shown
+
+_NUMBER = re.compile(r"-?\d+(?:[.,]\d+)?")
+
+
+def natural_key(text):
+    """Sort key that puts 2 before 10 and 'Level 2' before 'Level 10'."""
+    return [(0, int(t), u"") if t.isdigit() else (1, 0, t.lower())
+            for t in re.split(r"(\d+)", u"{}".format(text)) if t]
+
+
+def first_number(text):
+    """First number in a display string ('900 mm' -> 900.0), or None."""
+    m = _NUMBER.search(text or u"")
+    if m is None:
+        return None
+    return float(m.group().replace(",", "."))
+
+
+def rule_matches(value, rule, target):
+    """True if the display text *value* (None = no value) passes *rule*.
+    Text rules ignore case; greater / less than compare the first number in
+    the text, so '1000 mm' is greater than '900'."""
+    v = (value or u"").strip().lower()
+    t = (target or u"").strip().lower()
+    if rule == "is empty":
+        return v == u""
+    if rule == "has a value":
+        return v != u""
+    if rule == "equals":
+        return v == t
+    if rule == "does not equal":
+        return v != t
+    if rule == "contains":
+        return t in v
+    if rule == "does not contain":
+        return t not in v
+    if rule == "begins with":
+        return v.startswith(t)
+    a, b = first_number(v), first_number(t)
+    if a is None or b is None:
+        return False
+    if rule == "greater than":
+        return a > b
+    if rule == "less than":
+        return a < b
+    return False
+
 # ─── PICKER XAML ──────────────────────────────────────────────────────────────
 
 PICKER_XAML = """
@@ -82,7 +138,7 @@ PICKER_XAML = """
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="Pre-Filter by Parameter"
-    Width="390" MinHeight="120" MaxHeight="750"
+    Width="540" MinHeight="120" MaxHeight="750"
     SizeToContent="Height"
     WindowStartupLocation="CenterScreen"
     ResizeMode="NoResize"
@@ -294,13 +350,17 @@ PICKER_XAML = """
             <Grid Margin="0,0,0,5">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="10"/>
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="0.8*"/>
+                    <ColumnDefinition Width="8"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="34"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="Parameter"
                            Foreground="{TEXT}" FontSize="11" Margin="4,0,0,0"/>
-                <TextBlock Grid.Column="2" Text="Value"
+                <TextBlock Grid.Column="2" Text="Rule"
+                           Foreground="{TEXT}" FontSize="11" Margin="4,0,0,0"/>
+                <TextBlock Grid.Column="4" Text="Value"
                            Foreground="{TEXT}" FontSize="11" Margin="4,0,0,0"/>
             </Grid>
 
@@ -579,72 +639,66 @@ def get_params_for_category(category_name):
     return sorted(params)
 
 
+_VALUE_CACHE = {}   # (category, parameter) -> (values, truncated)
+
+
+def element_value(elem, param_name):
+    """The one display value *param_name* has on *elem*: the instance
+    parameter if the element has it, otherwise its type's. None = no value."""
+    try:
+        p = elem.LookupParameter(param_name)
+        if p is None:
+            tid = elem.GetTypeId()
+            if tid and _eid_int(tid) > 0:
+                etype = doc.GetElement(tid)
+                if etype:
+                    p = etype.LookupParameter(param_name)
+        return get_param_value_string(p) if p is not None else None
+    except Exception:
+        return None
+
+
 def get_values_for_param(category_name, param_name):
-    """Sorted list of unique human-readable values for *param_name*."""
+    """(values, truncated): unique values of *param_name* in the category,
+    in natural order (2 before 10), at most MAX_VALUES. Cached per
+    category and parameter, so picking the same parameter again is instant."""
+    key = (category_name, param_name)
+    if key in _VALUE_CACHE:
+        return _VALUE_CACHE[key]
+
     cat_obj = get_category_by_name(doc, category_name)
     if cat_obj is None:
-        return []
+        return [], False
 
-    values         = set()
-    seen_type_ints = set()
-
+    values = set()
     try:
         col = (FilteredElementCollector(doc)
                .WherePasses(ElementCategoryFilter(cat_obj.Id))
                .WhereElementIsNotElementType())
         for elem in col:
-            p = elem.LookupParameter(param_name)
-            if p:
-                v = get_param_value_string(p)
-                if v is not None:
-                    values.add(v)
-            try:
-                tid = elem.GetTypeId()
-                if tid and _eid_int(tid) > 0:
-                    k = _eid_int(tid)
-                    if k not in seen_type_ints:
-                        seen_type_ints.add(k)
-                        etype = doc.GetElement(tid)
-                        if etype:
-                            p = etype.LookupParameter(param_name)
-                            if p:
-                                v = get_param_value_string(p)
-                                if v is not None:
-                                    values.add(v)
-            except Exception:
-                pass
+            v = element_value(elem, param_name)
+            if v is not None:
+                values.add(v)
     except Exception:
         pass
 
-    return sorted(values)
+    ordered = sorted(values, key=natural_key)
+    result = (ordered[:MAX_VALUES], len(ordered) > MAX_VALUES)
+    _VALUE_CACHE[key] = result
+    return result
 
 
-def element_matches_single_param(elem, param_name, param_value):
-    """True if elem or its type has *param_name* equal to *param_value*."""
-    try:
-        p = elem.LookupParameter(param_name)
-        if p and get_param_value_string(p) == param_value:
-            return True
-    except Exception:
-        pass
-    try:
-        tid = elem.GetTypeId()
-        if tid and _eid_int(tid) > 0:
-            etype = doc.GetElement(tid)
-            if etype:
-                p = etype.LookupParameter(param_name)
-                if p and get_param_value_string(p) == param_value:
-                    return True
-    except Exception:
-        pass
-    return False
+def element_matches_single_param(elem, param_name, rule, param_value):
+    """True if *elem*'s value of *param_name* passes *rule* against
+    *param_value* (see rule_matches)."""
+    return rule_matches(element_value(elem, param_name), rule, param_value)
 
 
 def element_matches_filters_with_ops(elem, param_filters):
     """
     Evaluate *param_filters* against *elem* using per-row operators.
 
-    param_filters  – list of (param_name, param_value, operator)
+    param_filters  – list of (param_name, rule, param_value, operator)
                      Operator on the first item is ignored (base row).
 
     Operators:
@@ -658,13 +712,12 @@ def element_matches_filters_with_ops(elem, param_filters):
     if not param_filters:
         return True
 
-    result = element_matches_single_param(
-        elem, param_filters[0][0], param_filters[0][1]
-    )
+    pname, rule, pval, _ = param_filters[0]
+    result = element_matches_single_param(elem, pname, rule, pval)
 
     for i in range(1, len(param_filters)):
-        pname, pval, op = param_filters[i]
-        current = element_matches_single_param(elem, pname, pval)
+        pname, rule, pval, op = param_filters[i]
+        current = element_matches_single_param(elem, pname, rule, pval)
         if op == 'AND':
             result = result and current
         elif op == 'OR':
@@ -881,7 +934,7 @@ def show_category_picker(all_categories):
 
     Returns (category_name, param_filters) where:
         category_name  – str
-        param_filters  – [] or [(param_name, param_value, operator), ...]
+        param_filters  – [] or [(param_name, rule, param_value, operator), ...]
                          operator on index 0 is always 'AND' (base row)
 
     Returns None when the user closes without confirming.
@@ -905,19 +958,47 @@ def show_category_picker(all_categories):
             confirm_btn.IsEnabled = False
             return
         for row in rows:
-            p_sel    = _combo_value(row['param_combo'])
-            v_sel    = _combo_value(row['value_combo'])
-            has_vals = row['value_combo'].Items.Count > 0
-            if p_sel is not None and has_vals and v_sel is None:
+            if _combo_value(row['param_combo']) is None:
+                continue          # an empty row is simply ignored
+            if row_value(row) is None:
                 confirm_btn.IsEnabled = False
                 return
         confirm_btn.IsEnabled = True
+
+    # ── The value a row compares against, or None if it still needs one ──
+    def row_rule(row):
+        return _combo_value(row['rule_combo']) or RULES[0]
+
+    def row_value(row):
+        rule = row_rule(row)
+        if rule in NO_VALUE:
+            return u""
+        if rule in PICK_RULES:
+            return _combo_value(row['value_combo'])
+        text = row['value_text'].Text.strip()
+        return text if text else None
+
+    # ── Show the value input that fits the rule ───────────────────────────
+    def apply_rule_layout(row):
+        rule = row_rule(row)
+        row['value_border'].Visibility = (
+            Visibility.Visible if rule in PICK_RULES else Visibility.Collapsed)
+        row['text_border'].Visibility = (
+            Visibility.Visible if rule not in PICK_RULES and rule not in NO_VALUE
+            else Visibility.Collapsed)
+        row['no_value_hint'].Visibility = (
+            Visibility.Visible if rule in NO_VALUE else Visibility.Collapsed)
+        has_param = _combo_value(row['param_combo']) is not None
+        row['rule_combo'].IsEnabled = has_param
+        row['value_text'].IsEnabled = has_param
 
     # ── Populate param combo for one row ──────────────────────────────────
     def populate_row_params(row):
         row['param_combo'].Items.Clear()
         row['value_combo'].Items.Clear()
         row['value_combo'].IsEnabled = False
+        row['value_text'].Text = u""
+        apply_rule_layout(row)
         if selected_cat[0] is None:
             return
         for name in get_params_for_category(selected_cat[0]):
@@ -927,13 +1008,20 @@ def show_category_picker(all_categories):
     def reload_row_values(row):
         row['value_combo'].Items.Clear()
         row['value_combo'].IsEnabled = False
+        row['value_combo'].ToolTip = "Select a value"
+        apply_rule_layout(row)
         p_val = _combo_value(row['param_combo'])
         if p_val is None or selected_cat[0] is None:
             update_confirm()
             return
-        for v in get_values_for_param(selected_cat[0], p_val):
+        values, truncated = get_values_for_param(selected_cat[0], p_val)
+        for v in values:
             row['value_combo'].Items.Add(_combo_item(v))
         row['value_combo'].IsEnabled = row['value_combo'].Items.Count > 0
+        if truncated:
+            row['value_combo'].ToolTip = (
+                "Showing the first {} values - use 'contains' to reach the rest"
+                .format(MAX_VALUES))
         update_confirm()
 
     # ── Remove a filter row ───────────────────────────────────────────────
@@ -958,7 +1046,12 @@ def show_category_picker(all_categories):
         row = {
             'grid':           None,    # set below
             'param_combo':    None,
+            'rule_combo':     None,
             'value_combo':    None,
+            'value_text':     None,
+            'value_border':   None,
+            'text_border':    None,
+            'no_value_hint':  None,
             'remove_btn':     None,
             'operator':       ['AND'], # mutable — default AND
             'connector_grid': None,    # set below for rows after the first
@@ -971,12 +1064,14 @@ def show_category_picker(all_categories):
             row['connector_grid'] = connector
             rows_panel.Children.Add(connector)
 
-        # ── Filter row grid: [param | 10 | value | 8 | ×] ─────────────────
+        # ── Filter row grid: [param | 8 | rule | 8 | value | 8 | ×] ───────
         grid = Controls.Grid()
         grid.Margin = Thickness(0, 0, 0, 6)
         for w in [
             GridLength(1, GridUnitType.Star),
-            GridLength(10),
+            GridLength(8),
+            GridLength(0.8, GridUnitType.Star),
+            GridLength(8),
             GridLength(1, GridUnitType.Star),
             GridLength(8),
             GridLength.Auto,
@@ -1004,6 +1099,29 @@ def show_category_picker(all_categories):
         Controls.Grid.SetColumn(param_border, 0)
         grid.Children.Add(param_border)
 
+        # Rule ComboBox (equals, contains, greater than ...)
+        rule_combo = Controls.ComboBox()
+        rule_combo.Background      = TRANS_BRUSH
+        rule_combo.Foreground      = DARK_BRUSH
+        rule_combo.BorderThickness = Thickness(0)
+        rule_combo.Height          = 30
+        rule_combo.FontSize        = 12
+        rule_combo.Padding         = Thickness(6, 0, 4, 0)
+        rule_combo.ToolTip         = "How the value is compared"
+        for rule in RULES:
+            rule_combo.Items.Add(_combo_item(rule))
+        rule_combo.SelectedIndex   = 0
+        rule_combo.IsEnabled       = False
+
+        rule_border = Controls.Border()
+        rule_border.Background      = SURFACE_BRUSH
+        rule_border.CornerRadius    = CornerRadius(6)
+        rule_border.BorderBrush     = MUTED_BRUSH
+        rule_border.BorderThickness = Thickness(1)
+        rule_border.Child           = rule_combo
+        Controls.Grid.SetColumn(rule_border, 2)
+        grid.Children.Add(rule_border)
+
         # Value ComboBox
         value_combo = Controls.ComboBox()
         value_combo.Background      = TRANS_BRUSH
@@ -1021,8 +1139,42 @@ def show_category_picker(all_categories):
         value_border.BorderBrush     = MUTED_BRUSH
         value_border.BorderThickness = Thickness(1)
         value_border.Child           = value_combo
-        Controls.Grid.SetColumn(value_border, 2)
+        Controls.Grid.SetColumn(value_border, 4)
         grid.Children.Add(value_border)
+
+        # Typed value (contains / begins with / greater than / less than)
+        value_text = Controls.TextBox()
+        value_text.Background      = TRANS_BRUSH
+        value_text.Foreground      = TEXT_BRUSH
+        value_text.CaretBrush      = ACCENT_BRUSH
+        value_text.BorderThickness = Thickness(0)
+        value_text.Height          = 30
+        value_text.FontSize        = 12
+        value_text.Padding         = Thickness(6, 6, 6, 0)
+        value_text.IsEnabled       = False
+        value_text.ToolTip         = ("Type the text to look for. Greater / less than "
+                                      "compare the number in it, e.g. 900")
+
+        text_border = Controls.Border()
+        text_border.Background      = SURFACE_BRUSH
+        text_border.CornerRadius    = CornerRadius(6)
+        text_border.BorderBrush     = MUTED_BRUSH
+        text_border.BorderThickness = Thickness(1)
+        text_border.Child           = value_text
+        text_border.Visibility      = Visibility.Collapsed
+        Controls.Grid.SetColumn(text_border, 4)
+        grid.Children.Add(text_border)
+
+        # Is empty / has a value: nothing to type
+        no_value_hint = Controls.TextBlock()
+        no_value_hint.Text              = "no value needed"
+        no_value_hint.Foreground        = HINT_BRUSH
+        no_value_hint.FontSize          = 11
+        no_value_hint.Margin            = Thickness(6, 0, 0, 0)
+        no_value_hint.VerticalAlignment = System.Windows.VerticalAlignment.Center
+        no_value_hint.Visibility        = Visibility.Collapsed
+        Controls.Grid.SetColumn(no_value_hint, 4)
+        grid.Children.Add(no_value_hint)
 
         # Remove (×) button
         remove_btn = Controls.Button()
@@ -1035,13 +1187,18 @@ def show_category_picker(all_categories):
         remove_btn.FontSize          = 17
         remove_btn.Cursor            = WinInput.Cursors.Hand
         remove_btn.VerticalAlignment = System.Windows.VerticalAlignment.Center
-        Controls.Grid.SetColumn(remove_btn, 4)
+        Controls.Grid.SetColumn(remove_btn, 6)
         grid.Children.Add(remove_btn)
 
         # Back-fill the row dict
         row['grid']        = grid
-        row['param_combo'] = param_combo
-        row['value_combo'] = value_combo
+        row['param_combo']   = param_combo
+        row['rule_combo']    = rule_combo
+        row['value_combo']   = value_combo
+        row['value_text']    = value_text
+        row['value_border']  = value_border
+        row['text_border']   = text_border
+        row['no_value_hint'] = no_value_hint
         row['remove_btn']  = remove_btn
 
         rows_panel.Children.Add(grid)
@@ -1056,11 +1213,17 @@ def show_category_picker(all_categories):
         def _on_value(s, e):
             update_confirm()
 
+        def _on_rule(s, e, r=row):
+            apply_rule_layout(r)
+            update_confirm()
+
         def _on_remove(s, e, r=row):
             remove_row(r)
 
         param_combo.SelectionChanged += _on_param
         value_combo.SelectionChanged += _on_value
+        rule_combo.SelectionChanged  += _on_rule
+        value_text.TextChanged       += Controls.TextChangedEventHandler(_on_value)
         remove_btn.Click             += _on_remove
 
         update_confirm()
@@ -1091,11 +1254,11 @@ def show_category_picker(all_categories):
         param_filters = []
         for i, row in enumerate(rows):
             p = _combo_value(row['param_combo'])
-            v = _combo_value(row['value_combo'])
+            v = row_value(row)
             if p is not None and v is not None:
                 # First row is the base; subsequent rows carry their chosen operator.
                 op = row['operator'][0] if i > 0 else 'AND'
-                param_filters.append((p, v, op))
+                param_filters.append((p, row_rule(row), v, op))
         result_holder[0] = (cat, param_filters)
         window.Close()
 
@@ -1283,9 +1446,9 @@ if not elements:
     filter_desc = u""
     if param_filters:
         parts = []
-        for i, (p, v, op) in enumerate(param_filters):
+        for i, (p, rule, v, op) in enumerate(param_filters):
             prefix = u"  \u2022 " if i == 0 else u"  {} ".format(op)
-            parts.append(u"{}{} = {}".format(prefix, p, v))
+            parts.append(u"{}{} {} {}".format(prefix, p, rule, v).rstrip())
         filter_desc = u"\n\nFilters applied:\n" + u"\n".join(parts)
     TaskDialog.Show(
         "Pre-Filter by Parameter",

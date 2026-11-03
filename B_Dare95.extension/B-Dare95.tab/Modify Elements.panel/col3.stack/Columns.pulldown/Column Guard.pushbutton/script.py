@@ -28,7 +28,9 @@ from Autodesk.Revit.DB import (Element, Level, FilteredElementCollector,
                                BuiltInParameter, BuiltInCategory, Options,
                                ViewDetailLevel, GeometryInstance, Solid,
                                CurveLoop, Line, Transaction, Transform, XYZ,
-                               RevitLinkInstance)
+                               RevitLinkInstance, TransactionStatus,
+                               IFailuresPreprocessor, FailureSeverity,
+                               FailureProcessingResult)
 from Autodesk.Revit.DB.Architecture import Railing, RailingType
 from Autodesk.Revit.UI import TaskDialog
 from Autodesk.Revit.UI.Selection import ISelectionFilter, ObjectType
@@ -41,6 +43,8 @@ from System.Windows import RoutedEventHandler, Visibility
 from System.Windows.Controls import (ListBoxItem, TextChangedEventHandler,
                                      SelectionChangedEventHandler)
 from System.Windows.Threading import Dispatcher, DispatcherFrame
+
+from pyrevit import forms
 
 doc   = __revit__.ActiveUIDocument.Document
 uidoc = __revit__.ActiveUIDocument
@@ -67,6 +71,92 @@ LEVEL_FALLBACK_LIMIT = 4
 
 COLUMN_CATEGORIES = [int(BuiltInCategory.OST_StructuralColumns),
                      int(BuiltInCategory.OST_Columns)]
+
+PROGRESS_THRESHOLD = 10   # show a progress bar above this many columns
+MAX_REPORT_ITEMS = 10
+
+# ─── Revit messages answered silently (same behaviour as Split at Beams) ─────
+
+
+class SilentFailures(IFailuresPreprocessor):
+    """Answers Revit's failure dialogs the way you would by hand: warnings
+    are dismissed (OK) and errors get their default resolution. An error
+    with no resolution rolls the run back and is reported instead of shown."""
+
+    def __init__(self, handled, fatal):
+        self.handled = handled      # {(description, action): count}
+        self.fatal = fatal          # descriptions that forced a rollback
+
+    def PreprocessFailures(self, accessor):
+        resolved = False
+        for fm in accessor.GetFailureMessages():
+            text = fm.GetDescriptionText()
+            severity = fm.GetSeverity()
+            if severity == FailureSeverity.Warning:
+                accessor.DeleteWarning(fm)
+                action = 'OK'
+            elif severity == FailureSeverity.Error and fm.HasResolutions():
+                try:
+                    action = fm.GetDefaultResolutionCaption()
+                except Exception:
+                    action = 'resolved'
+                accessor.ResolveFailure(fm)
+                resolved = True
+            else:
+                self.fatal.append(text)
+                continue
+            key = (text, action)
+            self.handled[key] = self.handled.get(key, 0) + 1
+        if self.fatal:
+            return FailureProcessingResult.ProceedWithRollBack
+        if resolved:
+            return FailureProcessingResult.ProceedWithCommit
+        return FailureProcessingResult.Continue
+
+
+def make_silent(t, handled, fatal):
+    """Attach SilentFailures to a started transaction."""
+    opts = t.GetFailureHandlingOptions()
+    opts.SetFailuresPreprocessor(SilentFailures(handled, fatal))
+    opts.SetClearAfterRollback(True)
+    t.SetFailureHandlingOptions(opts)
+
+
+def handled_lines(handled):
+    """Report lines for the messages SilentFailures answered."""
+    if not handled:
+        return []
+    lines = ["Revit messages answered automatically:"]
+    ranked = sorted(handled.items(), key=lambda kv: -kv[1])
+    for (text, action), count in ranked[:MAX_REPORT_ITEMS]:
+        if len(text) > 70:
+            text = text[:67] + "..."
+        lines.append("  {} x {} -> {}".format(count, text, action))
+    if len(ranked) > MAX_REPORT_ITEMS:
+        lines.append("  ... and {} more kinds".format(len(ranked) - MAX_REPORT_ITEMS))
+    return lines
+
+
+class _NoProgress(object):
+    """Stand-in for forms.ProgressBar on short runs (no window)."""
+    cancelled = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def update_progress(self, *args):
+        pass
+
+
+def progress_for(count, title):
+    """A cancellable progress bar above PROGRESS_THRESHOLD items."""
+    if count > PROGRESS_THRESHOLD:
+        return forms.ProgressBar(title=title, cancellable=True)
+    return _NoProgress()
+
 
 # ─── Reporting ────────────────────────────────────────────────────────────────
 
@@ -1062,102 +1152,118 @@ else:
 
     t = Transaction(doc, "Generate Column Guardrails")
     t.Start()
+    handled, fatal = {}, []
+    make_silent(t, handled, fatal)
+    stopped_at = [None]
     try:
-        for ref in references:
-            # Per-column isolation: one bad column must not stop the rest.
-            try:
-                link_instance = doc.GetElement(ref.ElementId)
-                linked_doc    = link_instance.GetLinkDocument()
-                link_tf       = link_instance.GetTotalTransform()
-                column        = linked_doc.GetElement(ref.LinkedElementId)
+        with progress_for(len(references),
+                          "Building guards ({value} of {max_value})") as pb:
+            for i, ref in enumerate(references):
+                if pb.cancelled:
+                    stopped_at[0] = i
+                    break
+                pb.update_progress(i + 1, len(references))
+                # Per-column isolation: one bad column must not stop the rest.
+                try:
+                    link_instance = doc.GetElement(ref.ElementId)
+                    linked_doc    = link_instance.GetLinkDocument()
+                    link_tf       = link_instance.GetTotalTransform()
+                    column        = linked_doc.GetElement(ref.LinkedElementId)
 
-                if column is None:
-                    skipped.append("Unresolved linked element.")
+                    if column is None:
+                        skipped.append("Unresolved linked element.")
+                        continue
+
+                    col_label = "Column {}".format(eid_value(column.Id))
+
+                    corners, width, depth, source, reason = build_footprint(
+                        column, offset_ft)
+
+                    if corners is None:
+                        skipped.append("{}: {}".format(col_label, reason))
+                        continue
+
+                    if source == "bbox":
+                        bbox_fallbacks += 1
+
+                    print("{} | {} rect {:.1f} x {:.1f} cm".format(
+                        col_label, source, width * 30.48, depth * 30.48))
+
+                    host_corners = ([link_tf.OfPoint(p) for p in corners]
+                                    if link_tf else corners)
+
+                    made_rails  = []
+                    used_level  = None
+                    rail_errors = []
+
+                    for lvl in candidate_levels:
+                        loop = rect_loop(host_corners, lvl.Elevation)
+                        if loop is None:
+                            rail_errors.append("{} -> rectangle sides too short"
+                                               .format(element_name(lvl)))
+                            break
+
+                        attempt_errors = []
+                        made_rails = create_railings(loop, selected_rail_id,
+                                                     lvl.Id, attempt_errors)
+                        if made_rails:
+                            used_level = lvl
+                            break
+
+                        rail_errors.append("{} -> {}".format(
+                            element_name(lvl),
+                            " | ".join(attempt_errors) or "unknown"))
+
+                    if not made_rails:
+                        skipped.append("{}: refused. {}".format(
+                            col_label, " || ".join(rail_errors)))
+                        continue
+
+                    # The user's base offset, plus whatever is needed to undo a
+                    # level fallback, are the same parameter - set them together.
+                    level_delta   = view_level_z - used_level.Elevation
+                    total_offset  = base_offset_ft + level_delta
+                    fell_back     = eid_value(used_level.Id) != eid_value(view_level.Id)
+
+                    offset_ok = True
+                    if abs(total_offset) > 1e-9:
+                        for railing in made_rails:
+                            if not apply_base_offset(railing, total_offset):
+                                offset_ok = False
+
+                    if not offset_ok:
+                        offset_failures += 1
+                        print("{} | base offset could not be set".format(col_label))
+
+                    if fell_back:
+                        note = "{}: {} refused, hosted on {}{}".format(
+                            col_label, view_level_name, element_name(used_level),
+                            "" if offset_ok else " - BASE OFFSET NOT SET, check height")
+                        fallback_notes.append(note)
+                        print(note)
+
+                    if flip_railings:
+                        doc.Regenerate()
+                        for railing in made_rails:
+                            if not flip_railing(railing):
+                                flip_failures += 1
+
+                    railings_created += len(made_rails)
+                    columns_done     += 1
+
+                except Exception as ex:
+                    skipped.append("Column error: {}".format(ex))
+                    print(traceback.format_exc())
                     continue
 
-                col_label = "Column {}".format(eid_value(column.Id))
-
-                corners, width, depth, source, reason = build_footprint(
-                    column, offset_ft)
-
-                if corners is None:
-                    skipped.append("{}: {}".format(col_label, reason))
-                    continue
-
-                if source == "bbox":
-                    bbox_fallbacks += 1
-
-                print("{} | {} rect {:.1f} x {:.1f} cm".format(
-                    col_label, source, width * 30.48, depth * 30.48))
-
-                host_corners = ([link_tf.OfPoint(p) for p in corners]
-                                if link_tf else corners)
-
-                made_rails  = []
-                used_level  = None
-                rail_errors = []
-
-                for lvl in candidate_levels:
-                    loop = rect_loop(host_corners, lvl.Elevation)
-                    if loop is None:
-                        rail_errors.append("{} -> rectangle sides too short"
-                                           .format(element_name(lvl)))
-                        break
-
-                    attempt_errors = []
-                    made_rails = create_railings(loop, selected_rail_id,
-                                                 lvl.Id, attempt_errors)
-                    if made_rails:
-                        used_level = lvl
-                        break
-
-                    rail_errors.append("{} -> {}".format(
-                        element_name(lvl),
-                        " | ".join(attempt_errors) or "unknown"))
-
-                if not made_rails:
-                    skipped.append("{}: refused. {}".format(
-                        col_label, " || ".join(rail_errors)))
-                    continue
-
-                # The user's base offset, plus whatever is needed to undo a
-                # level fallback, are the same parameter - set them together.
-                level_delta   = view_level_z - used_level.Elevation
-                total_offset  = base_offset_ft + level_delta
-                fell_back     = eid_value(used_level.Id) != eid_value(view_level.Id)
-
-                offset_ok = True
-                if abs(total_offset) > 1e-9:
-                    for railing in made_rails:
-                        if not apply_base_offset(railing, total_offset):
-                            offset_ok = False
-
-                if not offset_ok:
-                    offset_failures += 1
-                    print("{} | base offset could not be set".format(col_label))
-
-                if fell_back:
-                    note = "{}: {} refused, hosted on {}{}".format(
-                        col_label, view_level_name, element_name(used_level),
-                        "" if offset_ok else " - BASE OFFSET NOT SET, check height")
-                    fallback_notes.append(note)
-                    print(note)
-
-                if flip_railings:
-                    doc.Regenerate()
-                    for railing in made_rails:
-                        if not flip_railing(railing):
-                            flip_failures += 1
-
-                railings_created += len(made_rails)
-                columns_done     += 1
-
-            except Exception as ex:
-                skipped.append("Column error: {}".format(ex))
-                print(traceback.format_exc())
-                continue
-
-        t.Commit()
+        commit_status = t.Commit()
+        if commit_status != TransactionStatus.Committed:
+            railings_created = 0
+            columns_done = 0
+            report.append("")
+            report.append("Revit rejected the result, so nothing was created:")
+            for msg in (fatal[:MAX_REPORT_ITEMS] or ["(no reason given)"]):
+                report.append("  - {}".format(msg))
 
         report.append("")
         report.append("Railings     : {}".format(railings_created))
@@ -1190,10 +1296,21 @@ else:
             for msg in skipped:
                 print("SKIPPED: {}".format(msg))
 
+        if stopped_at[0] is not None:
+            report.append("")
+            report.append("Stopped by you - the last {} column(s) were not processed."
+                          .format(len(references) - stopped_at[0]))
+
+        answered = handled_lines(handled)
+        if answered:
+            report.append("")
+            report.extend(answered)
+
         notify("Column Guard Generator", "\n".join(report))
 
     except Exception as e:
         print(traceback.format_exc())
-        t.RollBack()
+        if t.GetStatus() == TransactionStatus.Started:
+            t.RollBack()
         notify("Column Guard Generator",
                "Transaction failed and was rolled back:\n\n{}".format(e))

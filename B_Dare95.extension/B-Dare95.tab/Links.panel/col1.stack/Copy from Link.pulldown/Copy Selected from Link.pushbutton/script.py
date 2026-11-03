@@ -5,11 +5,10 @@ __doc__ = """__________________________________________________
 Description:
 
 Copies only the linked elements you pick into your model, pinned. You can click and box-select, even across several links.
-Copies land at the link's own coordinates, so they only line up if the link is placed origin to origin.
+They land exactly where you see them in each link, however the link is placed or rotated.
 __________________________________________________
 How-to:
 
--> Make sure the link is placed origin to origin
 -> Click on the button
 -> Click or drag a box over the linked elements you want
 -> Press Finish on the Options Bar
@@ -69,10 +68,16 @@ for ref in picked_refs:
     if lnkd_el_id is None or lnkd_el_id == ElementId.InvalidElementId:
         continue
 
-    key = link_instance.Id.IntegerValue if hasattr(link_instance.Id, "IntegerValue") else link_instance.Id.Value
+    try:
+        key = link_instance.Id.Value
+    except AttributeError:
+        key = link_instance.Id.IntegerValue
 
     if key not in link_groups:
-        link_groups[key] = {"doc": lnkd_doc, "ids": []}
+        # Each link instance has its own placement, so keep its transform
+        # to drop the copies where that instance shows them
+        link_groups[key] = {"doc": lnkd_doc, "ids": [],
+                            "transform": link_instance.GetTotalTransform()}
 
     link_groups[key]["ids"].append(lnkd_el_id)
 
@@ -100,7 +105,7 @@ try:
             lnkd_doc,
             List_el_ids,
             doc,
-            Transform.CreateTranslation(XYZ(0, 0, 0)),
+            link_groups[key]["transform"],
             CopyPasteOptions()
         )
 

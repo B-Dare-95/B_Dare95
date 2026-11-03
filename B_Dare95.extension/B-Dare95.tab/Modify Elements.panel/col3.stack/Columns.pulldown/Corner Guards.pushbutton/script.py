@@ -32,7 +32,9 @@ from Autodesk.Revit.DB import (Element, FamilySymbol, ViewPlan,
                                Solid, PlanarFace, Line, Plane,
                                ExtrusionAnalyzer, SolidUtils,
                                Transaction, SubTransaction, XYZ,
-                               ElementTransformUtils, RevitLinkInstance)
+                               ElementTransformUtils, RevitLinkInstance,
+                               TransactionStatus, IFailuresPreprocessor,
+                               FailureSeverity, FailureProcessingResult)
 from Autodesk.Revit.DB.Structure import StructuralType
 from Autodesk.Revit.UI import (TaskDialog, TaskDialogCommandLinkId,
                                TaskDialogCommonButtons, TaskDialogResult)
@@ -43,6 +45,8 @@ from System.Windows.Markup import XamlReader
 from System.Windows import RoutedEventHandler
 from System.Windows.Controls import TextChangedEventHandler
 from System.Windows.Threading import Dispatcher, DispatcherFrame
+
+from pyrevit import forms
 
 doc = __revit__.ActiveUIDocument.Document
 uidoc = __revit__.ActiveUIDocument
@@ -63,6 +67,92 @@ COLUMN_BICS = [BuiltInCategory.OST_Columns,
 
 DEFAULT_SYMBOL_BICS = [BuiltInCategory.OST_SpecialityEquipment,
                        BuiltInCategory.OST_GenericModel]
+
+PROGRESS_THRESHOLD = 10   # show a progress bar above this many columns
+MAX_REPORT_ITEMS = 10
+
+# ─── Revit messages answered silently (same behaviour as Split at Beams) ─────
+
+
+class SilentFailures(IFailuresPreprocessor):
+    """Answers Revit's failure dialogs the way you would by hand: warnings
+    are dismissed (OK) and errors get their default resolution. An error
+    with no resolution rolls the run back and is reported instead of shown."""
+
+    def __init__(self, handled, fatal):
+        self.handled = handled      # {(description, action): count}
+        self.fatal = fatal          # descriptions that forced a rollback
+
+    def PreprocessFailures(self, accessor):
+        resolved = False
+        for fm in accessor.GetFailureMessages():
+            text = fm.GetDescriptionText()
+            severity = fm.GetSeverity()
+            if severity == FailureSeverity.Warning:
+                accessor.DeleteWarning(fm)
+                action = 'OK'
+            elif severity == FailureSeverity.Error and fm.HasResolutions():
+                try:
+                    action = fm.GetDefaultResolutionCaption()
+                except Exception:
+                    action = 'resolved'
+                accessor.ResolveFailure(fm)
+                resolved = True
+            else:
+                self.fatal.append(text)
+                continue
+            key = (text, action)
+            self.handled[key] = self.handled.get(key, 0) + 1
+        if self.fatal:
+            return FailureProcessingResult.ProceedWithRollBack
+        if resolved:
+            return FailureProcessingResult.ProceedWithCommit
+        return FailureProcessingResult.Continue
+
+
+def make_silent(t, handled, fatal):
+    """Attach SilentFailures to a started transaction."""
+    opts = t.GetFailureHandlingOptions()
+    opts.SetFailuresPreprocessor(SilentFailures(handled, fatal))
+    opts.SetClearAfterRollback(True)
+    t.SetFailureHandlingOptions(opts)
+
+
+def handled_lines(handled):
+    """Report lines for the messages SilentFailures answered."""
+    if not handled:
+        return []
+    lines = ["Revit messages answered automatically:"]
+    ranked = sorted(handled.items(), key=lambda kv: -kv[1])
+    for (text, action), count in ranked[:MAX_REPORT_ITEMS]:
+        if len(text) > 70:
+            text = text[:67] + "..."
+        lines.append("  {} x {} -> {}".format(count, text, action))
+    if len(ranked) > MAX_REPORT_ITEMS:
+        lines.append("  ... and {} more kinds".format(len(ranked) - MAX_REPORT_ITEMS))
+    return lines
+
+
+class _NoProgress(object):
+    """Stand-in for forms.ProgressBar on short runs (no window)."""
+    cancelled = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def update_progress(self, *args):
+        pass
+
+
+def progress_for(count, title):
+    """A cancellable progress bar above PROGRESS_THRESHOLD items."""
+    if count > PROGRESS_THRESHOLD:
+        return forms.ProgressBar(title=title, cancellable=True)
+    return _NoProgress()
+
 
 
 # ─── Compatibility helpers ────────────────────────────────────────────────────
@@ -858,44 +948,55 @@ if not columns:
 records = []
 skipped_columns = []
 
-for element, transform, label in columns:
-    try:
-        solid = largest_solid(element, transform)
-    except Exception as ex:
-        skipped_columns.append((label, "geometry failed: {}".format(ex)))
-        continue
+detect_stopped = [False]
+with progress_for(len(columns),
+                  "Finding column corners ({value} of {max_value})") as pb:
+    for col_i, (element, transform, label) in enumerate(columns):
+        if pb.cancelled:
+            detect_stopped[0] = True
+            break
+        pb.update_progress(col_i + 1, len(columns))
+        try:
+            solid = largest_solid(element, transform)
+        except Exception as ex:
+            skipped_columns.append((label, "geometry failed: {}".format(ex)))
+            continue
 
-    if solid is None:
-        skipped_columns.append((label, "no solid geometry"))
-        continue
+        if solid is None:
+            skipped_columns.append((label, "no solid geometry"))
+            continue
 
-    segments, method = footprint_segments(solid)
-    if not segments:
-        skipped_columns.append((label, "no usable footprint (round column, or cut base)"))
-        continue
+        segments, method = footprint_segments(solid)
+        if not segments:
+            skipped_columns.append((label, "no usable footprint (round column, or cut base)"))
+            continue
 
-    corners = find_corners(segments, angle_tol)
-    if not corners:
-        skipped_columns.append((label, "no convex 90-degree corners ({})".format(method)))
-        continue
+        corners = find_corners(segments, angle_tol)
+        if not corners:
+            skipped_columns.append((label, "no convex 90-degree corners ({})".format(method)))
+            continue
 
-    ex, ey = column_local_frame(element, transform)
-    number_corners(corners, ex, ey)
+        ex, ey = column_local_frame(element, transform)
+        number_corners(corners, ex, ey)
 
-    for corner in corners:
-        records.append({"label": label,
-                        "method": method,
-                        "index": corner["index"],
-                        "local_deg": corner["local_deg"],
-                        "interior": corner["interior"],
-                        "corner": corner,
-                        "level": target_level,
-                        "bisector": corner["bisector"],
-                        "angle": signed_angle_deg(HOME_BISECTOR,
-                                                  corner["bisector"]),
-                        "instance": None,
-                        "status": "pending",
-                        "note": ""})
+        for corner in corners:
+            records.append({"label": label,
+                            "method": method,
+                            "index": corner["index"],
+                            "local_deg": corner["local_deg"],
+                            "interior": corner["interior"],
+                            "corner": corner,
+                            "level": target_level,
+                            "bisector": corner["bisector"],
+                            "angle": signed_angle_deg(HOME_BISECTOR,
+                                                      corner["bisector"]),
+                            "instance": None,
+                            "status": "pending",
+                            "note": ""})
+
+if detect_stopped[0]:
+    notify("Corner Guard Placer", "Stopped by you - nothing was placed.")
+    sys.exit()
 
 if not records:
     reasons = "\n".join(["{} - {}".format(label, reason)
@@ -921,6 +1022,9 @@ for record in placeable:
 
 t = Transaction(doc, "Place Corner Guards")
 t.Start()
+handled, fatal = {}, []
+make_silent(t, handled, fatal)
+place_stopped = [0]
 
 try:
     if not symbol.IsActive:
@@ -929,26 +1033,38 @@ try:
 
     # Pass 1 - place at rotation 0, isolated per column so one bad column
     # cannot take the rest of the run down with it.
-    for label in by_column:
-        sub = SubTransaction(doc)
-        sub.Start()
-        try:
-            for record in by_column[label]:
-                instance = place_instance(symbol, record["point"],
-                                          record["level"])
-                if instance is None:
+    labels = list(by_column)
+    with progress_for(len(labels),
+                      "Placing corner guards ({value} of {max_value})") as pb:
+        for lab_i, label in enumerate(labels):
+            if pb.cancelled:
+                # Columns not reached are left out; the ones already placed
+                # still get snapped and rotated below.
+                for rest in labels[lab_i:]:
+                    for record in by_column[rest]:
+                        record["status"] = "stopped"
+                place_stopped[0] = len(labels) - lab_i
+                break
+            pb.update_progress(lab_i + 1, len(labels))
+            sub = SubTransaction(doc)
+            sub.Start()
+            try:
+                for record in by_column[label]:
+                    instance = place_instance(symbol, record["point"],
+                                              record["level"])
+                    if instance is None:
+                        record["status"] = "failed"
+                        record["note"] = "NewFamilyInstance returned null"
+                        continue
+                    record["instance"] = instance
+                    record["status"] = "placed"
+                sub.Commit()
+            except Exception as ex:
+                sub.RollBack()
+                for record in by_column[label]:
+                    record["instance"] = None
                     record["status"] = "failed"
-                    record["note"] = "NewFamilyInstance returned null"
-                    continue
-                record["instance"] = instance
-                record["status"] = "placed"
-            sub.Commit()
-        except Exception as ex:
-            sub.RollBack()
-            for record in by_column[label]:
-                record["instance"] = None
-                record["status"] = "failed"
-                record["note"] = "placement: {}".format(ex)
+                    record["note"] = "placement: {}".format(ex)
 
     # One regeneration for the whole run, not one per element.
     doc.Regenerate()
@@ -980,10 +1096,17 @@ try:
 
     doc.Regenerate()
 
-    t.Commit()
+    commit_status = t.Commit()
+    if commit_status != TransactionStatus.Committed:
+        # Revit refused the run as a whole: nothing was placed.
+        for record in records:
+            record["instance"] = None
+            record["status"] = "failed"
+            record["note"] = fatal[0] if fatal else "rejected by Revit"
 
 except Exception as ex:
-    t.RollBack()
+    if t.GetStatus() == TransactionStatus.Started:
+        t.RollBack()
     notify("Corner Guard Placer",
            "Run failed and was rolled back:\n\n{}".format(ex))
     raise
@@ -1000,5 +1123,17 @@ if skipped_columns:
     lines.append("{} columns skipped entirely.".format(len(skipped_columns)))
 if bad:
     lines.append("{} guards failed.".format(bad))
+if commit_status != TransactionStatus.Committed:
+    lines.append("")
+    lines.append("Revit rejected the run, so nothing was placed:")
+    for msg in (fatal[:MAX_REPORT_ITEMS] or ["(no reason given)"]):
+        lines.append("  - {}".format(msg))
+if place_stopped[0]:
+    lines.append("Stopped by you - {} column(s) were not processed.".format(
+        place_stopped[0]))
+answered = handled_lines(handled)
+if answered:
+    lines.append("")
+    lines.extend(answered)
 
 notify("Corner Guard Placer", "\n".join(lines))

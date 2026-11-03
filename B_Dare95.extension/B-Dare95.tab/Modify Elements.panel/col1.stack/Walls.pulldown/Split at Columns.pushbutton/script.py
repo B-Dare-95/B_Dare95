@@ -27,9 +27,12 @@ from Autodesk.Revit.DB import (
     Wall, WallKind, WallUtils, RevitLinkInstance, Transform,
     Line, XYZ, LocationCurve, LocationPoint, FamilyInstance, Opening,
     ElementId, ElementTransformUtils,
-    Transaction, TransactionGroup
+    Transaction, TransactionGroup, TransactionStatus,
+    IFailuresPreprocessor, FailureSeverity, FailureProcessingResult
 )
 from Autodesk.Revit.UI.Selection import ISelectionFilter
+
+import math
 
 from System.Collections.Generic import List
 
@@ -55,12 +58,63 @@ HOSTED_U_TOL = 0.05
 MAX_REPORT_ITEMS = 10
 MAX_REPORT_IDS = 30
 
+PROGRESS_THRESHOLD = 15   # show a progress bar above this many walls
+GRID_CELL = 10.0          # ft - cell size of the column lookup grid
+
 
 def eid_str(eid):
     try:
         return str(eid.Value)
     except AttributeError:
         return str(eid.IntegerValue)
+
+
+# ---------------------------------------------------------------------------
+# 0. Revit messages answered silently (same behaviour as Split at Beams)
+# ---------------------------------------------------------------------------
+class SilentFailures(IFailuresPreprocessor):
+    """Answers Revit's failure dialogs the way you would by hand: warnings
+    are dismissed (OK) and errors get their default resolution (e.g.
+    'Unjoin Elements'). An error with no resolution rolls the wall back and
+    is reported instead of shown."""
+
+    def __init__(self, handled, fatal):
+        self.handled = handled      # {(description, action): count}
+        self.fatal = fatal          # descriptions that forced a rollback
+
+    def PreprocessFailures(self, accessor):
+        resolved = False
+        for fm in accessor.GetFailureMessages():
+            text = fm.GetDescriptionText()
+            severity = fm.GetSeverity()
+            if severity == FailureSeverity.Warning:
+                accessor.DeleteWarning(fm)
+                action = 'OK'
+            elif severity == FailureSeverity.Error and fm.HasResolutions():
+                try:
+                    action = fm.GetDefaultResolutionCaption()
+                except Exception:
+                    action = 'resolved'
+                accessor.ResolveFailure(fm)
+                resolved = True
+            else:
+                self.fatal.append(text)
+                continue
+            key = (text, action)
+            self.handled[key] = self.handled.get(key, 0) + 1
+        if self.fatal:
+            return FailureProcessingResult.ProceedWithRollBack
+        if resolved:
+            return FailureProcessingResult.ProceedWithCommit
+        return FailureProcessingResult.Continue
+
+
+def make_silent(t, handled, fatal):
+    """Attach SilentFailures to a started transaction."""
+    opts = t.GetFailureHandlingOptions()
+    opts.SetFailuresPreprocessor(SilentFailures(handled, fatal))
+    opts.SetClearAfterRollback(True)
+    t.SetFailureHandlingOptions(opts)
 
 
 # ---------------------------------------------------------------------------
@@ -116,6 +170,57 @@ def collect_all_columns(host_doc):
     return all_columns, skipped_links
 
 
+class ColumnIndex(object):
+    """Plan grid over every column's footprint (broad phase).
+
+    Built once. For each wall only the columns in the grid cells around it
+    are tested, instead of every column in the model and all links. The
+    search box is padded by the largest column size, so every column the
+    full corner test in find_wall_gaps would accept is always returned."""
+
+    def __init__(self, columns):
+        self.columns = columns
+        self.cells = {}
+        self.max_size = 0.0
+        for i, col in enumerate(columns):
+            xs = [c.X for c in col['corners']]
+            ys = [c.Y for c in col['corners']]
+            x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+            size = math.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2)
+            if size > self.max_size:
+                self.max_size = size
+            for cell in self._cells(x0, y0, x1, y1):
+                self.cells.setdefault(cell, []).append(i)
+
+    def __len__(self):
+        return len(self.columns)
+
+    def _cells(self, x0, y0, x1, y1):
+        i0 = int(math.floor(x0 / GRID_CELL))
+        i1 = int(math.floor(x1 / GRID_CELL))
+        j0 = int(math.floor(y0 / GRID_CELL))
+        j1 = int(math.floor(y1 / GRID_CELL))
+        for i in range(i0, i1 + 1):
+            for j in range(j0, j1 + 1):
+                yield (i, j)
+
+    def near_segment(self, p0, p1, band):
+        """Columns whose footprint could reach within `band` of p0-p1."""
+        pad = (band + self.max_size) * 1.5
+        x0 = min(p0.X, p1.X) - pad
+        x1 = max(p0.X, p1.X) + pad
+        y0 = min(p0.Y, p1.Y) - pad
+        y1 = max(p0.Y, p1.Y) + pad
+        seen = set()
+        found = []
+        for cell in self._cells(x0, y0, x1, y1):
+            for i in self.cells.get(cell, ()):
+                if i not in seen:
+                    seen.add(i)
+                    found.append(self.columns[i])
+        return found
+
+
 # ---------------------------------------------------------------------------
 # 2. For each straight basic wall, find the column-occupied intervals
 # ---------------------------------------------------------------------------
@@ -126,7 +231,7 @@ def get_wall_z_range(wall):
     return bbox.Min.Z, bbox.Max.Z
 
 
-def find_wall_gaps(wall, columns):
+def find_wall_gaps(wall, column_index):
     loc = wall.Location
     if not isinstance(loc, LocationCurve):
         return None, 'no LocationCurve'
@@ -152,7 +257,7 @@ def find_wall_gaps(wall, columns):
     band = half_thickness + PERP_TOL
 
     raw_intervals = []
-    for col in columns:
+    for col in column_index.near_segment(p0, p1, band):
         if col['z_max'] < wall_z_min - Z_OVERLAP_TOL:
             continue
         if col['z_min'] > wall_z_max + Z_OVERLAP_TOL:
@@ -436,7 +541,46 @@ def pick_walls_by_rectangle(uidoc):
 # ---------------------------------------------------------------------------
 # Main loop
 # ---------------------------------------------------------------------------
-def process_selected_walls(all_columns):
+def analyse_picked(picked, column_index):
+    """(plan, skipped) for the picked walls, or None if the user cancelled
+    the progress bar."""
+    plan = []
+    skipped = []
+
+    def analyse(wall):
+        try:
+            merged, reason = find_wall_gaps(wall, column_index)
+        except Exception as ex:
+            skipped.append((wall.Id, 'analysis error: {}'.format(ex)))
+            return
+        if reason:
+            skipped.append((wall.Id, reason))
+            return
+        if not merged:
+            return
+        length = wall.Location.Curve.Length
+        segments = gaps_to_segments(merged, length)
+        if not segments:
+            skipped.append((wall.Id, 'wall fully consumed by column(s)'))
+            return
+        plan.append((wall, segments))
+
+    if len(picked) <= PROGRESS_THRESHOLD:
+        for wall in picked:
+            analyse(wall)
+        return plan, skipped
+
+    with forms.ProgressBar(title='Checking walls ({value} of {max_value})',
+                           cancellable=True) as pb:
+        for i, wall in enumerate(picked):
+            if pb.cancelled:
+                return None
+            analyse(wall)
+            pb.update_progress(i + 1, len(picked))
+    return plan, skipped
+
+
+def process_selected_walls(column_index):
     """One full round: pick -> count -> confirm -> split. Returns True to
     keep looping (select again), False to stop the script."""
 
@@ -449,21 +593,12 @@ def process_selected_walls(all_columns):
             'No walls were picked. Select more walls?',
             title='Split Walls at Columns', yes=True, no=True)
 
-    plan = []
-    skipped = []
-    for wall in picked:
-        merged, reason = find_wall_gaps(wall, all_columns)
-        if reason:
-            skipped.append((wall.Id, reason))
-            continue
-        if not merged:
-            continue
-        length = wall.Location.Curve.Length
-        segments = gaps_to_segments(merged, length)
-        if not segments:
-            skipped.append((wall.Id, 'wall fully consumed by column(s)'))
-            continue
-        plan.append((wall, segments))
+    analysed = analyse_picked(picked, column_index)
+    if analysed is None:
+        return forms.alert(
+            'Check cancelled - nothing was changed. Select more walls?',
+            title='Split Walls at Columns', yes=True, no=True)
+    plan, skipped = analysed
 
     if not plan:
         msg = 'None of the {} selected wall(s) need splitting.'.format(len(picked))
@@ -492,22 +627,52 @@ def process_selected_walls(all_columns):
     done = 0
     errors = []
     all_unrecoverable = []
-    for wall, segments in plan:
-        t = Transaction(doc, 'Split wall {}'.format(eid_str(wall.Id)))
+    handled_all = {}
+    stopped_at = [None]
+
+    def split_one(wall, segments):
+        wall_id = wall.Id
+        handled, fatal = {}, []
+        t = Transaction(doc, 'Split wall {}'.format(eid_str(wall_id)))
         t.Start()
+        make_silent(t, handled, fatal)
         try:
             _, unrecoverable = split_wall(doc, wall, segments)
-            t.Commit()
-            done += 1
-            all_unrecoverable.extend(unrecoverable)
+            status = t.Commit()
         except Exception as ex:
-            t.RollBack()
-            errors.append((wall.Id, str(ex)))
+            if t.GetStatus() == TransactionStatus.Started:
+                t.RollBack()
+            errors.append((wall_id, str(ex)))
+            return 0
+        if status != TransactionStatus.Committed:
+            errors.append((wall_id, fatal[0] if fatal else
+                           'Revit rejected the result ({})'.format(status)))
+            return 0
+        all_unrecoverable.extend(unrecoverable)
+        for key, count in handled.items():
+            handled_all[key] = handled_all.get(key, 0) + count
+        return 1
+
+    if len(plan) <= PROGRESS_THRESHOLD:
+        for wall, segments in plan:
+            done += split_one(wall, segments)
+    else:
+        with forms.ProgressBar(title='Splitting walls ({value} of {max_value})',
+                               cancellable=True) as pb:
+            for i, (wall, segments) in enumerate(plan):
+                if pb.cancelled:
+                    stopped_at[0] = i
+                    break
+                done += split_one(wall, segments)
+                pb.update_progress(i + 1, len(plan))
 
     tg.Assimilate()
 
     lines = ['Round complete.',
              'Walls split: {} / {}'.format(done, len(plan))]
+    if stopped_at[0] is not None:
+        lines.append('Stopped by you - the last {} wall(s) were left unchanged.'
+                     .format(len(plan) - stopped_at[0]))
     if skipped:
         lines.append('Skipped in this selection: {}'.format(len(skipped)))
 
@@ -529,6 +694,17 @@ def process_selected_walls(all_columns):
         if len(all_unrecoverable) > MAX_REPORT_IDS:
             lines.append('  ... and {} more'
                          .format(len(all_unrecoverable) - MAX_REPORT_IDS))
+
+    if handled_all:
+        lines.append('')
+        lines.append('Revit messages answered automatically:')
+        ranked = sorted(handled_all.items(), key=lambda kv: -kv[1])
+        for (text, action), count in ranked[:MAX_REPORT_ITEMS]:
+            if len(text) > 70:
+                text = text[:67] + '...'
+            lines.append('  {} x {} -> {}'.format(count, text, action))
+        if len(ranked) > MAX_REPORT_ITEMS:
+            lines.append('  ... and {} more kinds'.format(len(ranked) - MAX_REPORT_ITEMS))
 
     if STARTUP_NOTES:
         lines.append('')
@@ -553,8 +729,10 @@ def main():
         STARTUP_NOTES.append('Unloaded links skipped: {}'
                              .format(', '.join(skipped_links)))
 
+    column_index = ColumnIndex(all_columns)
+
     while True:
-        keep_going = process_selected_walls(all_columns)
+        keep_going = process_selected_walls(column_index)
         if not keep_going:
             break
 

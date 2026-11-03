@@ -29,7 +29,8 @@ from Autodesk.Revit.DB import (
     XYZ, Line, Arc, CurveLoop, Floor, Transform, RevitLinkInstance,
     FilteredElementCollector,
     GeometryCreationUtilities, BooleanOperationsUtils, BooleanOperationsType,
-    PlanarFace
+    PlanarFace, TransactionStatus,
+    IFailuresPreprocessor, FailureSeverity, FailureProcessingResult
 )
 from Autodesk.Revit.UI import TaskDialog
 from Autodesk.Revit.UI.Selection import ObjectType, ISelectionFilter
@@ -49,6 +50,8 @@ from System.Windows.Threading import Dispatcher, DispatcherFrame
 
 import traceback
 
+from pyrevit import forms
+
 
 doc = __revit__.ActiveUIDocument.Document
 uidoc = __revit__.ActiveUIDocument
@@ -67,6 +70,8 @@ MIN_LOOP_AREA = 1e-6      # sq ft - below this a loop is degenerate
 MIN_CUT_VOLUME = 1e-6     # cu ft - below this a shaft is treated as not cutting
 SCRATCH_HEIGHT = 1.0      # ft - extrusion height for boolean scratch geometry
 COLLINEAR_TOL = 1e-9      # 1 - dot product, above which two lines count as collinear
+PROGRESS_THRESHOLD = 5    # slow path: show a progress bar above this many shafts
+MAX_REPORT_ITEMS = 10
 
 try:
     SHORT_CURVE_TOL = app.ShortCurveTolerance
@@ -84,6 +89,70 @@ COLOR_SUBTEXT = "#A8A8A8"
 COLOR_ACCENT = "#F1C21B"
 
 _BRUSHES = BrushConverter()
+
+
+# ---------------------------------------------------------------------------
+# Revit messages answered silently (same behaviour as Split at Beams)
+# ---------------------------------------------------------------------------
+
+class SilentFailures(IFailuresPreprocessor):
+    """Answers Revit's failure dialogs the way you would by hand: warnings
+    are dismissed (OK) and errors get their default resolution. An error
+    with no resolution rolls the whole change back and is reported instead
+    of shown."""
+
+    def __init__(self, handled, fatal):
+        self.handled = handled      # {(description, action): count}
+        self.fatal = fatal          # descriptions that forced a rollback
+
+    def PreprocessFailures(self, accessor):
+        resolved = False
+        for fm in accessor.GetFailureMessages():
+            text = fm.GetDescriptionText()
+            severity = fm.GetSeverity()
+            if severity == FailureSeverity.Warning:
+                accessor.DeleteWarning(fm)
+                action = 'OK'
+            elif severity == FailureSeverity.Error and fm.HasResolutions():
+                try:
+                    action = fm.GetDefaultResolutionCaption()
+                except Exception:
+                    action = 'resolved'
+                accessor.ResolveFailure(fm)
+                resolved = True
+            else:
+                self.fatal.append(text)
+                continue
+            key = (text, action)
+            self.handled[key] = self.handled.get(key, 0) + 1
+        if self.fatal:
+            return FailureProcessingResult.ProceedWithRollBack
+        if resolved:
+            return FailureProcessingResult.ProceedWithCommit
+        return FailureProcessingResult.Continue
+
+
+def make_silent(t, handled, fatal):
+    """Attach SilentFailures to a started transaction."""
+    opts = t.GetFailureHandlingOptions()
+    opts.SetFailuresPreprocessor(SilentFailures(handled, fatal))
+    opts.SetClearAfterRollback(True)
+    t.SetFailureHandlingOptions(opts)
+
+
+def handled_lines(handled):
+    """Report lines for the messages SilentFailures answered."""
+    if not handled:
+        return []
+    lines = ["Revit messages answered automatically:"]
+    ranked = sorted(handled.items(), key=lambda kv: -kv[1])
+    for (text, action), count in ranked[:MAX_REPORT_ITEMS]:
+        if len(text) > 70:
+            text = text[:67] + "..."
+        lines.append("  {0} x {1} -> {2}".format(count, text, action))
+    if len(ranked) > MAX_REPORT_ITEMS:
+        lines.append("  ... and {0} more kinds".format(len(ranked) - MAX_REPORT_ITEMS))
+    return lines
 
 
 def _brush(hex_string):
@@ -1249,6 +1318,8 @@ def main():
     # --- Stages 3-5, inside one transaction ---
     t = Transaction(doc, "Open Floor Around Linked Shafts")
     t.Start()
+    handled, fatal = {}, []
+    make_silent(t, handled, fatal)
     try:
         # The original floor goes first so probe floors do not overlap it and
         # raise duplicate-geometry warnings. If anything below fails, the whole
@@ -1289,37 +1360,61 @@ def main():
             # after each. This is N sketch creations - it only runs when
             # something is genuinely wrong.
             used_slow_path = True
-            working_solid = base_solid
+            state = {"solid": base_solid}   # mutable: rebound inside try_one
             applied = []
             notched = []
             rejected = []
             pass_skips = []
 
-            for name, shaft_solid in shafts:
+            def try_one(name, shaft_solid):
                 if name in outside:
-                    continue
+                    return
 
-                candidate_solid, status = subtract_shaft(working_solid, shaft_solid)
+                candidate_solid, status = subtract_shaft(state["solid"], shaft_solid)
                 if status not in ("cut", "notched"):
                     pass_skips.append("{0} - {1}".format(name, status))
-                    continue
+                    return
 
                 candidate_regions = top_face_regions(candidate_solid, profile_z)
                 if not candidate_regions:
                     rejected.append(name)
-                    continue
+                    return
 
                 if not profile_is_buildable(candidate_regions, floor_type_id, level_id):
                     # Note: a sliver is created BETWEEN two things, not by one
                     # of them. When two shafts are jointly at fault, this skips
                     # whichever came second. Arbitrary, but it names its choice.
                     rejected.append(name)
-                    continue
+                    return
 
-                working_solid = candidate_solid
+                state["solid"] = candidate_solid
                 applied.append(name)
                 if status == "notched":
                     notched.append(name)
+
+            # Each step here is a full sketch probe, so a long list gets a
+            # progress bar. Stopping it undoes everything (nothing is cut).
+            if len(shafts) <= PROGRESS_THRESHOLD:
+                for name, shaft_solid in shafts:
+                    try_one(name, shaft_solid)
+            else:
+                cancelled = [False]
+                with forms.ProgressBar(
+                        title="Checking shafts one by one ({value} of {max_value})",
+                        cancellable=True) as pb:
+                    for i, (name, shaft_solid) in enumerate(shafts):
+                        if pb.cancelled:
+                            cancelled[0] = True
+                            break
+                        try_one(name, shaft_solid)
+                        pb.update_progress(i + 1, len(shafts))
+                if cancelled[0]:
+                    t.RollBack()
+                    TaskDialog.Show("Floor Opener",
+                                    "Stopped by you - nothing was changed.")
+                    return
+
+            working_solid = state["solid"]
 
             for name in rejected:
                 pass_skips.append(name + " - profile became unbuildable, opening not cut")
@@ -1345,15 +1440,23 @@ def main():
         for new_floor in created:
             apply_result_parameters(new_floor, is_structural, height_offset)
 
-        t.Commit()
+        commit_status = t.Commit()
 
     except Exception as ex:
-        t.RollBack()
+        if t.GetStatus() == TransactionStatus.Started:
+            t.RollBack()
         TaskDialog.Show(
             "Floor Opener",
             "Failed to rebuild floor with openings:\n" + str(ex) + "\n\n" +
             traceback.format_exc()
         )
+        return
+
+    if commit_status != TransactionStatus.Committed:
+        msg = "Revit rejected the new floor, so nothing was changed."
+        if fatal:
+            msg += "\n\nRevit said:\n  - " + "\n  - ".join(fatal[:MAX_REPORT_ITEMS])
+        TaskDialog.Show("Floor Opener", msg)
         return
 
     # --- Summary ---
@@ -1379,6 +1482,9 @@ def main():
     if skipped:
         msg += "\n\nSkipped {0} item(s):\n  - {1}".format(
             len(skipped), "\n  - ".join(skipped))
+    answered = handled_lines(handled)
+    if answered:
+        msg += "\n\n" + "\n".join(answered)
     TaskDialog.Show("Floor Opener - Done", msg)
 
 
