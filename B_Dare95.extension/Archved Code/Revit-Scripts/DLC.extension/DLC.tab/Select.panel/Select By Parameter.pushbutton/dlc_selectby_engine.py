@@ -2,7 +2,7 @@
 """DLC Select By Parameter - selection logic.
 
 No Revit imports here: everything that touches the model goes through a
-"provider" object (see RevitProvider in script.py). That keeps this file
+"provider" object (see RevitProvider in bd_family_cleaner.py). That keeps this file
 testable outside Revit. IronPython 2.7 and CPython 3 compatible.
 
 Provider contract

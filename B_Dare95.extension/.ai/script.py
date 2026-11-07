@@ -12,7 +12,7 @@ never meant to run inside Revit.
 What it does
 ------------
 1. Asks for your `.extension` folder.
-2. Lists every `*.pushbutton` bundle that contains a `script.py`, with a count
+2. Lists every `*.pushbutton` bundle that contains a `bd_family_cleaner.py`, with a count
    of palette colors found in each.
 3. Preview shows the exact lines that would change. Convert rewrites the file.
 
@@ -79,7 +79,7 @@ PALETTE_MAP = {
 # Bundle folder suffixes to scan. Add ".smartbutton" here if you want those too.
 BUNDLE_SUFFIXES = (".pushbutton",)
 
-SCRIPT_NAME = "script.py"
+SCRIPT_NAME = "bd_family_cleaner.py"
 BACKUP_SUFFIX = ".bak"
 
 # Matches #RRGGBB and #AARRGGBB, and refuses to bite into a longer hex run.

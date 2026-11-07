@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Drive the real Tab Designer script.py with stand-in WPF controls.
+"""Drive the real Tab Designer bd_family_cleaner.py with stand-in WPF controls.
 
 The stub window is built from the script's own XAML (so names and markup are
 checked), every click handler runs, and Apply/Undo really change a mock

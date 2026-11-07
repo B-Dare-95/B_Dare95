@@ -3,7 +3,7 @@
 DLC_RenumberRooms - dlc_renumber_revit.py  (v1.1.0)
 
 Every Revit-API touching operation that is NOT user-interface lives here, so
-it can be exercised against a mock API in the test harness. script.py holds
+it can be exercised against a mock API in the test harness. bd_family_cleaner.py holds
 only the WPF dialog and the pick/apply orchestration.
 
 IronPython 2.7 compatible: no f-strings, no walrus, stdlib only.

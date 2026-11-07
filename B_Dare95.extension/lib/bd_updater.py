@@ -361,7 +361,7 @@ _PREFIX = EXT_NAME + '/'
 
 
 def _command_bundle(path):
-    """'X.tab/Y.panel/Z.pushbutton/script.py' -> 'X.tab/Y.panel/Z.pushbutton'.
+    """'X.tab/Y.panel/Z.pushbutton/bd_family_cleaner.py' -> 'X.tab/Y.panel/Z.pushbutton'.
 
     None when the path is not inside a pyRevit command bundle (folders without
     a bundle suffix are ignored by pyRevit, so their files never matter).

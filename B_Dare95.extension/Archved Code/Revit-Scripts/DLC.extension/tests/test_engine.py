@@ -35,7 +35,7 @@ def w(path, text=""):
 
 def button(panel, name, kb=1, title=None):
     d = os.path.join(panel, name + ".pushbutton")
-    w(os.path.join(d, "script.py"), "x = 1\n" * (kb * 170))
+    w(os.path.join(d, "bd_family_cleaner.py"), "x = 1\n" * (kb * 170))
     w(os.path.join(d, "icon.png"), "png")
     if title:
         w(os.path.join(d, "bundle.yaml"), 'title: "%s"\n' % title)
@@ -88,7 +88,7 @@ def make_ext(root):
 def designer_script(ext_dir):
     for root, dirs, files in os.walk(ext_dir):
         if root.endswith("Tab Designer.pushbutton"):
-            return os.path.join(root, "script.py")
+            return os.path.join(root, "bd_family_cleaner.py")
     raise AssertionError("designer not found")
 
 
@@ -179,7 +179,7 @@ def test_context_from_own_location():
           ctx.ext_name == "SDC", "found ext/tab from the button")
     check(ctx.root == root, "root = folder holding the extension")
     try:
-        E.find_context(os.path.join(root, "loose", "script.py"))
+        E.find_context(os.path.join(root, "loose", "bd_family_cleaner.py"))
         FAILED.append("outside an extension should fail")
     except E.DesignerError as ex:
         check("must sit inside" in str(ex), "clear message")
@@ -262,7 +262,7 @@ def test_apply_rename_reapply_undo_cycle():
     rb = yaml.safe_load(open(os.path.join(tab, "Rooms.panel", "bundle.yaml")))
     check(rb["background"] == "#123456", "other bundle keys kept")
     check(os.path.isfile(os.path.join(tab, "Tools.panel",
-                                      "Tab Designer.pushbutton", "script.py")),
+                                      "Tab Designer.pushbutton", "bd_family_cleaner.py")),
           "designer never moved")
     check(os.path.exists(os.path.join(new_ext, ".hidden")), "hidden kept")
     check(any("installer.ps1" in h[0] for h in res.name_refs) and

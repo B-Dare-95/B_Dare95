@@ -20,7 +20,7 @@ LIB_NAME = "dlc_roomrestore"
 
 
 def find_lib(start):
-    """Look next to script.py, then in <each parent>\\lib up to the
+    """Look next to bd_family_cleaner.py, then in <each parent>\\lib up to the
     .extension folder. Returns (found_dir or None, expected_dir)."""
     here = os.path.dirname(os.path.abspath(start))
     cands = [here]
@@ -47,7 +47,7 @@ def find_lib(start):
 try:
     _this = __file__
 except NameError:
-    _this = __commandpath__ + "\\script.py"       # noqa: F821 (pyRevit)
+    _this = __commandpath__ + "\\bd_family_cleaner.py"       # noqa: F821 (pyRevit)
 _found, _expected = find_lib(_this)
 # --- end bootstrap ---------------------------------------------------------
 

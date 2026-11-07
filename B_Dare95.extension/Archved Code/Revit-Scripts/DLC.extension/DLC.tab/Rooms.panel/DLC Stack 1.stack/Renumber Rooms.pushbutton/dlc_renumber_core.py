@@ -4,7 +4,7 @@ DLC_RenumberRooms - dlc_renumber_core.py  (v1.1.0)
 
 Pure logic for clockwise room renumbering. Deliberately has ZERO Revit API
 imports so it can be unit-tested with plain CPython. Written to IronPython
-2.7 rules (no f-strings, no walrus, stdlib only) because script.py imports
+2.7 rules (no f-strings, no walrus, stdlib only) because bd_family_cleaner.py imports
 it at runtime inside Revit.
 
 Room record shape used throughout:

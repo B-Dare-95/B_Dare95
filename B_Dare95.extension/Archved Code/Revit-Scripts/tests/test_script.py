@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Runs the real pushbutton script.py against stubs (no WPF window shown)."""
+"""Runs the real pushbutton bd_family_cleaner.py against stubs (no WPF window shown)."""
 from __future__ import division
 import imp_helper
 import os
@@ -11,7 +11,7 @@ import revit_stubs as S
 from harness import check, close, run_suite, ROOT
 
 SCRIPT = os.path.join(ROOT, 'DLC.extension', 'DLC.tab', 'Rooms.panel',
-                      'Room Areas.pushbutton', 'script.py')
+                      'Room Areas.pushbutton', 'bd_family_cleaner.py')
 
 
 def load_script(doc, uidoc, save_path):
@@ -136,4 +136,4 @@ TESTS = [test_measure_write_export, test_write_stops_on_wrong_param_type,
 
 
 def run():
-    return run_suite('script.py (integration)', TESTS)
+    return run_suite('bd_family_cleaner.py (integration)', TESTS)

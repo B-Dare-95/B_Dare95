@@ -398,7 +398,7 @@ class PackagingChecks(unittest.TestCase):
         xns = "{http://schemas.microsoft.com/winfx/2006/xaml}Name"
         names = set(el.get(xns) for el in root.iter() if el.get(xns))
         self.assertEqual(names, set(tool.XAML_NAMES))
-        src = open(os.path.join(BUTTON, "script.py")).read()
+        src = open(os.path.join(BUTTON, "bd_family_cleaner.py")).read()
         import re
         used = set(re.findall(r"self\.((?:rb|tb|lb|cb|btn|tx)_[a-z_]+)", src))
         self.assertTrue(used <= names, used - names)

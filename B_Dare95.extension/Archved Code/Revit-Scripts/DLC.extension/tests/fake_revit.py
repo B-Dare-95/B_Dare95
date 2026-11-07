@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Minimal fake of the Revit API + pyRevit, just enough to import and drive
-DLC Stair Transfer's script.py outside Revit.
+DLC Stair Transfer's bd_family_cleaner.py outside Revit.
 
 Fidelity rules (the ones that matter for this tool):
   * Stairs reject top-below-base at Regenerate, like Revit does.

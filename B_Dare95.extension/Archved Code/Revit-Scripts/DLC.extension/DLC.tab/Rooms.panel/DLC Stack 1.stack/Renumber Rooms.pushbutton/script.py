@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-DLC_RenumberRooms - script.py  (v1.1.0)
+DLC_RenumberRooms - bd_family_cleaner.py  (v1.1.0)
 =======================================
 Renumbers rooms clockwise, starting from a number you type, over the scope
 you choose: Whole Model (one level at a time), Selected Rooms, or Active View.

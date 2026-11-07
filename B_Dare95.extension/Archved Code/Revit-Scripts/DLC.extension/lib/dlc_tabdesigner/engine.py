@@ -228,7 +228,7 @@ def read_title(d):
         t = yaml_title(read_text(f))
         if t:
             return t
-    s = os.path.join(d, "script.py")
+    s = os.path.join(d, "bd_family_cleaner.py")
     if os.path.exists(s):
         m = re.search(r"__title__\s*=\s*[uU]?['\"](.+?)['\"]", read_text(s))
         if m:

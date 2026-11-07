@@ -15,7 +15,7 @@ env = F.install()
 from dlc_stairxfer import engine as E  # noqa: E402
 
 SCRIPT = os.path.join(ROOT, "DLC.tab", "Coordination.panel",
-                      "Stair Transfer.pushbutton", "script.py")
+                      "Stair Transfer.pushbutton", "bd_family_cleaner.py")
 
 PASSED = [0]
 FAILED = []
