@@ -10,7 +10,6 @@ How-to:
 
 -> Click on the button
 -> Read the list: nothing is ticked for you, so tick what to delete
--> Leave "Purge up to 3 times" ticked to also purge what this purge frees
 -> Click Purge and read the result at the bottom; the list refreshes and the window stays open
 -> One Undo puts the whole purge back
 __________________________________________________

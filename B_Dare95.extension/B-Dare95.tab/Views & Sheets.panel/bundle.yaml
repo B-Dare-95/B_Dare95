@@ -2,5 +2,4 @@ background:
   title: "#24a148"
 layout:
   - "col1"
-  - "col2"
   - "Tidy Views"

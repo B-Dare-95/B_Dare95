@@ -45,7 +45,7 @@ from pyrevit import forms, revit, script
 doc = revit.doc
 cfg = script.get_config()
 
-TITLE = "Tidy 3D Extents"
+TITLE = "Tidy 3D View"
 MM = 1.0 / 304.8                      # mm -> feet
 FT_TO_M = 0.3048
 MODEL = DatumExtentType.Model
@@ -466,7 +466,7 @@ def tidy_levels(levels, fr, area, opts, work, report):
 XAML = u"""
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Tidy 3D Extents" SizeToContent="WidthAndHeight"
+        Title="Tidy 3D View" SizeToContent="WidthAndHeight"
         ResizeMode="NoResize" WindowStartupLocation="CenterScreen"
         Background="#161616" FontFamily="Segoe UI" FontSize="12">
   <Window.Resources>
@@ -546,7 +546,7 @@ XAML = u"""
   </Window.Resources>
 
   <StackPanel Margin="12">
-    <TextBlock Text="Tidy 3D Extents" Foreground="#F4F4F4" FontSize="20" FontWeight="Bold"/>
+    <TextBlock Text="Tidy 3D View" Foreground="#F4F4F4" FontSize="20" FontWeight="Bold"/>
     <TextBlock Style="{StaticResource Sub}" Margin="0,2,0,12"
                Text="Grid ends and level planes in 3D, measured from the outermost grids."/>
     <Grid>
