@@ -1,9 +1,0 @@
-title: "Export\nPDF + DWG"
-tooltip: >-
-  Batch export sheets or views to PDF and DWG in one run.
-  ProSheets-style: parametric file names from any sheet, title block,
-  project or shared parameter; native PDF (auto paper size, combined PDF);
-  any DWG export setup; PDF/DWG sub-folders; profiles. One dialog, then
-  the whole batch runs without interruptions.
-author: Ahmed Sedki - DLC
-min_revit_version: 2022

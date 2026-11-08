@@ -1,6 +1,0 @@
-title: "Delete\nDuplicates"
-tooltip: >-
-  Deletes duplicates found by Find Link Duplicates: all, only the ones you
-  selected in the model, or ticked from a list. Skips grouped elements and
-  elements owned by others; warns before deleting hosts of doors/windows.
-author: DLC

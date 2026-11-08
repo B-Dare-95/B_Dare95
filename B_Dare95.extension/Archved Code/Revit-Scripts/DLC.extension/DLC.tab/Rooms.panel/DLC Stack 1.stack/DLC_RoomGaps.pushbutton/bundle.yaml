@@ -1,8 +1,0 @@
-title: Room Gaps
-tooltip: >-
-  Pick a level. Finds unbounded (Not Enclosed / Redundant) rooms and draws the
-  missing room boundaries in the level's plan view: red = gap, orange = element
-  in the gap that is not room bounding, magenta X = unbounded room.
-  Checks walls, curtain walls, room separation lines and columns, in this model
-  and in linked models. One Undo step; re-running replaces the markers.
-author: DLC
