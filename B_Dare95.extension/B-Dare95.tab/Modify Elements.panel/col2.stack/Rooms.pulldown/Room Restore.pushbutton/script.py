@@ -9,7 +9,7 @@ How-to:
 
 -> Click on the button
 -> Choose Reload Latest if asked (shared models)
--> Tick the rooms you want back, or click Select ready
+-> Check the rooms you want back, or click Select ready
 -> Click Restore selected
 -> A report shows the result for each room
 -> Shift+Click to open the register's folder, or create one

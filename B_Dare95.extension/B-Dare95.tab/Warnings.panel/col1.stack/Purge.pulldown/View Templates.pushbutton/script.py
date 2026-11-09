@@ -9,9 +9,9 @@ __________________________________________________
 How-to:
 
 -> Click on the button
--> Read the list of unused view templates: they are all ticked
--> Untick anything you want to keep
--> Tick Show used items too to see what stays and why
+-> Read the list of unused view templates: they are all checked
+-> Uncheck anything you want to keep
+-> Check Show used items too to see what stays and why
 -> Click Purge and read the result at the bottom; the list refreshes and the window stays open
 -> One Undo puts the whole purge back
 __________________________________________________

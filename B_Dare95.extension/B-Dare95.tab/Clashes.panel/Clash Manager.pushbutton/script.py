@@ -2,8 +2,8 @@
 __doc__ = """__________________________________________________
 Description:
 
-Go through your Navisworks clash reports without leaving Revit: find each clash, fix it, and tick it off.
-Your Solved / Approved ticks are saved next to the report, so your team sees them too.
+Go through your Navisworks clash reports without leaving Revit: find each clash, fix it, and check it off.
+Your Solved / Approved check marks are saved next to the report, so your team sees them too.
 __________________________________________________
 How-to:
 
@@ -11,7 +11,7 @@ How-to:
 -> Click Load HTML Reports and pick one or more reports
 -> Click a clash, then Focus (zoom to it) or Isolate (hide the rest)
 -> In a 3D view, Create Clash Box boxes in the clash point
--> Tick Solved or Approved as you go
+-> Check Solved or Approved as you go
 -> Click Export Results for a progress report to share
 __________________________________________________
 Author: Mohamed Bedair"""
@@ -1424,20 +1424,20 @@ XAML = u"""
 
 
 # ---------------------------------------------------------- solved / approved
-# Which clashes the user has ticked as solved or approved, kept per report.
-# The two are independent ticks. The file sits
+# Which clashes the user has checked as solved or approved, kept per report.
+# The two are independent check marks. The file sits
 # next to the report ("<report>.html.solved.json") so it travels with it and a
 # coordinator opening the same report from the shared folder sees the same
-# ticks. If that folder is read-only, it falls back to %APPDATA%, keyed by the
+# check marks. If that folder is read-only, it falls back to %APPDATA%, keyed by the
 # report's full path.
 #
 # A clash is identified by test + clash name + both element ids rather than by
 # its position in the list, so a re-exported report (same file name, clashes
-# added, removed or reordered) keeps the ticks of every clash still in it.
+# added, removed or reordered) keeps the check marks of every clash still in it.
 # Keys of clashes that are no longer in the report are kept, not pruned -- a
-# clash that comes back in a later export comes back still ticked.
+# clash that comes back in a later export comes back still checked.
 #
-# The file keeps its original ".solved.json" name so reports ticked before the
+# The file keeps its original ".solved.json" name so reports checked before the
 # Approved column existed still load; a file without "approved" just means
 # nothing is approved yet.
 
@@ -1446,8 +1446,8 @@ SOLVED_SUFFIX = ".solved.json"
 # (flag, header, column width, checkbox tooltip) -- the header widths in the
 # XAML match these
 STATE_COLUMNS = (
-    ("solved", "Solved", 52, "Tick when this clash is solved."),
-    ("approved", "Approved", 66, "Tick when this clash is approved (accepted as is)."),
+    ("solved", "Solved", 52, "Check when this clash is solved."),
+    ("approved", "Approved", 66, "Check when this clash is approved (accepted as is)."),
 )
 STATE_FLAGS = tuple(c[0] for c in STATE_COLUMNS)
 
@@ -1555,7 +1555,7 @@ def html_escape(value):
 
 
 def result_of(entry):
-    """(css class, label) for an entry's ticks."""
+    """(css class, label) for an entry's check marks."""
     if entry["solved"] and entry["approved"]:
         return "both", u"Solved & Approved"
     if entry["solved"]:
@@ -1746,7 +1746,7 @@ def build_results_html(reports):
                u'</div>')
     for report in reports:
         out.append(report_section_html(report))
-    out.append(u'<div class="footer">Results reflect the Solved / Approved ticks at export time. '
+    out.append(u'<div class="footer">Results reflect the Solved / Approved check marks at export time. '
                u'Filter, then print (Ctrl+P) to print only what is shown.</div>')
     out.append(u"<script>{0}</script></body></html>".format(EXPORT_JS))
     return u"".join(out)
@@ -1872,14 +1872,14 @@ def run():
         clash_image.Source = None
         set_focus_enabled(False, reason)
 
-    # ------------------------------------------------------------ ticks
+    # ------------------------------------------------------------ check marks
     def state_summary(report):
         c = tally(report["items"])
         return u"{0}: {1} solved, {2} approved, {3} open, of {4} clashes.".format(
             report["name"], c["solved"], c["approved"], c["open"], c["total"])
 
     def style_row(entry):
-        """Ticked clashes stay in the list: solved ones green, approved ones
+        """Checked clashes stay in the list: solved ones green, approved ones
         (not solved) blue."""
         if entry["solved"]:
             entry["row_text"].Foreground = SOLVED_BRUSH
@@ -2088,7 +2088,7 @@ def run():
         return None
 
     def load_one(html_path, position, total):
-        """Parses one report into a report dict (rows built, ticks applied).
+        """Parses one report into a report dict (rows built, check marks applied).
         Returns None if it holds no clashes."""
         prefix = u"[{0}/{1}] ".format(position, total) if total > 1 else u""
         name = os.path.basename(html_path)

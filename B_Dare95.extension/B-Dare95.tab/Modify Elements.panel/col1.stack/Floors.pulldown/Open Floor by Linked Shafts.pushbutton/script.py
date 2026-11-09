@@ -8,8 +8,8 @@ __________________________________________________
 How-to:
 
 -> Select one flat floor, or click the button and pick it
--> Tick the links whose shafts you want to use
--> Tick "Host document" too if your own shafts should cut
+-> Check the links whose shafts you want to use
+-> Check "Host document" too if your own shafts should cut
 -> Click Cut openings
 -> A summary shows how many shafts were cut
 __________________________________________________
@@ -410,7 +410,7 @@ def show_link_menu(sources, floor_id_text):
     ok_btn = window.FindName("OkBtn")
     cancel_btn = window.FindName("CancelBtn")
 
-    subtitle.Text = ("Only shafts from the links you tick will be cut into "
+    subtitle.Text = ("Only shafts from the links you check will be cut into "
                      "floor {0}. Counts show how many shafts fall near this "
                      "floor, which is the number that matters.".format(floor_id_text))
 

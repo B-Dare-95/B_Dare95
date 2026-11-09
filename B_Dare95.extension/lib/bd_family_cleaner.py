@@ -1144,7 +1144,7 @@ def restore_controls(window, saved):
             window.FindName(name).IsEnabled = bool(chk_params.IsChecked)
 
 
-# Inspection Mode runs as if every setting were ticked
+# Inspection Mode runs as if every setting were checked
 INSPECTION_SETTINGS = {"Depth1": False, "Depth2": False, "Depth3": False, "Depth4": True,
                        "ChkPurge": True, "ChkParams": True, "ScopeAll": True, "ScopeJunk": False,
                        "ChkCad": True, "ChkShared": True}
@@ -1168,11 +1168,11 @@ def read_options(window):
 
 
 class GroupedCheckList(object):
-    """The tick list grouped into dropdowns (categories). Needs ListPanel, SearchBox, SearchHint,
+    """The checklist grouped into dropdowns (categories). Needs ListPanel, SearchBox, SearchHint,
     CountText, BtnAll and BtnNone in the window.
     items: dicts {key, title, info, group, checked, enabled, reason}
-    A dropdown's own tick box ticks or clears its families (only the ones the search shows);
-    it shows a partial state when some are ticked. Searching opens the dropdowns with matches."""
+    A dropdown's own checkbox checks or clears its families (only the ones the search shows);
+    it shows a partial state when some are checked. Searching opens the dropdowns with matches."""
 
     def __init__(self, window, noun=u"families", group_noun=u"categories"):
         self.noun = noun
@@ -1226,7 +1226,7 @@ class GroupedCheckList(object):
         tick = CheckBox()
         tick.VerticalAlignment = VerticalAlignment.Center
         tick.Margin = Thickness(0, 0, 8, 0)
-        tick.ToolTip = u"Tick or clear every family in this category"
+        tick.ToolTip = u"Check or clear every family in this category"
         DockPanel.SetDock(tick, Dock.Left)
         count = TextBlock()
         count.Foreground = brush(SUBTEXT)
@@ -1331,15 +1331,15 @@ class GroupedCheckList(object):
                 group["tick"].IsChecked = False
             else:
                 group["tick"].IsChecked = None
-            text = u"{} of {} ticked".format(on, len(enabled))
+            text = u"{} of {} checked".format(on, len(enabled))
             if skipped:
                 text += u"  \u00b7  {} skipped".format(skipped)
             group["count"].Text = text
-        self.count.Text = u"{} of {} {} ticked  \u00b7  {} {}".format(
+        self.count.Text = u"{} of {} {} checked  \u00b7  {} {}".format(
             ticked, total, self.noun, len(self.groups), self.group_noun)
 
     def set_checked(self, keys, only=False):
-        """Tick these keys (only=True clears every other one) and open their dropdowns."""
+        """Check these keys (only=True clears every other one) and open their dropdowns."""
         keys = set(keys)
         for group in self.groups:
             for item, _, box in group["rows"]:
@@ -1370,7 +1370,7 @@ class GroupedCheckList(object):
 
 
 def _check_row(item):
-    """One family tick row."""
+    """One family checkbox row."""
     enabled = item.get("enabled", True)
     border = Border()
     border.Background = brush(SURFACE)

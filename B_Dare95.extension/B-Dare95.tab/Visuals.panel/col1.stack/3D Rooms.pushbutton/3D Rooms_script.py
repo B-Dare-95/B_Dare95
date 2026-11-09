@@ -10,7 +10,7 @@ How-to:
 
 -> Open a 3D view
 -> Click on the button
--> Tick rooms and click New Set from Checked Rooms
+-> Check rooms and click New Set from Checked Rooms
 -> Name the Set and pick a colour
 -> Adjust transparency, add or remove rooms as needed
 -> Close the window to remove the overlay

@@ -11,7 +11,7 @@ How-to:
 
 -> Open a 3D view that shows the grids and levels you want to tidy
 -> Click on the button
--> Tick Grids and / or Levels, and set the distances past the outermost grids
+-> Check Grids and / or Levels, and set the distances past the outermost grids
 -> Check the previews and click Apply
 -> A summary shows what was updated and what was skipped
 __________________________________________________
@@ -901,7 +901,7 @@ def show_ui(view, grids, levels, fr, area):
     def on_apply(s, e):
         on = dict((k, bool(chk[k].IsChecked)) for k in ("g", "l"))
         if not (on["g"] or on["l"]):
-            txt_msg.Text = u"Tick Grids, Levels or both."
+            txt_msg.Text = u"Check Grids, Levels or both."
             return
         offs = {}
         for key, label in (("g", u"Grids"), ("l", u"Levels")):

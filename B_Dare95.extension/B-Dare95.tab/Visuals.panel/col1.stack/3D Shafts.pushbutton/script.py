@@ -12,7 +12,7 @@ How-to:
 -> Click on the button
 -> Shafts appear coloured by Shaft Function
 -> Change colours, show/hide functions or set transparency
--> Tick "Selected shafts only" to show just your selection
+-> Check "Selected shafts only" to show just your selection
 -> Close the window to remove the overlay
 __________________________________________________
 Author: Mohamed Bedair"""

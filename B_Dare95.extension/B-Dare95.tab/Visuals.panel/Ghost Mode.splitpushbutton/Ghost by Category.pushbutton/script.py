@@ -9,8 +9,8 @@ How-to:
 
 -> Open a view without a view template
 -> Click on the button
--> Tick the categories and set the transparency
--> Tick Negate mode to ghost everything except the ticked ones
+-> Check the categories and set the transparency
+-> Check Negate mode to ghost everything except the checked ones
 -> Click Apply; click Restore View to undo the ghosting
 -> Shift+Click the button to open with Negate mode on
 __________________________________________________

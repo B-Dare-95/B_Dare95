@@ -11,7 +11,7 @@ How-to:
 -> Choose From Room or To Room
 -> Pick a room parameter, or several in Combine mode
 -> Pick the door parameter to fill
--> Tick Add Designator for doors that share a room, if needed
+-> Check Add Designator for doors that share a room, if needed
 -> Click Run Transfer and check the status line
 __________________________________________________
 Author: Mohamed Bedair"""

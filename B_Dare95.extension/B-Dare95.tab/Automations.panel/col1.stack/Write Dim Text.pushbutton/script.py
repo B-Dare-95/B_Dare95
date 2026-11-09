@@ -3,13 +3,13 @@ __doc__ = """__________________________________________________
 Description:
 
 Writes the same Top, Bottom, Prefix and/or Suffix text into many dimensions, one click per dimension.
-Only ticked fields are changed (an empty ticked field clears that text), and all changes are a single undo.
+Only checked fields are changed (an empty checked field clears that text), and all changes are a single undo.
 __________________________________________________
 How-to:
 
 -> Open the view with the dimensions
 -> Click on the button
--> Type your text and untick the fields to leave alone
+-> Type your text and uncheck the fields to leave alone
 -> Choose All segments or Picked segment only
 -> Click Start Picking, then click dimensions one by one
 -> Press Esc to finish

@@ -4,15 +4,15 @@ Description:
 
 Reloads several Revit links in one go. Every link in the project is listed, loaded or not, with its status, whether it is an Attachment or an Overlay, how many copies are placed and the path it loads from.
 
-Tick the links you want and click Reload ticked: each one is loaded again from its saved path, loaded or not, so it picks up the latest saved changes in that file. For a link whose file has moved, tick it alone and use Reload From to point it at the new file. Each link shows what happened after the reload.
+Check the links you want and click Reload checked: each one is loaded again from its saved path, loaded or not, so it picks up the latest saved changes in that file. For a link whose file has moved, check it alone and use Reload From to point it at the new file. Each link shows what happened after the reload.
 __________________________________________________
 How-to:
 
 -> Click on the button
--> Tick the links to reload, or click a row to tick it
--> Use Tick visible or Tick not loaded to tick several at once
--> Click Reload ticked
--> To repoint a link whose file has moved, tick only that link and click Reload From
+-> Check the links to reload, or click a row to check it
+-> Use Check visible or Check not loaded to check several at once
+-> Click Reload checked
+-> To repoint a link whose file has moved, check only that link and click Reload From
 -> Each link shows its result; reload more or click Close
 __________________________________________________
 Author: Mohamed Bedair"""
@@ -439,9 +439,9 @@ XAML = u"""
       <DockPanel>
         <Button x:Name="ClearBtn" DockPanel.Dock="Right" Content="Clear" Style="{StaticResource GhostBtn}"
                 Height="26" Padding="14,0" Margin="8,0,0,0"/>
-        <Button x:Name="TickUnloadedBtn" DockPanel.Dock="Right" Content="Tick not loaded"
+        <Button x:Name="TickUnloadedBtn" DockPanel.Dock="Right" Content="Check not loaded"
                 Style="{StaticResource GhostBtn}" Height="26" Padding="14,0" Margin="8,0,0,0"/>
-        <Button x:Name="TickVisibleBtn" DockPanel.Dock="Right" Content="Tick visible"
+        <Button x:Name="TickVisibleBtn" DockPanel.Dock="Right" Content="Check visible"
                 Style="{StaticResource GhostBtn}" Height="26" Padding="14,0" Margin="16,0,0,0"/>
         <Grid>
           <Border Background="#393939" BorderBrush="#525252" BorderThickness="1" CornerRadius="4" Height="26">
@@ -467,8 +467,8 @@ XAML = u"""
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
         <Button x:Name="CloseBtn" Content="Close" Style="{StaticResource GhostBtn}"/>
         <Button x:Name="FromBtn" Content="Reload From..." Style="{StaticResource GhostBtn}" Margin="10,0,0,0"
-                ToolTip="Tick one link, then pick the file it should load from"/>
-        <Button x:Name="ReloadBtn" Content="Reload ticked" Style="{StaticResource FlatBtn}" Margin="10,0,0,0"/>
+                ToolTip="Check one link, then pick the file it should load from"/>
+        <Button x:Name="ReloadBtn" Content="Reload checked" Style="{StaticResource FlatBtn}" Margin="10,0,0,0"/>
       </StackPanel>
     </Grid>
   </Grid>
@@ -601,11 +601,11 @@ def show_window(links, results, ticked, banner):
             else:
                 ticked.discard(link["key"])
         visible = len([l for l in links if l["border"].Visibility == Visibility.Visible])
-        text = "Showing {0} of {1}{2}{3} ticked".format(visible, len(links), DOT, len(chosen))
+        text = "Showing {0} of {1}{2}{3} checked".format(visible, len(links), DOT, len(chosen))
         if banner[0]:
             text = banner[0] + DOT + text
         count_text.Text = text
-        reload_btn.Content = "Reload ticked ({0})".format(len(chosen)) if chosen else "Reload ticked"
+        reload_btn.Content = "Reload checked ({0})".format(len(chosen)) if chosen else "Reload checked"
         reload_btn.IsEnabled = bool(chosen)
         from_btn.IsEnabled = len(chosen) == 1
 
@@ -652,7 +652,7 @@ def show_window(links, results, ticked, banner):
     def on_from(sender, args):
         chosen = picked()
         if len(chosen) != 1:
-            TaskDialog.Show(TOOL, "Tick exactly one link to use Reload From.")
+            TaskDialog.Show(TOOL, "Check exactly one link to use Reload From.")
             return
         link = chosen[0]
         dialog = OpenFileDialog()
@@ -718,7 +718,7 @@ def main():
             banner[0] = "Last run: {0} of {1} reloaded".format(done, len(chosen))
             for key in list(ticked):
                 if results.get(key, ("bad",))[0] == "ok":
-                    ticked.discard(key)  # untick what worked, keep the failures ticked to retry
+                    ticked.discard(key)  # uncheck what worked, keep the failures checked to retry
         else:
             link, new_path = action[1], action[2]
             results.clear()

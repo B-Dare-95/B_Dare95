@@ -2,13 +2,13 @@
 __doc__ = """__________________________________________________
 Description:
 
-Creates an enlarged plan and two sections (one each way) for every room you tick, all cropped tightly around the room.
+Creates an enlarged plan and two sections (one each way) for every room you check, all cropped tightly around the room.
 Views are named from the room name and number with your prefix and suffix, and can get view templates.
 __________________________________________________
 How-to:
 
 -> Click on the button
--> Tick the rooms you want (search to filter the list)
+-> Check the rooms you want (search to filter the list)
 -> Choose view templates for the plans and the sections (optional)
 -> Set a prefix and suffix for the view names
 -> Click Generate Views

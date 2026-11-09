@@ -9,7 +9,7 @@ __________________________________________________
 How-to:
 
 -> Click on the button
--> Tick the wall types to check
+-> Check the wall types to include
 -> Set the clearance for pipes, ducts and cable trays (mm)
 -> Click Find clashes and review the report
 -> Click Create openings and confirm

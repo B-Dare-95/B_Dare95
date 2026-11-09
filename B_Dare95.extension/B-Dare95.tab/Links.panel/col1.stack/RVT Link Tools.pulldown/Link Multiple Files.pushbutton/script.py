@@ -10,9 +10,9 @@ How-to:
 
 -> Click on the button
 -> Click Add files or Add folder to list the Revit models
--> Untick any file you don't want, or remove it from the list
+-> Uncheck any file you don't want, or remove it from the list
 -> On the right, pick the placement, Attachment or Overlay, the workset and the pin option
--> Click Link ticked files
+-> Click Link checked files
 -> Each file shows its result; add more files or click Close
 __________________________________________________
 Author: Mohamed Bedair"""
@@ -463,7 +463,7 @@ XAML = u"""
         <DockPanel>
           <Button x:Name="ClearBtn" DockPanel.Dock="Right" Content="Clear list" Style="{StaticResource GhostBtn}"
                   Height="26" Padding="14,0" Margin="8,0,0,0"/>
-          <Button x:Name="RemoveBtn" DockPanel.Dock="Right" Content="Remove ticked" Style="{StaticResource GhostBtn}"
+          <Button x:Name="RemoveBtn" DockPanel.Dock="Right" Content="Remove checked" Style="{StaticResource GhostBtn}"
                   Height="26" Padding="14,0" Margin="8,0,0,0"/>
           <Button x:Name="FolderBtn" DockPanel.Dock="Right" Content="Add folder..." Style="{StaticResource GhostBtn}"
                   Height="26" Padding="14,0" Margin="8,0,0,0"/>
@@ -517,7 +517,7 @@ XAML = u"""
                  HorizontalAlignment="Left" TextWrapping="Wrap" Margin="0,0,320,0"/>
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
         <Button x:Name="CloseBtn" Content="Close" Style="{StaticResource GhostBtn}"/>
-        <Button x:Name="LinkBtn" Content="Link ticked files" Style="{StaticResource FlatBtn}" Margin="10,0,0,0"/>
+        <Button x:Name="LinkBtn" Content="Link checked files" Style="{StaticResource FlatBtn}" Margin="10,0,0,0"/>
       </StackPanel>
     </Grid>
   </Grid>
@@ -670,7 +670,7 @@ def show_window(files, settings, worksets, banner):
     relative_check = window.FindName("RelativeCheck")
 
     window.FindName("SubTitle").Text = u"{0}{1}Add the Revit models, set how they are placed on the right, " \
-                                       u"then click Link ticked files.".format(doc.Title, DOT)
+                                       u"then click Link checked files.".format(doc.Title, DOT)
     make_header(window)
 
     def ticked():
@@ -680,11 +680,11 @@ def show_window(files, settings, worksets, banner):
         chosen = ticked()
         empty_text.Visibility = Visibility.Collapsed if files else Visibility.Visible
         visible = len([f for f in files if f["border"].Visibility == Visibility.Visible])
-        text = "Showing {0} of {1}{2}{3} ticked".format(visible, plural(len(files), "file"), DOT, len(chosen))
+        text = "Showing {0} of {1}{2}{3} checked".format(visible, plural(len(files), "file"), DOT, len(chosen))
         if banner[0]:
             text = banner[0] + DOT + text
         count_text.Text = text
-        link_btn.Content = "Link ticked files ({0})".format(len(chosen)) if chosen else "Link ticked files"
+        link_btn.Content = "Link checked files ({0})".format(len(chosen)) if chosen else "Link checked files"
         link_btn.IsEnabled = bool(chosen)
 
     for entry in files:

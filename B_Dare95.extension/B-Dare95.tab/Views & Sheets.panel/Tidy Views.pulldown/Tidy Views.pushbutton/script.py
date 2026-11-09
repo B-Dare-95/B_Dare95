@@ -13,7 +13,7 @@ How-to:
 -> Select viewports or views first if you want to work on just those
 -> Click on the button
 -> Choose: active view, active sheet, selected views or picked sheets
--> Tick Grids, Levels and / or Viewport titles, and set their options
+-> Check Grids, Levels and / or Viewport titles, and set their options
 -> Check the preview next to each section and click Apply
 -> A summary shows what was updated and what was skipped
 __________________________________________________
@@ -1207,7 +1207,7 @@ def show_ui(active, active_is_sheet, sheet_rows, sel_views, sel_vps):
         "view": u"Grids and levels in the active view. Viewport titles are tidied only on sheets.",
         "sheet": u"Every view and viewport title on the active sheet.",
         "sel": u"The views you selected. Titles are tidied for selected viewports.",
-        "pick": u"Every view and viewport title on the sheets you tick below.",
+        "pick": u"Every view and viewport title on the sheets you check below.",
     }
 
     def set_scope(name):
@@ -1326,7 +1326,7 @@ def show_ui(active, active_is_sheet, sheet_rows, sel_views, sel_vps):
         levels_on = do["levels"] and (do["l_head"] or do["l_align"])
         titles_on = do["titles"] and (do["t_align"] or do["t_fit"])
         if not (grids_on or levels_on or titles_on):
-            return fail(u"Tick at least one option under Grids, Levels or Viewport titles.")
+            return fail(u"Check at least one option under Grids, Levels or Viewport titles.")
         try:
             g_off_mm = read_offsets(g_off, u"grid") if grids_on and do["g_align"] else \
                 dict((k, opt_float("g_off_" + k, 1000.0)) for k in GRID_SIDES)

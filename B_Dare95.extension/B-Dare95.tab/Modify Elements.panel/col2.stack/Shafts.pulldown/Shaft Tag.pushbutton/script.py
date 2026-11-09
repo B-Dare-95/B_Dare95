@@ -3,14 +3,14 @@
 __doc__ = """__________________________________________________
 Description:
 
-Writes each shaft's Shaft Function value as a text note in its bottom-left corner, in all the plan views you tick.
+Writes each shaft's Shaft Function value as a text note in its bottom-left corner, in all the plan views you check.
 Only shafts cut by the view's cut plane are tagged, from your model and from loaded links.
 __________________________________________________
 How-to:
 
 -> Click on the button
--> Keep or untick Include shafts from linked models
--> Tick the plan views to tag (search to filter)
+-> Keep or uncheck Include shafts from linked models
+-> Check the plan views to tag (search to filter)
 -> Pick a text note type
 -> Click Apply
 -> A summary shows how many notes were placed
@@ -507,7 +507,7 @@ def show_form(plan_views, text_note_types, link_count, linked_shaft_count):
     def on_apply(s, e):
         selected = [plan_views[i] for i, cb in enumerate(view_checkboxes) if cb.IsChecked]
         if not selected:
-            forms.alert("Please tick at least one plan view.")
+            forms.alert("Please check at least one plan view.")
             return
         result['ok']             = True
         result['views']          = selected
@@ -586,7 +586,7 @@ def main():
         output.print_md(
             "_Linked models included: {}_\n".format(", ".join(link_names)))
     elif linked_shafts:
-        output.print_md("_Linked model shafts excluded (checkbox unticked)._\n")
+        output.print_md("_Linked model shafts excluded (checkbox unchecked)._\n")
 
     total_placed = 0
     error_views  = []

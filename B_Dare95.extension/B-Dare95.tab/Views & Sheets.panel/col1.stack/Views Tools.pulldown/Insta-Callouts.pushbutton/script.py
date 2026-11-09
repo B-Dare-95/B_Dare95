@@ -10,7 +10,7 @@ How-to:
 -> Open a plan view
 -> Click on the button and drag a box for the callout area
 -> Choose View Callout or Reference Callout
--> Tick the plan views to add it to
+-> Check the plan views to add it to
 -> Set the names and templates, or the views to reference
 -> Click Create Callouts
 __________________________________________________

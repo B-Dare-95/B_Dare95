@@ -8,7 +8,7 @@ __________________________________________________
 How-to:
 
 -> Click on the button
--> Tick the detail callouts to convert (only ready ones can be ticked)
+-> Check the detail callouts to convert (only ready ones can be checked)
 -> Choose the floor plan type and the view template to use
 -> Click Convert selected
 -> A report lists each callout and anything that couldn't be kept

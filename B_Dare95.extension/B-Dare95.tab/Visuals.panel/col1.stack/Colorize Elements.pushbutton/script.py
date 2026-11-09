@@ -10,7 +10,7 @@ How-to:
 -> Open the view you want to colour
 -> Click on the button and choose By View Filter or By Graphic Override
 -> Pick a category, then an instance or type parameter
--> Adjust colours or turn values off, tick the override targets
+-> Adjust colours or turn values off, check the override targets
 -> Click Apply
 -> Shift+Click the button to remove the tool's filters from the view
 __________________________________________________
@@ -1491,7 +1491,7 @@ class ColorizerWindow(object):
 
         tg = self._targets()
         if not any(tg.values()):
-            warn("Tick at least one override target (surface, cut or lines).",
+            warn("Check at least one override target (surface, cut or lines).",
                  "No Target Selected")
             return
         if self._needs_pattern(tg) and SOLID_PATTERN is None:

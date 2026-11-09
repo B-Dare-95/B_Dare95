@@ -14,10 +14,10 @@ __________________________________________________
 How-to:
 
 -> Click on the button
--> Tick the families to clean in their category dropdowns, or click Pick from Model, pick placed instances of the families you want and click Finish
--> Search the list, or use All / None, to adjust the ticks
+-> Check the families to clean in their category dropdowns, or click Pick from Model, pick placed instances of the families you want and click Finish
+-> Search the list, or use All / None, to adjust the check marks
 -> Set the nested levels, what to clean and the project options on the right
--> Tick Inspection Mode for a report only, or leave it off to clean
+-> Check Inspection Mode for a report only, or leave it off to clean
 -> Click Clean, save the model first if asked, and read the report
 __________________________________________________
 Author: Mohamed Bedair"""
@@ -182,7 +182,7 @@ def open_window():
     chk_inspect = window.FindName("ChkInspect")
 
     def show_inspection(on):
-        """Grey out the settings and show them all ticked; turning it off brings yours back."""
+        """Grey out the settings and show them all checked; turning it off brings yours back."""
         settings_panel.IsEnabled = not on
         settings_panel.Opacity = 0.45 if on else 1.0
         inspect_note.Visibility = Visibility.Visible if on else Visibility.Collapsed
@@ -214,7 +214,7 @@ def open_window():
     def on_run(sender, args):
         keys = checklist.selected_keys()
         if not keys:
-            forms.alert("Tick at least one family, or use Pick from Model.", title=TOOL_NAME)
+            forms.alert("Check at least one family, or use Pick from Model.", title=TOOL_NAME)
             return
         try:
             every = int(window.FindName("TxtEvery").Text)
@@ -255,7 +255,7 @@ class _PlacedFamilies(ISelectionFilter):
 
 
 def pick_from_model():
-    """Pick instances; their families replace the ticks. Esc keeps the ticks as they were."""
+    """Pick instances; their families replace the check marks. Esc keeps the check marks as they were."""
     try:
         refs = uidoc.Selection.PickObjects(ObjectType.Element, _PlacedFamilies(),
                                            "Pick instances of the families to clean, then click Finish")

@@ -8,7 +8,7 @@ __________________________________________________
 How-to:
 
 -> Click on the button
--> Tick the groups you want to merge (search to filter)
+-> Check the groups you want to merge (search to filter)
 -> Choose whether to join outlines, delete originals and copy values
 -> Click Merge Selected
 -> A summary shows the result; details are in the output window

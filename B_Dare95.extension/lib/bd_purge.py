@@ -7,9 +7,9 @@ with one of the keys in KINDS (bottom of this file).
 
 Every window (approved mockup):
   - a line saying what "unused" means for that kind
-  - unused items listed and ticked (nothing ticked for Views, Sheets, Schedules,
+  - unused items listed and checked (nothing checked for Views, Sheets, Schedules,
     Analytical Models and CAD/PDF), search, All / None
-  - "Show used items too": used items greyed out, not tickable, with the reason
+  - "Show used items too": used items greyed out, can't be checked, with the reason
   - the window stays open; the list refreshes and the status bar reports the result
 One Purge click is one undo. Warnings are never suppressed; a Revit error rolls back
 only the transaction it came from (and that item is reported).
@@ -306,7 +306,7 @@ class Tool(object):
     """title: the kind ("Line Styles"); noun: one item ("line style")
     columns: [(header, width)] after the name; info: what "unused" means
     apply(keys) -> Result
-    default_tick: unused rows start ticked; lists_all: every row is a candidate (no used/unused)"""
+    default_tick: unused rows start checked; lists_all: every row is a candidate (no used/unused)"""
 
     def __init__(self, title, noun, info, columns, rows, apply, default_tick=True, lists_all=False,
                  noun_plural=None):
@@ -787,7 +787,7 @@ def views(doc, cache):
         rows.append(row(k, v.Name, [u"{}".format(v.ViewType)], unused, status, eid=v.Id))
     rows.sort(key=lambda r: (r["cells"][0], r["name"].lower()))
     return Tool(u"Views", u"view",
-                u"Views on no sheet. Nothing is ticked for you: working and coordination views often live off "
+                u"Views on no sheet. Nothing is checked for you: working and coordination views often live off "
                 u"sheets on purpose. Views whose dependent is on a sheet, the open view and the starting view "
                 u"are kept. Deleting a view also deletes what is drawn only in it.",
                 [(u"View type", 130)], rows,
@@ -818,7 +818,7 @@ def sheets(doc, cache):
     rows.sort(key=lambda r: r["name"].lower())
     return Tool(u"Sheets", u"sheet",
                 u"Sheets with no view and no schedule on them (the title block's revision schedule doesn't "
-                u"count). Nothing is ticked for you: an empty sheet can be a placeholder in a sheet list.",
+                u"count). Nothing is checked for you: an empty sheet can be a placeholder in a sheet list.",
                 [(u"Views on it", 80)], rows,
                 lambda keys: _delete_rows(doc, rows, keys, u"Purge Sheets"), default_tick=False)
 
@@ -847,7 +847,7 @@ def schedules(doc, cache):
         rows.append(row(k, s.Name, [u"Key" if is_key else u"Regular"], unused, status, eid=s.Id))
     rows.sort(key=lambda r: r["name"].lower())
     return Tool(u"Schedules", u"schedule",
-                u"Schedules placed on no sheet. Nothing is ticked for you: working schedules are often kept off "
+                u"Schedules placed on no sheet. Nothing is checked for you: working schedules are often kept off "
                 u"sheets. Key schedules are kept, because deleting one clears the key values on elements.",
                 [(u"Kind", 80)], rows,
                 lambda keys: _delete_rows(doc, rows, keys, u"Purge Schedules"), default_tick=False)
@@ -986,7 +986,7 @@ def analytical_models(doc, cache):
                 u"Every analytical member, panel and opening in the model - not only unused ones. They aren't "
                 u"needed for the physical model; the analytical nodes, links, loads and boundary conditions on them "
                 u"go with them. Energy-analysis spaces and surfaces and the load cases, natures and combinations are "
-                u"kept. Nothing is ticked for you.",
+                u"kept. Nothing is checked for you.",
                 [(u"Elements", 70)], rows, apply, default_tick=False, lists_all=True)
 
 
@@ -1027,7 +1027,7 @@ def cad_and_pdf(doc, cache):
     def apply(keys):
         ticked = set(keys)
         items = [(r["eid"], r["name"]) for r in rows if r["key"] in ticked]
-        # a type goes too once all its placed copies are ticked, so a link is removed, not just hidden
+        # a type goes too once all its placed copies are checked, so a link is removed, not just hidden
         for tid, (type_id, insts) in instances_of.items():
             if insts and all(i in ticked for i in insts):
                 t = doc.GetElement(type_id)
@@ -1035,8 +1035,8 @@ def cad_and_pdf(doc, cache):
         return delete_elements(doc, items, u"Purge CAD and PDF Files")
     return Tool(u"CAD and PDF Files", u"CAD or PDF file",
                 u"Every CAD import, CAD link and PDF placed in the project, plus CAD links that aren't placed - not "
-                u"only unused ones. When every placed copy of a file is ticked, the file itself is removed too. "
-                u"Nothing is ticked for you.",
+                u"only unused ones. When every placed copy of a file is checked, the file itself is removed too. "
+                u"Nothing is checked for you.",
                 [(u"Kind", 80), (u"View", 160)], rows, apply, default_tick=False, lists_all=True,
                 noun_plural=u"CAD and PDF files")
 
@@ -1215,7 +1215,7 @@ class PurgeWindow(object):
         ui["BtnClose"].Click += RoutedEventHandler(self._on_close)
         ui["BtnPurge"].Click += RoutedEventHandler(self._on_purge)
         self._fill(first=True)
-        self._status(u"Tick what to purge, then click Purge. The list stays open and refreshes afterwards.")
+        self._status(u"Check what to purge, then click Purge. The list stays open and refreshes afterwards.")
 
     # ------------------------------------------------------------- list
     def _cell(self, text, width, color=SUBTEXT, align=TextAlignment.Right):
@@ -1310,7 +1310,7 @@ class PurgeWindow(object):
         return border, box
 
     def _fill(self, first=False, keep=None):
-        """(Re)build the rows from self.tool. keep: keys to tick (after a purge: none)."""
+        """(Re)build the rows from self.tool. keep: keys to check (after a purge: none)."""
         panel = self.ui["ListPanel"]
         panel.Children.Clear()
         self.rows = []
@@ -1357,10 +1357,10 @@ class PurgeWindow(object):
         ticked = len([b for b in tickable if b.IsChecked == True])
         used = len(self.rows) - len(tickable)
         if self.tool.lists_all:
-            text = u"{} of {} ticked".format(ticked, len(tickable))
+            text = u"{} of {} checked".format(ticked, len(tickable))
         else:
-            text = u"{} of {} unused ticked  ·  {} used {}".format(
-                ticked, len(tickable), used, u"shown (not tickable)" if self.ui["ChkUsed"].IsChecked == True
+            text = u"{} of {} unused checked  ·  {} used {}".format(
+                ticked, len(tickable), used, u"shown (can't be checked)" if self.ui["ChkUsed"].IsChecked == True
                 else u"hidden")
         self.ui["TbCount"].Text = text
         self.ui["BtnPurge"].Content = u"Purge {}".format(ticked) if ticked else u"Purge"
@@ -1400,7 +1400,7 @@ class PurgeWindow(object):
     def _on_purge(self, sender, args):
         keys = [r["key"] for r, _, b in self.rows if b.IsEnabled and b.IsChecked == True]
         if not keys:
-            self._status(u"Tick at least one {} to purge.".format(self.tool.noun), "warn")
+            self._status(u"Check at least one {} to purge.".format(self.tool.noun), "warn")
             return
         if self.tool.lists_all or not self.tool.default_tick:
             if not forms.alert(u"Delete {}? This is one Undo.".format(

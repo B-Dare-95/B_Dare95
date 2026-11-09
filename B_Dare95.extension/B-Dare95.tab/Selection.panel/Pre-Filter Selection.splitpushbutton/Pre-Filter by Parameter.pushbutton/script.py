@@ -6,15 +6,17 @@ Description:
 
 Makes your selection box pick only one category, optionally only elements whose parameters match values you choose.
 Combine several parameter rules with AND / OR / NOT for precise selections.
+Check Everything except the matching elements, above the category list, to do the opposite: select everything in the box except the elements that match.
 __________________________________________________
 How-to:
 
 -> Click on the button
 -> Pick one category from the list
+-> Check Everything except the matching elements, above the list, to leave them out instead
 -> Optionally choose a parameter and value (NOT to exclude them)
 -> Click "+ Add Filter" for more rules and set AND / OR / NOT
 -> Click "Make A Selection" and drag a box in the view
--> Only matching elements are selected
+-> Only matching elements are selected (or everything but them)
 __________________________________________________
 Author: Mohamed Bedair"""
 
@@ -47,6 +49,7 @@ from bd_combo_search import enable_combo_search
 doc       = __revit__.ActiveUIDocument.Document
 uidoc     = __revit__.ActiveUIDocument
 selection = uidoc.Selection
+cfg       = script.get_config()
 
 # ─── THEME ────────────────────────────────────────────────────────────────────
 BG      = "#161616"
@@ -233,16 +236,55 @@ XAML_TEMPLATE = """
             </Setter>
         </Style>
 
+        <!-- Only these / Everything except -->
+        <Style x:Key="ExceptCheck" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{TEXT}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="18"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="CheckBorder" Grid.Column="0" Width="14" Height="14"
+                                    CornerRadius="3" Background="{SURFACE}" BorderBrush="{MUTED}"
+                                    BorderThickness="1.5" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="CheckMark" Grid.Column="0" Text="&#x2714;" FontSize="10"
+                                       Foreground="{BG}" HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" Visibility="Collapsed"/>
+                            <ContentPresenter Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="CheckBorder" Property="Background" Value="{ACCENT}"/>
+                                <Setter TargetName="CheckBorder" Property="BorderBrush" Value="{ACCENT}"/>
+                                <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="CheckBorder" Property="BorderBrush" Value="{ACCENT}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
     </Window.Resources>
 
     <Border Padding="16" Background="{BG}">
         <StackPanel>
 
             <!-- Header -->
-            <TextBlock Text="Choose Category"
+            <TextBlock x:Name="HeaderText" Text="Choose Category"
                        FontSize="15" FontWeight="SemiBold"
                        Foreground="{TEXT}"
                        Margin="0,0,0,10"/>
+
+            <TextBlock x:Name="FilterHint" FontSize="11" Foreground="#A8A8A8" TextWrapping="Wrap"
+                       Margin="2,0,0,10"/>
 
             <!-- Search box -->
             <Border Background="{SURFACE}" CornerRadius="6" Margin="0,0,0,10"
@@ -256,6 +298,11 @@ XAML_TEMPLATE = """
                          FontSize="12"
                          ToolTip="Filter categories..."/>
             </Border>
+
+            <!-- Everything except -->
+            <CheckBox x:Name="ChkExcept" Content="Everything except the matching elements"
+                      Style="{StaticResource ExceptCheck}" Margin="0,0,0,8"
+                      ToolTip="Select everything in the box except the elements of this category that match the rules"/>
 
             <!-- Category list (RadioButtons) -->
             <Border Background="{CARD}" CornerRadius="8"
@@ -637,6 +684,32 @@ def show_category_picker(all_categories):
     confirm_btn = window.FindName("ConfirmBtn")
     add_row_btn = window.FindName("AddRowBtn")
     rows_panel  = window.FindName("RowsPanel")
+    header_text = window.FindName("HeaderText")
+    chk_except  = window.FindName("ChkExcept")
+    filter_hint = window.FindName("FilterHint")
+
+    exclude = [False]
+    try:
+        exclude[0] = float(cfg.get_option("exclude_mode", 0.0)) > 0.5
+    except Exception:
+        pass
+
+    def update_mode_texts():
+        chk_except.IsChecked = exclude[0]
+        if exclude[0]:
+            header_text.Text = u"Exclude Category"
+            filter_hint.Text = (u"Drag a box in the view: everything is selected except the elements "
+                                u"of this category that match the rules below.")
+            confirm_btn.Content = u"Select Everything Else"
+        else:
+            header_text.Text = u"Choose Category"
+            filter_hint.Text = (u"Drag a box in the view: only the elements of this category that match "
+                                u"the rules below are selected.")
+            confirm_btn.Content = u"Make A Selection"
+
+    def on_except(sender, e):
+        exclude[0] = bool(chk_except.IsChecked)
+        update_mode_texts()
 
     result_holder = [None]
     selected_cat  = [None]
@@ -886,7 +959,7 @@ def show_category_picker(all_categories):
                 # user selected on their connector.
                 op = row['operator'][0]
                 param_filters.append((p, v, op))
-        result_holder[0] = (cat, param_filters)
+        result_holder[0] = (cat, param_filters, exclude[0])
         window.Close()
 
     # ── Build RadioButton list ─────────────────────────────────────────────
@@ -902,6 +975,8 @@ def show_category_picker(all_categories):
     search_box.TextChanged += on_search_changed
     add_row_btn.Click      += lambda s, e: create_filter_row()
     confirm_btn.Click      += on_confirm
+    chk_except.Click       += on_except
+    update_mode_texts()
 
     # Start with one empty filter row (no connector — it is the base)
     create_filter_row()
@@ -919,16 +994,21 @@ class CustomISelectionFilter(ISelectionFilter):
     If *param_filters* is provided as (name, value, op) triples, the combined
     boolean expression is evaluated with element_matches_filters_with_ops.
     """
-    def __init__(self, category_name, param_filters=None):
+    def __init__(self, category_name, param_filters=None, exclude=False):
         self.category_name = category_name
         self.param_filters = param_filters or []
+        self.exclude       = exclude
 
-    def AllowElement(self, elem):
+    def _matches(self, elem):
         if not (elem.Category and elem.Category.Name == self.category_name):
             return False
         if self.param_filters:
             return element_matches_filters_with_ops(elem, self.param_filters)
         return True
+
+    def AllowElement(self, elem):
+        # Everything except: every element in the box that does NOT match
+        return not self._matches(elem) if self.exclude else self._matches(elem)
 
     def AllowReference(self, reference, position):
         return False
@@ -936,10 +1016,10 @@ class CustomISelectionFilter(ISelectionFilter):
 
 # ─── ACTIONS ──────────────────────────────────────────────────────────────────
 
-def apply_category_filter(category_name, param_filters=None):
-    """Restrict rectangle selection to elements matching the combined criteria."""
+def apply_category_filter(category_name, param_filters=None, exclude=False):
+    """Restrict rectangle selection to elements matching (or not matching) the combined criteria."""
     try:
-        sel_filter     = CustomISelectionFilter(category_name, param_filters)
+        sel_filter     = CustomISelectionFilter(category_name, param_filters, exclude)
         selected_elems = selection.PickElementsByRectangle(sel_filter, "Select Elements")
         selected_ids   = [el.Id for el in selected_elems]
         uidoc.Selection.SetElementIds(List[ElementId](selected_ids))
@@ -956,6 +1036,8 @@ result         = show_category_picker(all_categories)
 if not result:
     script.exit()
 
-category_name, param_filters = result
+category_name, param_filters, exclude = result
+cfg.set_option("exclude_mode", 1.0 if exclude else 0.0)
+script.save_config()
 
-apply_category_filter(category_name, param_filters)
+apply_category_filter(category_name, param_filters, exclude)

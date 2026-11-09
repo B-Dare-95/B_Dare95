@@ -11,7 +11,7 @@ How-to:
 
 -> Click on the button
 -> The tool scans the project and lists every view with grid or level ends still on 3D
--> Untick the views or view types you want to leave, and choose Grids and / or Levels
+-> Uncheck the views or view types you want to leave, and choose Grids and / or Levels
 -> Click Apply
 -> A summary shows how many ends were switched and anything that was skipped
 __________________________________________________
@@ -432,7 +432,7 @@ def show_ui(rows, clean, total):
                 shown += 1
         todo = processed()
         n_ends = sum(ends_for(r) for r in todo)
-        txt_count.Text = u"{0} of {1} views ticked".format(
+        txt_count.Text = u"{0} of {1} views checked".format(
             len([r for r in rows if r["cb"].IsChecked and kinds[r["kind"]].IsChecked]),
             len([r for r in rows if kinds[r["kind"]].IsChecked]))
         f("txtGrids").Text = u"{0} ends on 3D in {1} views".format(
@@ -440,7 +440,7 @@ def show_ui(rows, clean, total):
         f("txtLevels").Text = u"{0} ends on 3D in {1} views".format(
             sum(r["l"] for r in rows), len([r for r in rows if r["l"]]))
         if not (chk_g.IsChecked or chk_l.IsChecked):
-            txt_msg.Text = u"Tick Grids, Levels or both."
+            txt_msg.Text = u"Check Grids, Levels or both."
         elif not todo:
             txt_msg.Text = u"Nothing to switch with these choices."
         else:

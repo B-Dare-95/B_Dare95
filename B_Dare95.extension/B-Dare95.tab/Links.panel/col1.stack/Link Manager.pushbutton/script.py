@@ -4,7 +4,7 @@ Description:
 
 Manages and inspects every Revit link in one window: its workset, Room Bounding, whether it is pinned, where it sits, and what is inside it.
 
-Under each link a status line checks its position: Shared Coordinates, Base Point and Internal Origin get a tick when the link sits there, or the offset when it doesn't, followed by its rotation and how many grids and levels with the same name line up exactly. Pick Internal Origin, Base Point or Shared Coords to move a link there; it is pinned again after the move.
+Under each link a status line checks its position: Shared Coordinates, Base Point and Internal Origin get a check mark when the link sits there, or the offset when it doesn't, followed by its rotation and how many grids and levels with the same name line up exactly. Pick Internal Origin, Base Point or Shared Coords to move a link there; it is pinned again after the move.
 
 A health line sums up what is inside each loaded link. Click a link to show it in the inspector on the right: DWG / CAD, the Revit links inside it, warnings, levels and grids on the wrong workset, items left on Workset1, and unused families and types. Export HTML report writes all of it to a page you can share.
 __________________________________________________
@@ -12,7 +12,7 @@ How-to:
 
 -> Click on the button
 -> Pick a workset for each link, or use Set all visible to
--> Tick or untick Room bounding and Pinned
+-> Check or uncheck Room bounding and Pinned
 -> Read the status line under each link, and click a position to move it there
 -> Click a link to show it in the inspector on the right, and switch between the tabs
 -> In Unused Items, click Scan unused to check that link's families and types
@@ -2749,7 +2749,7 @@ def main():
 
     def on_ok(sender, args):
         if not any(u.changed() for u in row_uis):
-            TaskDialog.Show(TOOL, "Nothing has changed yet. Change a workset, a tick box or a position first.")
+            TaskDialog.Show(TOOL, "Nothing has changed yet. Change a workset, a checkbox or a position first.")
             return
         include_instances[0] = bool(instances_check.IsChecked)
         result[0] = True

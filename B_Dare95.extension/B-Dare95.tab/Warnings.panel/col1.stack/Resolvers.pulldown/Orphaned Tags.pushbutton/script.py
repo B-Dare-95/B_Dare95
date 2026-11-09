@@ -8,7 +8,7 @@ __________________________________________________
 How-to:
 
 -> Click on the button and wait for the scan
--> Untick any tag categories you want to leave alone
+-> Uncheck any tag categories you want to leave alone
 -> Choose Move to element or Keep position + leader
 -> Click Fix Selected
 -> Skipped tags are listed in the output window for review

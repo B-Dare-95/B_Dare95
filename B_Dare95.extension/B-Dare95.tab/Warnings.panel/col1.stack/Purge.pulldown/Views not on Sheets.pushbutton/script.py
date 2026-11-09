@@ -4,13 +4,13 @@ __author__ = "Mohamed Bedair"
 __doc__ = """__________________________________________________
 Description:
 
-Lists the views that are on no sheet, so you can delete the ones you don't need. Nothing is ticked for you, because working views often live off sheets on purpose. The open view, the starting view and views whose dependent is on a sheet are kept.
+Lists the views that are on no sheet, so you can delete the ones you don't need. Nothing is checked for you, because working views often live off sheets on purpose. The open view, the starting view and views whose dependent is on a sheet are kept.
 __________________________________________________
 How-to:
 
 -> Click on the button
--> Read the list: nothing is ticked for you, so tick what to delete
--> Tick Show used items too to see what stays and why
+-> Read the list: nothing is checked for you, so check what to delete
+-> Check Show used items too to see what stays and why
 -> Click Purge and read the result at the bottom; the list refreshes and the window stays open
 -> One Undo puts the whole purge back
 __________________________________________________

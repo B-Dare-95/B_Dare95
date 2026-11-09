@@ -10,7 +10,7 @@ __________________________________________________
 How-to:
 
 -> Click on the button
--> Tick the floor or structural plans to annotate
+-> Check the floor or structural plans to annotate
 -> Choose your own and/or linked shafts
 -> Pick the line style, text types and label text
 -> Click Draw
@@ -1137,7 +1137,7 @@ def show_dialog(rows, line_styles, text_types, n_host, n_linked, n_links, no_geo
     def on_draw(s, e):
         host_on, link_on = sources()
         if not host_on and not link_on:
-            forms.alert("Tick at least one source (host or linked).",
+            forms.alert("Check at least one source (host or linked).",
                         title=TOOL_TITLE)
             return
         selected = [it['row'] for it in items if it['cb'].IsChecked == True]

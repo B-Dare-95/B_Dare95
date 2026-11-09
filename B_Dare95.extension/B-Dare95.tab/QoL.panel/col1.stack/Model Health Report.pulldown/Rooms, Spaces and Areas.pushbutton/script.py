@@ -11,7 +11,7 @@ How-to:
 -> Click on the button and wait for the checks to finish
 -> Click a check to select its elements in the model, or its arrow to see the list
 -> Click a room, space or area in a list to select it; click a duplicate number to select the ones using it
--> Ctrl+click adds to the current selection; tick Failed only to see the problems
+-> Ctrl+click adds to the current selection; check Failed only to see the problems
 -> Click Refresh after changing the model
 __________________________________________________
 Author: Mohamed Bedair"""

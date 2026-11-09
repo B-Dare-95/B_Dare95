@@ -11,7 +11,7 @@ __________________________________________________
 How-to:
 
 -> Click on the button
--> Tick Rooms, Areas and/or MEP Spaces (counts appear when ticked)
+-> Check Rooms, Areas and/or MEP Spaces (counts appear when checked)
 -> Click OK
 -> Confirm the list of elements to delete
 -> A summary shows how many were deleted

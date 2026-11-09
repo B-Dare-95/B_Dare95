@@ -12,7 +12,7 @@ How-to:
 -> Click on the button
 -> Choose Pin or Unpin
 -> Choose Current View, Selected Views or Entire Project
--> Optionally turn on the category filter and tick categories
+-> Optionally turn on the category filter and check categories
 -> Click "Run" and check the summary in the output window
 __________________________________________________
 Author: Mohamed Bedair"""
@@ -438,7 +438,7 @@ class PinUnpinDialog(object):
        _view_checked / _cat_checked dicts store {key: bool} and
        are read/written by per-item Checked/Unchecked handlers.
        When the search filter changes, the panel is cleared and
-       rebuilt; IsChecked is seeded from the dict so ticks survive.
+       rebuilt; IsChecked is seeded from the dict so check marks survive.
     """
 
     def __init__(self):

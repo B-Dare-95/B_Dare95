@@ -2,13 +2,13 @@
 __doc__ = """__________________________________________________
 Description:
 
-Builds Revit schedules for several categories in one window. Tick the categories, and for each one pick its fields and their order, filter rules, sorting and grouping, itemizing and totals, then create all the schedules at once.
+Builds Revit schedules for several categories in one window. Check the categories, and for each one pick its fields and their order, filter rules, sorting and grouping, itemizing and totals, then create all the schedules at once.
 The preview shows the real schedule Revit will make. Elements in linked models can be included per category, and each category's setup is remembered for next time.
 __________________________________________________
 How-to:
 
 -> Click on the button
--> Tick the categories you want schedules for; click a name to set it up
+-> Check the categories you want schedules for; click a name to set it up
 -> Fields: add, remove and order the columns; the sum button adds totals to a number column
 -> Filter: keep only the elements that pass your rules
 -> Sorting / grouping: sort levels with headers, footers and blank lines, itemize on or off, grand totals
@@ -615,7 +615,7 @@ XAML = u"""
 
     <StackPanel Grid.Row="0" Margin="0,0,0,10">
       <TextBlock Text="Schedule Builder" Foreground="#F4F4F4" FontSize="18" FontWeight="SemiBold"/>
-      <TextBlock Text="Tick the categories, set each one up, and create all the schedules in one go"
+      <TextBlock Text="Check the categories, set each one up, and create all the schedules in one go"
                  Style="{StaticResource Sub}" Margin="0,2,0,0"/>
     </StackPanel>
 
@@ -642,7 +642,7 @@ XAML = u"""
             <TextBlock x:Name="txtCatCount" Style="{StaticResource Sub}" VerticalAlignment="Center"/>
           </DockPanel>
           <TextBlock DockPanel.Dock="Bottom" Style="{StaticResource Hint}" Margin="0,6,0,0"
-                     Text="Tick = create its schedule. Click a name to set it up."/>
+                     Text="Check = create its schedule. Click a name to set it up."/>
           <Border Background="#161616" CornerRadius="6">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
               <StackPanel x:Name="spCats" Margin="4"/>
@@ -869,7 +869,7 @@ def show_ui(cats):
                 continue
             sp.Children.Add(cat_row(k))
         n = len([k for k in order if setups[k]["on"]])
-        f("txtCatCount").Text = u"{} of {} ticked".format(n, len(order))
+        f("txtCatCount").Text = u"{} of {} checked".format(n, len(order))
 
     def cat_row(k):
         cat, s = cats[k], setups[k]
@@ -897,7 +897,7 @@ def show_ui(cats):
             s["on"] = bool(sender.IsChecked)
             msg(u"")
             n = len([x for x in order if setups[x]["on"]])
-            f("txtCatCount").Text = u"{} of {} ticked".format(n, len(order))
+            f("txtCatCount").Text = u"{} of {} checked".format(n, len(order))
 
         def on_open(sender, args):
             sync_widgets()
@@ -1008,7 +1008,7 @@ def show_ui(cats):
 
     def render_cats_light():
         n = len([k for k in order if setups[k]["on"]])
-        f("txtCatCount").Text = u"{} of {} ticked".format(n, len(order))
+        f("txtCatCount").Text = u"{} of {} checked".format(n, len(order))
 
     def sel_avail(key):
         def h():
@@ -1343,7 +1343,7 @@ def show_ui(cats):
         sync_widgets()
         picked = [k for k in order if setups[k]["on"]]
         if not picked:
-            return msg(u"Tick at least one category.")
+            return msg(u"Check at least one category.")
         problems = []
         for k in picked:
             s = setup_of(k)
