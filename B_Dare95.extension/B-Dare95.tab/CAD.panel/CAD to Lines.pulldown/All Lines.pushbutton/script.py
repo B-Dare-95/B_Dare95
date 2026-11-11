@@ -34,8 +34,9 @@ from Autodesk.Revit.DB import (
 from Autodesk.Revit.UI import (
     TaskDialog, TaskDialogCommonButtons, TaskDialogResult
 )
-from Autodesk.Revit.UI.Selection import ISelectionFilter, ObjectType
+from Autodesk.Revit.UI.Selection import ObjectType
 from Autodesk.Revit.Exceptions import OperationCanceledException
+import bd_core as bd
 
 
 uidoc = __revit__.ActiveUIDocument
@@ -63,11 +64,7 @@ class StyleNotAllowed(Exception):
 
 
 # ---------------------------------------------------------------- helpers
-def eid_int(eid):
-    try:
-        return eid.Value
-    except AttributeError:
-        return eid.IntegerValue
+eid_int = bd.eid_int
 
 
 def alert(message):
@@ -82,12 +79,8 @@ def confirm(message):
     return res == TaskDialogResult.Yes
 
 
-class CadFilter(ISelectionFilter):
-    def AllowElement(self, element):
-        return isinstance(element, ImportInstance)
-
-    def AllowReference(self, reference, point):
-        return False
+def CadFilter():
+    return bd.ClassFilter(ImportInstance)
 
 
 def get_cad():

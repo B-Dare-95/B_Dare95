@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 
-#Imports
-
 __doc__ = """__________________________________________________
 Description:
 
@@ -18,47 +16,33 @@ How-to:
 __________________________________________________
 Author: Mohamed Bedair"""
 
-from Autodesk.Revit.DB import *
-from Autodesk.Revit.UI import *
-from Autodesk.Revit.UI.Selection import *
-from System.Collections.Generic import List
-from pyrevit import forms, revit
+from Autodesk.Revit.DB import BuiltInCategory, BuiltInParameter
 
-#Revit Variables
-uidoc       = __revit__.ActiveUIDocument
-doc         = __revit__.ActiveUIDocument.Document
-selection   = uidoc.Selection
-active_view = doc.ActiveView
+import bd_core as bd
+
+TOOL = u"Match Floor Height"
+KEYS = [BuiltInParameter.FLOOR_HEIGHTABOVELEVEL_PARAM]
+
+uidoc = __revit__.ActiveUIDocument
+doc = uidoc.Document
+only_floor = bd.CategoryFilter(BuiltInCategory.OST_Floors)
+
+source = bd.pick_element(uidoc, u"Pick the source floor", only_floor)
+if source is None:
+    bd.alert(u"No source floor was picked.", TOOL, exit=True)
+
+skipped = [0]
 
 
-class CustomISelectionFilter(ISelectionFilter):
-    def AllowElement(self, elem):
-        if elem.Category.Name == "Floors":
-            return True
+def match(target):
+    failed = bd.run_transaction(doc, TOOL, lambda: bd.copy_params(source, target, KEYS))
+    if failed:
+        skipped[0] += 1
 
-#Select an Element from The UI
-custom_filter = CustomISelectionFilter()
 
-try: floor_reference = selection.PickObject(ObjectType.Element,custom_filter,"Select A Floor")
-except: forms.alert("Script is canceled.",exitscript=True,title="Script Canceled.")
+bd.pick_repeat(uidoc, u"Pick a floor to match (Esc to finish)", match,
+               only_floor, bar_title=u"Pick floors to match the height:")
 
-floor_element = doc.GetElement(floor_reference.ElementId)
-
-source_floor_height = floor_element.get_Parameter(BuiltInParameter.FLOOR_HEIGHTABOVELEVEL_PARAM).AsDouble()
-
-with forms.WarningBar(title="Pick Floor to match Height:", handle_esc=True):
-    while True:
-
-        try: target_floor_reference = selection.PickObject(ObjectType.Element,custom_filter,"Select A Floor")
-
-        except: break
-
-        target_floor_element = doc.GetElement(target_floor_reference.ElementId)
-
-        with Transaction(doc,"Match Floor Height") as t:
-
-                t.Start()
-
-                target_floor_element.get_Parameter(BuiltInParameter.FLOOR_HEIGHTABOVELEVEL_PARAM).Set(source_floor_height)
-
-                t.Commit()
+if skipped[0]:
+    bd.alert(u"{0} couldn't take every value (read-only or missing).".format(
+        bd.plural(skipped[0], u"floor")), TOOL)

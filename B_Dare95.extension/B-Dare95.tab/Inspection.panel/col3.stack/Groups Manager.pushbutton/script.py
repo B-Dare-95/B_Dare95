@@ -50,6 +50,7 @@ from Autodesk.Revit.DB import (
 from Autodesk.Revit.UI import TaskDialog, TaskDialogCommonButtons, TaskDialogResult
 
 from pyrevit import revit
+import bd_core as bd
 
 doc = revit.doc
 
@@ -57,12 +58,7 @@ doc = revit.doc
 # ---------------------------------------------------------------------------
 # Revit helpers
 # ---------------------------------------------------------------------------
-def eid_value(element_id):
-    """ElementId -> int, compatible with Revit 2024 (.IntegerValue) and 2025+ (.Value)."""
-    try:
-        return element_id.Value
-    except AttributeError:
-        return element_id.IntegerValue
+eid_value = bd.eid_int
 
 
 def safe_name(element):

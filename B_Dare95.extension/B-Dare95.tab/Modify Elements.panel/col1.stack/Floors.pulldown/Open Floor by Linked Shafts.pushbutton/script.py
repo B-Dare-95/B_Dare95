@@ -24,14 +24,13 @@ clr.AddReference('PresentationCore')
 clr.AddReference('WindowsBase')
 clr.AddReference('System.Xml')
 
-from Autodesk.Revit.DB import (
-    Transaction, SubTransaction, BuiltInCategory, BuiltInParameter, ElementId,
-    XYZ, Line, Arc, CurveLoop, Floor, Transform, RevitLinkInstance,
-    FilteredElementCollector,
-    GeometryCreationUtilities, BooleanOperationsUtils, BooleanOperationsType,
-    PlanarFace, TransactionStatus,
-    IFailuresPreprocessor, FailureSeverity, FailureProcessingResult
-)
+from Autodesk.Revit.DB import (Transaction, SubTransaction, BuiltInCategory,
+                               BuiltInParameter, ElementId, XYZ, Line, Arc,
+                               CurveLoop, Floor, Transform, RevitLinkInstance,
+                               FilteredElementCollector,
+                               GeometryCreationUtilities,
+                               BooleanOperationsUtils, BooleanOperationsType,
+                               PlanarFace, TransactionStatus)
 from Autodesk.Revit.UI import TaskDialog
 from Autodesk.Revit.UI.Selection import ObjectType, ISelectionFilter
 
@@ -51,6 +50,7 @@ from System.Windows.Threading import Dispatcher, DispatcherFrame
 import traceback
 
 from pyrevit import forms
+import bd_core as bd
 
 
 doc = __revit__.ActiveUIDocument.Document
@@ -95,49 +95,13 @@ _BRUSHES = BrushConverter()
 # Revit messages answered silently (same behaviour as Split at Beams)
 # ---------------------------------------------------------------------------
 
-class SilentFailures(IFailuresPreprocessor):
-    """Answers Revit's failure dialogs the way you would by hand: warnings
-    are dismissed (OK) and errors get their default resolution. An error
-    with no resolution rolls the whole change back and is reported instead
-    of shown."""
-
-    def __init__(self, handled, fatal):
-        self.handled = handled      # {(description, action): count}
-        self.fatal = fatal          # descriptions that forced a rollback
-
-    def PreprocessFailures(self, accessor):
-        resolved = False
-        for fm in accessor.GetFailureMessages():
-            text = fm.GetDescriptionText()
-            severity = fm.GetSeverity()
-            if severity == FailureSeverity.Warning:
-                accessor.DeleteWarning(fm)
-                action = 'OK'
-            elif severity == FailureSeverity.Error and fm.HasResolutions():
-                try:
-                    action = fm.GetDefaultResolutionCaption()
-                except Exception:
-                    action = 'resolved'
-                accessor.ResolveFailure(fm)
-                resolved = True
-            else:
-                self.fatal.append(text)
-                continue
-            key = (text, action)
-            self.handled[key] = self.handled.get(key, 0) + 1
-        if self.fatal:
-            return FailureProcessingResult.ProceedWithRollBack
-        if resolved:
-            return FailureProcessingResult.ProceedWithCommit
-        return FailureProcessingResult.Continue
-
 
 def make_silent(t, handled, fatal):
-    """Attach SilentFailures to a started transaction."""
-    opts = t.GetFailureHandlingOptions()
-    opts.SetFailuresPreprocessor(SilentFailures(handled, fatal))
-    opts.SetClearAfterRollback(True)
-    t.SetFailureHandlingOptions(opts)
+    """Answer Revit's warnings silently (bd_core.SilentFailures)."""
+    log = bd.FailureLog()
+    log.handled = handled
+    log.fatal = fatal
+    bd.make_silent(t, log)
 
 
 def handled_lines(handled):
@@ -164,12 +128,7 @@ def _brush(hex_string):
 # ---------------------------------------------------------------------------
 
 def _eid_str(element_id):
-    """ElementId -> string, compatible across Revit versions.
-    Revit 2025+ replaced IntegerValue with Value (Int64)."""
-    try:
-        return str(element_id.Value)
-    except AttributeError:
-        return str(element_id.IntegerValue)
+    return str(bd.eid_int(element_id))
 
 
 def _label(source_name, element):

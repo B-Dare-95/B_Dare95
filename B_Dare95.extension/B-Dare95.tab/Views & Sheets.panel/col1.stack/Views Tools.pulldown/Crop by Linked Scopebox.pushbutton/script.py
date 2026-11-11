@@ -41,6 +41,7 @@ from Autodesk.Revit.DB import (Arc, BasePoint, BoundingBoxXYZ, BuiltInCategory,
 from Autodesk.Revit.UI import TaskDialog
 from pyrevit import script
 from bd_combo_search import enable_combo_search
+import bd_core as bd
 
 uiapp = __revit__
 doc = __revit__.ActiveUIDocument.Document
@@ -48,7 +49,7 @@ doc = __revit__.ActiveUIDocument.Document
 TOOL_NAME = "Crop by Linked Scope Box"
 TOL = 1e-6          # feet - only absorbs floating-point noise from the link transform
 ANG_TOL = 1e-6      # radians
-FT_TO_MM = 304.8
+FT_TO_MM = bd.MM_PER_FT
 NONE_LABEL = "None"
 
 STATUS_COLORS = {
@@ -84,15 +85,10 @@ def brush(hex_value):
 SYMBOL_FONT = FontFamily("Segoe UI Symbol")
 
 
-def eid_int(eid):
-    try:
-        return eid.Value
-    except AttributeError:
-        return eid.IntegerValue
+eid_int = bd.eid_int
 
 
-def plural(n, word, word_pl=None):
-    return "{} {}".format(n, word if n == 1 else (word_pl or word + "s"))
+plural = bd.plural
 
 
 def fmt_mm(ft):

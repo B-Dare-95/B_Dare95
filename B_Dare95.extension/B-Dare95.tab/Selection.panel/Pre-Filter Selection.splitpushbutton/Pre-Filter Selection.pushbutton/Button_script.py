@@ -33,7 +33,7 @@ from Autodesk.Revit.DB import (CategoryType, ElementId, FilteredElementCollector
 from Autodesk.Revit.UI.Selection import ISelectionFilter, ObjectType
 import Autodesk.Revit.Exceptions as RvtEx
 
-from pyrevit import forms, script
+from pyrevit import script
 
 import System.Windows.Controls as Controls
 from System.Windows.Controls import ToolTipService
@@ -43,6 +43,7 @@ from System.Windows.Interop import WindowInteropHelper
 from System.Windows.Media import ColorConverter, SolidColorBrush
 from System.Windows.Markup import XamlReader
 from System.Windows.Threading import Dispatcher, DispatcherFrame
+import bd_core as bd
 
 TOOL_NAME = "Pre-Filter Selection"
 uidoc = __revit__.ActiveUIDocument  # noqa: F821
@@ -298,12 +299,7 @@ XAML_TEMPLATE = """
 
 
 # --- HELPERS -----------------------------------------------------------------
-def eid_value(eid):
-    """ElementId integer, Revit 2024-2027 safe."""
-    try:
-        return int(eid.Value)
-    except AttributeError:
-        return int(eid.IntegerValue)
+eid_value = bd.eid_int
 
 
 def get_all_category_names():
@@ -649,7 +645,7 @@ def select_in_links(names, link_insts, exclude):
         if r is not None:
             refs.Add(r)
     if refs.Count == 0:
-        forms.alert(u"None of the picked elements could be found in their links again.", title=TOOL_NAME)
+        bd.alert(u"None of the picked elements could be found in their links again.", TOOL_NAME)
         return
     selection.SetReferences(refs)
 

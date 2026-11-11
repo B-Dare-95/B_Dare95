@@ -53,8 +53,9 @@ from Autodesk.Revit.DB import (
     Transaction, TransactionGroup, SubTransaction
 )
 
-from pyrevit import forms
+
 from bd_combo_search import enable_combo_search
+import bd_core as bd
 
 # ─────────────────────────────────────────────────────────────────────
 # Revit handles
@@ -83,12 +84,7 @@ C_DIM     = "#6F6F6F"
 # GENERIC HELPERS
 # ═════════════════════════════════════════════════════════════════════
 
-def eid_int(eid):
-    """ElementId -> int, Revit 2024-2027 safe."""
-    try:
-        return eid.Value
-    except AttributeError:
-        return eid.IntegerValue
+eid_int = bd.eid_int
 
 
 def hex_brush(hex_str):
@@ -123,8 +119,7 @@ def parse_mm(text):
     return val
 
 
-def plural(n, word):
-    return u"{} {}{}".format(n, word, u"" if n == 1 else u"s")
+plural = bd.plural
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -705,7 +700,7 @@ def report(results, no_geom):
         for ref in no_geom[:15]:
             lines.append(u"  " + ref)
 
-    forms.alert("\n".join(lines), title=TOOL_TITLE)
+    bd.alert("\n".join(lines), TOOL_TITLE)
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -1137,25 +1132,25 @@ def show_dialog(rows, line_styles, text_types, n_host, n_linked, n_links, no_geo
     def on_draw(s, e):
         host_on, link_on = sources()
         if not host_on and not link_on:
-            forms.alert("Check at least one source (host or linked).",
-                        title=TOOL_TITLE)
+            bd.alert("Check at least one source (host or linked).",
+                     TOOL_TITLE)
             return
         selected = [it['row'] for it in items if it['cb'].IsChecked == True]
         if not selected:
-            forms.alert("Select at least one plan view.", title=TOOL_TITLE)
+            bd.alert("Select at least one plan view.", TOOL_TITLE)
             return
         if style_cmb.SelectedIndex < 0:
-            forms.alert("Select a line style.", title=TOOL_TITLE)
+            bd.alert("Select a line style.", TOOL_TITLE)
             return
         if label_cmb.SelectedIndex < 0 or function_cmb.SelectedIndex < 0:
-            forms.alert("Select the text note types.", title=TOOL_TITLE)
+            bd.alert("Select the text note types.", TOOL_TITLE)
             return
 
         gap_mm = parse_mm(gap_tb.Text)
         inset_mm = parse_mm(inset_tb.Text)
         if gap_mm is None or inset_mm is None:
-            forms.alert("Gap and inset must be numbers of 0 or more (paper mm).",
-                        title=TOOL_TITLE)
+            bd.alert("Gap and inset must be numbers of 0 or more (paper mm).",
+                     TOOL_TITLE)
             return
 
         state['cfg'] = {
@@ -1215,19 +1210,19 @@ def show_dialog(rows, line_styles, text_types, n_host, n_linked, n_links, no_geo
 def main():
     views = collect_plan_views()
     if not views:
-        forms.alert("No Floor Plan or Structural Plan views found.",
-                    title=TOOL_TITLE)
+        bd.alert("No Floor Plan or Structural Plan views found.",
+                 TOOL_TITLE)
         return
 
     line_styles = get_line_styles()
     if not line_styles:
-        forms.alert("No line styles found in the document.", title=TOOL_TITLE)
+        bd.alert("No line styles found in the document.", TOOL_TITLE)
         return
 
     text_types = get_text_note_types()
     if not text_types:
-        forms.alert("No text note types found in the document.",
-                    title=TOOL_TITLE)
+        bd.alert("No text note types found in the document.",
+                 TOOL_TITLE)
         return
 
     links = get_loaded_links()
@@ -1235,8 +1230,9 @@ def main():
     n_host   = sum(len(v) for v in host_by_level.values())
     n_linked = len(linked_list)
     if n_host + n_linked == 0:
-        forms.alert("No Shaft Openings with a positive Base Offset were found "
-                    "in the host model or in any loaded link.", title=TOOL_TITLE)
+        bd.alert("No Shaft Openings with a positive Base Offset were found "
+                 "in the host model or in any loaded link.",
+                 TOOL_TITLE)
         return
 
     rows = build_view_rows(views, host_by_level, linked_list)

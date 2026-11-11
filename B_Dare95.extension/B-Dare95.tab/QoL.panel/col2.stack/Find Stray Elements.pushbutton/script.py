@@ -72,12 +72,13 @@ from Autodesk.Revit.UI import TaskDialog
 from pyrevit import revit
 
 from bd_combo_search import enable_combo_search
+import bd_core as bd
 
 doc = revit.doc
 uidoc = revit.uidoc
 
 TITLE = "Find Stray Elements"
-FT_MM = 304.8
+FT_MM = bd.MM_PER_FT
 FT_M = FT_MM / 1000.0
 
 DEFAULT_DISTANCE_M = 30.0
@@ -294,12 +295,7 @@ def distance_outside(p, hull):
 # ---------------------------------------------------------------------------
 # Revit helpers
 # ---------------------------------------------------------------------------
-def eid_value(element_id):
-    """ElementId -> Python int on Revit 2024 (.IntegerValue) and 2025+ (.Value)."""
-    try:
-        return int(element_id.Value)
-    except AttributeError:
-        return int(element_id.IntegerValue)
+eid_value = bd.eid_int
 
 
 def make_id(number):
@@ -311,16 +307,7 @@ def make_id(number):
 
 
 def elem_name(element):
-    if element is None:
-        return u""
-    try:
-        return Element.Name.GetValue(element) or u""
-    except Exception:
-        pass
-    try:
-        return element.Name or u""
-    except Exception:
-        return u""
+    return bd.element_name(element, u"")
 
 
 def bip_param(element, name):

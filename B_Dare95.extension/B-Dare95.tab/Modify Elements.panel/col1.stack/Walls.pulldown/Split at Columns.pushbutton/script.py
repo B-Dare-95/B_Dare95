@@ -22,21 +22,20 @@ clr.AddReference('RevitAPI')
 clr.AddReference('RevitAPIUI')
 clr.AddReference('System')
 
-from Autodesk.Revit.DB import (
-    FilteredElementCollector, BuiltInCategory, BuiltInParameter,
-    Wall, WallKind, WallUtils, RevitLinkInstance, Transform,
-    Line, XYZ, LocationCurve, LocationPoint, FamilyInstance, Opening,
-    ElementId, ElementTransformUtils,
-    Transaction, TransactionGroup, TransactionStatus,
-    IFailuresPreprocessor, FailureSeverity, FailureProcessingResult
-)
-from Autodesk.Revit.UI.Selection import ISelectionFilter
+from Autodesk.Revit.DB import (FilteredElementCollector, BuiltInCategory,
+                               BuiltInParameter, Wall, WallKind, WallUtils,
+                               RevitLinkInstance, Transform, Line, XYZ,
+                               LocationCurve, LocationPoint, FamilyInstance,
+                               Opening, ElementId, ElementTransformUtils,
+                               Transaction, TransactionGroup,
+                               TransactionStatus)
 
 import math
 
 from System.Collections.Generic import List
 
 from pyrevit import revit, forms
+import bd_core as bd
 
 doc = revit.doc
 uidoc = revit.uidoc
@@ -63,58 +62,19 @@ GRID_CELL = 10.0          # ft - cell size of the column lookup grid
 
 
 def eid_str(eid):
-    try:
-        return str(eid.Value)
-    except AttributeError:
-        return str(eid.IntegerValue)
+    return str(bd.eid_int(eid))
 
 
 # ---------------------------------------------------------------------------
 # 0. Revit messages answered silently (same behaviour as Split at Beams)
 # ---------------------------------------------------------------------------
-class SilentFailures(IFailuresPreprocessor):
-    """Answers Revit's failure dialogs the way you would by hand: warnings
-    are dismissed (OK) and errors get their default resolution (e.g.
-    'Unjoin Elements'). An error with no resolution rolls the wall back and
-    is reported instead of shown."""
-
-    def __init__(self, handled, fatal):
-        self.handled = handled      # {(description, action): count}
-        self.fatal = fatal          # descriptions that forced a rollback
-
-    def PreprocessFailures(self, accessor):
-        resolved = False
-        for fm in accessor.GetFailureMessages():
-            text = fm.GetDescriptionText()
-            severity = fm.GetSeverity()
-            if severity == FailureSeverity.Warning:
-                accessor.DeleteWarning(fm)
-                action = 'OK'
-            elif severity == FailureSeverity.Error and fm.HasResolutions():
-                try:
-                    action = fm.GetDefaultResolutionCaption()
-                except Exception:
-                    action = 'resolved'
-                accessor.ResolveFailure(fm)
-                resolved = True
-            else:
-                self.fatal.append(text)
-                continue
-            key = (text, action)
-            self.handled[key] = self.handled.get(key, 0) + 1
-        if self.fatal:
-            return FailureProcessingResult.ProceedWithRollBack
-        if resolved:
-            return FailureProcessingResult.ProceedWithCommit
-        return FailureProcessingResult.Continue
-
 
 def make_silent(t, handled, fatal):
-    """Attach SilentFailures to a started transaction."""
-    opts = t.GetFailureHandlingOptions()
-    opts.SetFailuresPreprocessor(SilentFailures(handled, fatal))
-    opts.SetClearAfterRollback(True)
-    t.SetFailureHandlingOptions(opts)
+    """Answer Revit's warnings silently (bd_core.SilentFailures)."""
+    log = bd.FailureLog()
+    log.handled = handled
+    log.fatal = fatal
+    bd.make_silent(t, log)
 
 
 # ---------------------------------------------------------------------------
@@ -520,12 +480,8 @@ def split_wall(doc, wall, segments):
 # ---------------------------------------------------------------------------
 # 5. Rectangle selection (walls only)
 # ---------------------------------------------------------------------------
-class WallOnlyFilter(ISelectionFilter):
-    def AllowElement(self, elem):
-        return isinstance(elem, Wall)
-
-    def AllowReference(self, reference, point):
-        return False
+def WallOnlyFilter():
+    return bd.ClassFilter(Wall)
 
 
 def pick_walls_by_rectangle(uidoc):
@@ -589,15 +545,15 @@ def process_selected_walls(column_index):
         return False  # user hit Esc during the pick - stop the script
 
     if not picked:
-        return forms.alert(
+        return bd.confirm(
             'No walls were picked. Select more walls?',
-            title='Split Walls at Columns', yes=True, no=True)
+            'Split Walls at Columns')
 
     analysed = analyse_picked(picked, column_index)
     if analysed is None:
-        return forms.alert(
+        return bd.confirm(
             'Check cancelled - nothing was changed. Select more walls?',
-            title='Split Walls at Columns', yes=True, no=True)
+            'Split Walls at Columns')
     plan, skipped = analysed
 
     if not plan:
@@ -606,7 +562,7 @@ def process_selected_walls(column_index):
             msg += ' ({} skipped: curved/stacked/curtain or fully consumed.)'\
                 .format(len(skipped))
         msg += '\n\nSelect more walls?'
-        return forms.alert(msg, title='Split Walls at Columns', yes=True, no=True)
+        return bd.confirm(msg, 'Split Walls at Columns')
 
     total_new = sum(len(segs) for _, segs in plan)
     summary = (
@@ -616,10 +572,10 @@ def process_selected_walls(column_index):
         'Proceed with the split?'
     ).format(len(picked), len(plan), total_new, len(skipped))
 
-    if not forms.alert(summary, title='Split Walls at Columns', yes=True, no=True):
-        return forms.alert(
+    if not bd.confirm(summary, 'Split Walls at Columns'):
+        return bd.confirm(
             'Split cancelled. Select more walls?',
-            title='Split Walls at Columns', yes=True, no=True)
+            'Split Walls at Columns')
 
     tg = TransactionGroup(doc, 'Split Walls at Columns (Selection)')
     tg.Start()
@@ -714,16 +670,17 @@ def process_selected_walls(column_index):
     lines.append('')
     lines.append('Select more walls to process?')
 
-    return forms.alert('\n'.join(lines),
-                       title='Split Walls at Columns', yes=True, no=True)
+    return bd.confirm('\n'.join(lines),
+                      'Split Walls at Columns')
 
 
 def main():
     all_columns, skipped_links = collect_all_columns(doc)
     if not all_columns:
-        forms.alert('No columns found in the active document or any loaded '
-                     'links (checked "Columns" and "Structural Columns" '
-                     'categories). Nothing to do.', title='Split Walls at Columns')
+        bd.alert('No columns found in the active document or any loaded '
+                  'links (checked "Columns" and "Structural Columns" '
+                  'categories). Nothing to do.',
+                 'Split Walls at Columns')
         return
     if skipped_links:
         STARTUP_NOTES.append('Unloaded links skipped: {}'

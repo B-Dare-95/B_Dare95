@@ -66,6 +66,7 @@ from System.Windows.Controls import SelectionChangedEventHandler, TextChangedEve
 from System.Windows.Input import MouseButtonEventHandler
 from System.Windows.Markup import XamlReader
 from System.Windows.Threading import Dispatcher, DispatcherFrame
+import bd_core as bd
 
 
 # ---------------------------------------------------------------------------
@@ -76,7 +77,7 @@ uidoc = __revit__.ActiveUIDocument
 doc = uidoc.Document
 active_view = doc.ActiveView
 
-FT_TO_MM = 304.8
+FT_TO_MM = bd.MM_PER_FT
 TOL = 1.0e-9
 
 
@@ -84,16 +85,10 @@ TOL = 1.0e-9
 # Small helpers
 # ---------------------------------------------------------------------------
 
-def eid_val(element_id):
-    """ElementId numeric value - .Value (2025+) with .IntegerValue fallback."""
-    try:
-        return element_id.Value
-    except AttributeError:
-        return element_id.IntegerValue
+eid_val = bd.eid_int
 
 
-def to_mm(feet):
-    return feet * FT_TO_MM
+to_mm = bd.ft_to_mm
 
 
 def fmt_mm(value_mm):

@@ -77,6 +77,7 @@ from System.Windows.Markup import XamlReader
 from System.Windows.Media import BrushConverter
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 from bd_combo_search import enable_combo_search
+import bd_core as bd
 
 doc = __revit__.ActiveUIDocument.Document  # noqa: F821
 TOOL = "Link Files"
@@ -116,16 +117,10 @@ def brush(hex_string):
     return _BRUSHES[hex_string]
 
 
-def id_value(id_obj):
-    """ElementId / WorksetId integer value, valid on Revit 2024 through 2027."""
-    try:
-        return id_obj.Value
-    except AttributeError:
-        return id_obj.IntegerValue
+id_value = bd.eid_int
 
 
-def plural(n, word, word_pl=None):
-    return "{0} {1}".format(n, word if n == 1 else (word_pl or word + "s"))
+plural = bd.plural
 
 
 def norm(path):

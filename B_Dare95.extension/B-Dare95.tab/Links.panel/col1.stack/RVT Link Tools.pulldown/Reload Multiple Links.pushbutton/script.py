@@ -30,14 +30,9 @@ clr.AddReference("PresentationFramework")
 clr.AddReference("WindowsBase")
 clr.AddReference("System.Xml")
 
-from Autodesk.Revit.DB import (
-    BuiltInParameter,
-    FilteredElementCollector,
-    ModelPathUtils,
-    RevitLinkInstance,
-    RevitLinkType,
-    WorksetConfiguration,
-)
+from Autodesk.Revit.DB import (FilteredElementCollector, ModelPathUtils,
+                               RevitLinkInstance, RevitLinkType,
+                               WorksetConfiguration)
 from Autodesk.Revit.UI import TaskDialog
 
 from Microsoft.Win32 import OpenFileDialog
@@ -66,6 +61,7 @@ from System.Windows.Interop import WindowInteropHelper
 from System.Windows.Markup import XamlReader
 from System.Windows.Media import BrushConverter
 from System.Windows.Threading import Dispatcher, DispatcherFrame
+import bd_core as bd
 
 doc = __revit__.ActiveUIDocument.Document  # noqa: F821
 TOOL = "Reload Links"
@@ -110,29 +106,13 @@ def brush(hex_string):
     return _BRUSHES[hex_string]
 
 
-def id_value(id_obj):
-    """ElementId integer value, valid on Revit 2024 through 2027."""
-    try:
-        return id_obj.Value
-    except AttributeError:
-        return id_obj.IntegerValue
+id_value = bd.eid_int
 
 
-def plural(n, word, word_pl=None):
-    return "{0} {1}".format(n, word if n == 1 else (word_pl or word + "s"))
+plural = bd.plural
 
 
-def element_name(el):
-    try:
-        name = el.Name
-    except Exception:
-        name = ""
-    if not name:
-        try:
-            name = el.get_Parameter(BuiltInParameter.SYMBOL_NAME_PARAM).AsString() or ""
-        except Exception:
-            name = ""
-    return name or "<unnamed>"
+element_name = bd.element_name
 
 
 # ---------------------------------------------------------------------------

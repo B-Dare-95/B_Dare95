@@ -75,6 +75,7 @@ from Autodesk.Revit.DB.Mechanical import (
 from Autodesk.Revit.DB.Plumbing import (
     FlexPipeType, PipeType, PipingSystem, PipingSystemType,
 )
+import bd_core as bd
 
 try:
     basestring_type = basestring
@@ -83,7 +84,7 @@ except NameError:       # only for testing outside IronPython
 
 doc = None
 
-FT_MM = 304.8
+FT_MM = bd.MM_PER_FT
 
 PASS, FAIL, COUNT, LIST, RESULT = "PASS", "FAIL", "COUNT", "COUNT AND LIST", "RESULT"
 
@@ -91,15 +92,7 @@ PASS, FAIL, COUNT, LIST, RESULT = "PASS", "FAIL", "COUNT", "COUNT AND LIST", "RE
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-def eid_value(element_id):
-    """ElementId -> Python int on Revit 2024 (.IntegerValue) and 2025+ (.Value).
-
-    .Value is a System.Int64, which IronPython does not treat as int or long, so it
-    is converted here: otherwise as_ids() drops every id and nothing is clickable."""
-    try:
-        return int(element_id.Value)
-    except AttributeError:
-        return int(element_id.IntegerValue)
+eid_value = bd.eid_int
 
 
 def ename(element):

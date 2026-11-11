@@ -112,6 +112,7 @@ from System.Windows.Media import BrushConverter
 from System.Windows.Shapes import Ellipse
 from System.Windows.Threading import Dispatcher, DispatcherFrame, DispatcherPriority
 from bd_combo_search import enable_combo_search
+import bd_core as bd
 
 try:
     from System.Diagnostics import Process, ProcessStartInfo
@@ -200,31 +201,13 @@ STATUS_COLOR = {
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-def id_value(id_obj):
-    """ElementId/WorksetId integer value, valid on Revit 2024 through 2027."""
-    try:
-        return id_obj.Value
-    except AttributeError:
-        return id_obj.IntegerValue
+id_value = bd.eid_int
 
 
-def element_name(el):
-    try:
-        name = el.Name
-    except Exception:
-        name = ""
-    if not name:
-        try:
-            param = el.get_Parameter(BuiltInParameter.SYMBOL_NAME_PARAM)
-            if param:
-                name = param.AsString() or ""
-        except Exception:
-            pass
-    return name or "<unnamed>"
+element_name = bd.element_name
 
 
-def plural(n, word, word_pl=None):
-    return "{0} {1}".format(n, word if n == 1 else (word_pl or word + "s"))
+plural = bd.plural
 
 
 def fmt_mm(ft):

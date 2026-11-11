@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 
-#Imports
-
 __doc__ = """__________________________________________________
 Description:
 
@@ -18,43 +16,33 @@ How-to:
 __________________________________________________
 Author: Mohamed Bedair"""
 
-from Autodesk.Revit.DB import *
-from Autodesk.Revit.UI.Selection import *
-from pyrevit import forms, revit
+from Autodesk.Revit.DB import BuiltInCategory, BuiltInParameter
 
-#Revit Variables
-uidoc       = __revit__.ActiveUIDocument
-doc         = __revit__.ActiveUIDocument.Document
-selection   = uidoc.Selection
+import bd_core as bd
 
-class CustomISelectionFilter(ISelectionFilter):
-    def AllowElement(self, elem):
-        if elem.Category.Name == "Ceilings":
-            return True
+TOOL = u"Match Ceiling Height"
+KEYS = [BuiltInParameter.CEILING_HEIGHTABOVELEVEL_PARAM]
 
-#Select an Element from The UI
-custom_filter = CustomISelectionFilter()
+uidoc = __revit__.ActiveUIDocument
+doc = uidoc.Document
+only_ceiling = bd.CategoryFilter(BuiltInCategory.OST_Ceilings)
 
-try: ceiling_reference = selection.PickObject(ObjectType.Element,custom_filter,"Select A Ceiling")
-except: forms.alert("Script is canceled.",exitscript=True,title="Script Canceled.")
+source = bd.pick_element(uidoc, u"Pick the source ceiling", only_ceiling)
+if source is None:
+    bd.alert(u"No source ceiling was picked.", TOOL, exit=True)
 
-ceiling_element = doc.GetElement(ceiling_reference.ElementId)
+skipped = [0]
 
-source_ceiling_height = ceiling_element.get_Parameter(BuiltInParameter.CEILING_HEIGHTABOVELEVEL_PARAM).AsDouble()
 
-with forms.WarningBar(title="Pick Wall to match base constrains:", handle_esc=True):
-    while True:
+def match(target):
+    failed = bd.run_transaction(doc, TOOL, lambda: bd.copy_params(source, target, KEYS))
+    if failed:
+        skipped[0] += 1
 
-        try: target_ceiling_reference = selection.PickObject(ObjectType.Element,custom_filter,"Select A Ceiling")
 
-        except: break
+bd.pick_repeat(uidoc, u"Pick a ceiling to match (Esc to finish)", match,
+               only_ceiling, bar_title=u"Pick ceilings to match the height:")
 
-        target_ceiling_element = doc.GetElement(target_ceiling_reference.ElementId)
-
-        with Transaction(doc,"Match Ceiling Height") as t:
-
-                t.Start()
-
-                target_ceiling_element.get_Parameter(BuiltInParameter.CEILING_HEIGHTABOVELEVEL_PARAM).Set(source_ceiling_height)
-
-                t.Commit()
+if skipped[0]:
+    bd.alert(u"{0} couldn't take every value (read-only or missing).".format(
+        bd.plural(skipped[0], u"ceiling")), TOOL)

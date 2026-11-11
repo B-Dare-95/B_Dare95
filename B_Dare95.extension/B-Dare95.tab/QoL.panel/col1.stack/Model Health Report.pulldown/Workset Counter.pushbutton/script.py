@@ -37,8 +37,9 @@ from System.Windows.Media import BrushConverter, FontFamily
 
 from Autodesk.Revit.UI import ExternalEvent, IExternalEventHandler
 
-from pyrevit import DB, forms, revit, script
+from pyrevit import DB, revit, script
 from pyrevit.coreutils import envvars
+import bd_core as bd
 
 logger = script.get_logger()
 
@@ -69,20 +70,14 @@ def brush(hex_value):
 
 
 # --------------------------------------------------------------- helpers ---
-def id_int(some_id):
-    """ElementId / WorksetId integer value, Revit 2024-2027 safe."""
-    try:
-        return some_id.Value
-    except AttributeError:
-        return some_id.IntegerValue
+id_int = bd.eid_int
 
 
 def fmt_n(n):
     return u"{:,}".format(n)
 
 
-def plural(n, word, word_pl=None):
-    return u"{} {}".format(fmt_n(n), word if n == 1 else (word_pl or word + u"s"))
+plural = bd.plural
 
 
 def get_creator(doc, workset):
@@ -207,7 +202,7 @@ class WorksetEventHandler(IExternalEventHandler):
                 action()
             except Exception as ex:
                 logger.error("Workset Counter error: {0}".format(ex))
-                forms.alert("Workset Counter ran into an error:\n\n{0}".format(ex))
+                bd.alert("Workset Counter ran into an error:\n\n{0}".format(ex), u"Workset Counter")
 
     def GetName(self):
         return "Workset Counter"
@@ -354,8 +349,8 @@ def run():
 
     doc = revit.doc
     if not doc.IsWorkshared:
-        forms.alert("This model is not workshared - there are no worksets to report.",
-                    title="Workset Report")
+        bd.alert("This model is not workshared - there are no worksets to report.",
+                 "Workset Report")
         return
 
     window = XamlReader.Parse(XAML)

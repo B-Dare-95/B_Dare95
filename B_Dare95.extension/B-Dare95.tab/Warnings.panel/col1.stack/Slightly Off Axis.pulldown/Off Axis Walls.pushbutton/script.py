@@ -20,6 +20,7 @@ clr.AddReference('RevitAPI')
 clr.AddReference('RevitAPIUI')
 from Autodesk.Revit.DB import *
 from Autodesk.Revit.UI import TaskDialog, TaskDialogCommonButtons, TaskDialogResult
+import bd_core as bd
 
 # Get the current Revit document
 doc = __revit__.ActiveUIDocument.Document  # Works in the Revit Python Shell / pyRevit
@@ -28,12 +29,7 @@ max_distance = 0.0001
 WARNING_TEXT = "slightly off axis"
 
 
-def get_id_value(element_id):
-    """ElementId -> plain int, safe across pre/post Revit 2024 API (Int32 vs Int64)."""
-    try:
-        return element_id.Value
-    except AttributeError:
-        return element_id.IntegerValue
+get_id_value = bd.eid_int
 
 
 def align_off_axis_element(element, curve):

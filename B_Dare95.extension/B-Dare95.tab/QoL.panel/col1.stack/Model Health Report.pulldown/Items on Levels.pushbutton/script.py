@@ -37,12 +37,13 @@ from System.Windows.Media import BrushConverter, FontFamily
 
 from Autodesk.Revit.UI import ExternalEvent, IExternalEventHandler
 
-from pyrevit import DB, forms, revit, script
+from pyrevit import DB, revit, script
 from pyrevit.coreutils import envvars
+import bd_core as bd
 
 logger = script.get_logger()
 
-FT_TO_MM = 304.8
+FT_TO_MM = bd.MM_PER_FT
 UNASSIGNED = -1
 SESSION_KEY = "ITEMS_ON_LEVELS_SESSION"
 NO_LEVEL_NAME = u"No Level / Unassigned"
@@ -56,20 +57,14 @@ def brush(hex_value):
 
 
 # --------------------------------------------------------------- helpers ---
-def id_int(some_id):
-    """ElementId integer value, Revit 2024-2027 safe."""
-    try:
-        return some_id.Value
-    except AttributeError:
-        return some_id.IntegerValue
+id_int = bd.eid_int
 
 
 def fmt_n(n):
     return u"{:,}".format(n)
 
 
-def plural(n, word, word_pl=None):
-    return u"{} {}".format(fmt_n(n), word if n == 1 else (word_pl or word + u"s"))
+plural = bd.plural
 
 
 def _bic(name):
@@ -264,7 +259,7 @@ class LevelsEventHandler(IExternalEventHandler):
                 action()
             except Exception as ex:
                 logger.error("Items on Levels error: {0}".format(ex))
-                forms.alert("Items on Levels ran into an error:\n\n{0}".format(ex))
+                bd.alert("Items on Levels ran into an error:\n\n{0}".format(ex), u"Items on Levels")
 
     def GetName(self):
         return "Items on Levels"

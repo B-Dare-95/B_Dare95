@@ -45,6 +45,7 @@ from System.Windows import (
 )
 from System.Windows.Markup import XamlReader
 from bd_combo_search import enable_combo_search
+import bd_core as bd
 
 # ─── REVIT HANDLES ─────────────────────────────────────────────────────────────
 doc   = __revit__.ActiveUIDocument.Document
@@ -291,12 +292,7 @@ BROWSER_XAML = """
 
 # ─── REVIT HELPERS ─────────────────────────────────────────────────────────────
 
-def _eid_int(eid):
-    """Read ElementId integer safely across Revit versions (2025+ Int64)."""
-    try:
-        return eid.Value          # Revit 2025+
-    except AttributeError:
-        return eid.IntegerValue   # older
+_eid_int = bd.eid_int
 
 def _invalid_eid():
     """Return an invalid ElementId compatible with all Revit versions."""

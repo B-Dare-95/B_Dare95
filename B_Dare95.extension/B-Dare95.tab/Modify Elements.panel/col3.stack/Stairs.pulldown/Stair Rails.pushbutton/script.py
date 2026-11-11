@@ -32,27 +32,11 @@ from System.Windows.Controls import SelectionChangedEventHandler, TextChangedEve
 from System.Windows.Markup import XamlReader
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 
-from Autodesk.Revit.DB import (
-    Arc,
-    BuiltInParameter,
-    CurveLoop,
-    Element,
-    ElementId,
-    GeometryInstance,
-    Options,
-    Plane,
-    SketchPlane,
-    Solid,
-    ViewDetailLevel,
-    FilteredElementCollector,
-    Level,
-    Line,
-    Transaction,
-    Transform,
-    UnitTypeId,
-    UnitUtils,
-    XYZ,
-)
+from Autodesk.Revit.DB import (Arc, BuiltInParameter, CurveLoop, ElementId,
+                               GeometryInstance, Options, Plane, SketchPlane,
+                               Solid, ViewDetailLevel,
+                               FilteredElementCollector, Level, Line,
+                               Transaction, Transform, XYZ)
 from Autodesk.Revit.DB.Architecture import (
     MultistoryStairs,
     Railing,
@@ -60,8 +44,9 @@ from Autodesk.Revit.DB.Architecture import (
     Stairs,
 )
 from Autodesk.Revit.UI import TaskDialog
-from Autodesk.Revit.UI.Selection import ISelectionFilter, ObjectType
+from Autodesk.Revit.UI.Selection import ObjectType
 from Autodesk.Revit.Exceptions import OperationCanceledException
+import bd_core as bd
 
 doc = __revit__.ActiveUIDocument.Document
 uidoc = __revit__.ActiveUIDocument
@@ -100,29 +85,13 @@ LAST_ATTEMPT = {}   # what make_railing() built on its latest call
 # small helpers
 # --------------------------------------------------------------------------- #
 
-def eid_value(element_id):
-    """ElementId.Value on Revit 2025+, ElementId.IntegerValue before that."""
-    try:
-        return element_id.Value
-    except AttributeError:
-        return element_id.IntegerValue
+eid_value = bd.eid_int
 
 
-def element_name(element):
-    """Element.Name is redeclared on ElementType, so IronPython cannot bind it on
-    an instance. Read it through the reflected property on the class instead."""
-    try:
-        return Element.Name.GetValue(element)
-    except Exception:
-        pass
-    try:
-        return element.get_Name()
-    except Exception:
-        return "<unnamed>"
+element_name = bd.element_name
 
 
-def mm_to_ft(value_mm):
-    return UnitUtils.ConvertToInternalUnits(value_mm, UnitTypeId.Millimeters)
+mm_to_ft = bd.mm_to_ft
 
 
 def loop_curves(curve_loop):
@@ -1360,12 +1329,8 @@ class RailingDialog(object):
 # selection
 # --------------------------------------------------------------------------- #
 
-class StairsSelectionFilter(ISelectionFilter):
-    def AllowElement(self, element):
-        return isinstance(element, Stairs) or isinstance(element, MultistoryStairs)
-
-    def AllowReference(self, reference, position):
-        return False
+def StairsSelectionFilter():
+    return bd.ClassFilter(Stairs, MultistoryStairs)
 
 
 def expand_target(element, targets, seen):

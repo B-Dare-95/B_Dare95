@@ -28,6 +28,7 @@ from Autodesk.Revit.UI import TaskDialog
 from Autodesk.Revit.UI.Selection import ISelectionFilter
 from Autodesk.Revit.Exceptions import OperationCanceledException
 from System.Collections.Generic import List
+import bd_core as bd
 
 uidoc = __revit__.ActiveUIDocument
 doc = uidoc.Document
@@ -43,12 +44,7 @@ MAX_DEPTH = 4                 # depth of the dependency-tree walk
 # --------------------------------------------------------------------------- #
 #  Helpers
 # --------------------------------------------------------------------------- #
-def eid_int(element_id):
-    """ElementId -> int, compatible with Revit 2025+ (.Value) and older (.IntegerValue)."""
-    try:
-        return element_id.Value
-    except AttributeError:
-        return element_id.IntegerValue
+eid_int = bd.eid_int
 
 
 class ShaftFilter(ISelectionFilter):

@@ -37,6 +37,7 @@ from System.Windows.Threading import Dispatcher, DispatcherFrame
 from System.Windows.Interop import WindowInteropHelper
 
 from pyrevit import forms
+import bd_core as bd
 
 # IBM Carbon
 BG, CARD, SURFACE, MUTED = "#161616", "#262626", "#393939", "#525252"
@@ -47,22 +48,11 @@ TEXT, SUBTEXT, ACCENT = "#F4F4F4", "#A8A8A8", "#F1C21B"
 #  Helpers
 # =============================================================================
 
-def eid_int(eid):
-    """ElementId as int: .Value (2024+) with .IntegerValue fallback."""
-    try:
-        return eid.Value
-    except AttributeError:
-        return eid.IntegerValue
+eid_int = bd.eid_int
 
 
 def elem_name(e):
-    try:
-        return DB.Element.Name.GetValue(e) or u""
-    except Exception:
-        try:
-            return e.Name or u""
-        except Exception:
-            return u"?"
+    return bd.element_name(e, u"?")
 
 
 def brush(hex_code):
@@ -72,8 +62,7 @@ def brush(hex_code):
         return SolidColorBrush(ColorConverter.ConvertFromString("#8D8D8D"))
 
 
-def plural(n, word, word_pl=None):
-    return u"{0:,} {1}".format(n, word if n == 1 else (word_pl or word + u"s"))
+plural = bd.plural
 
 
 def _param_text(e, bip):
@@ -1403,9 +1392,9 @@ class PurgeWindow(object):
             self._status(u"Check at least one {} to purge.".format(self.tool.noun), "warn")
             return
         if self.tool.lists_all or not self.tool.default_tick:
-            if not forms.alert(u"Delete {}? This is one Undo.".format(
+            if not bd.confirm(u"Delete {}? This is one Undo.".format(
                     plural(len(keys), self.tool.noun, self.tool.noun_plural)),
-                    title=u"Purge {}".format(self.tool.title), yes=True, no=True):
+                              u"Purge {}".format(self.tool.title)):
                 return
         try:
             message, kind = self._purge(keys)
@@ -1460,7 +1449,7 @@ def run(uiapp, kind):
     uidoc = uiapp.ActiveUIDocument
     doc = uidoc.Document if uidoc is not None else None
     if doc is None or doc.IsFamilyDocument:
-        forms.alert(u"Open a project first.", title=u"Purge", exitscript=True)
+        bd.alert(u"Open a project first.", u"Purge", exit=True)
         return
     factory = KINDS[kind]
     cache = {"active": eid_int(uidoc.ActiveView.Id) if uidoc.ActiveView is not None else None}

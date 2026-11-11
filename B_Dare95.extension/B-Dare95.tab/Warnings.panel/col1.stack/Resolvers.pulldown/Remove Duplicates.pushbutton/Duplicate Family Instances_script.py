@@ -25,7 +25,8 @@ from Autodesk.Revit.DB import (
     WorksharingUtils,
 )
 
-from pyrevit import forms, script
+from pyrevit import script
+import bd_core as bd
 
 doc = __revit__.ActiveUIDocument.Document
 output = script.get_output()
@@ -50,12 +51,7 @@ RELATED_TEXT = "in the same place"
 # ---------------------------------------------------------------------------
 
 
-def get_id_value(element_id):
-    """ElementId.Value (Revit 2025+) with an .IntegerValue fallback."""
-    try:
-        return element_id.Value
-    except AttributeError:
-        return element_id.IntegerValue
+get_id_value = bd.eid_int
 
 
 def collect_target_guids():
@@ -150,7 +146,7 @@ def group_note(element):
 # ---------------------------------------------------------------------------
 
 if doc.IsFamilyDocument:
-    forms.alert("This tool runs on project documents only.", exitscript=True)
+    bd.alert("This tool runs on project documents only.", u"Remove Duplicates", exit=True)
 
 is_workshared = doc.IsWorkshared
 
@@ -222,21 +218,17 @@ for cluster in clusters:
 total_to_delete = sum([len(item[1]) for item in plan])
 
 if not plan:
-    forms.alert(
+    bd.alert(
         "No 'identical instances in the same place' warnings found "
         "in this document.",
-        title="Nothing to delete",
-        exitscript=True,
-    )
+        "Nothing to delete",
+        exit=True)
 
-if not forms.alert(
+if not bd.confirm(
     "Found {0} warning(s) resolving to {1} duplicate group(s).\n\n"
     "{2} element(s) will be deleted, keeping the oldest ID in each group.\n\n"
     "Proceed?".format(matched_count, len(plan), total_to_delete),
-    title="Delete Identical Instances",
-    yes=True,
-    no=True,
-):
+    "Delete Identical Instances"):
     script.exit()
 
 # ---------------------------------------------------------------------------
@@ -339,11 +331,10 @@ try:
 
 except Exception as ex:
     transaction.RollBack()
-    forms.alert(
+    bd.alert(
         "The run was aborted and everything was rolled back:\n\n{0}".format(ex),
-        title="Delete Identical Instances",
-        exitscript=True,
-    )
+        "Delete Identical Instances",
+        exit=True)
 
 # ---------------------------------------------------------------------------
 # Final report

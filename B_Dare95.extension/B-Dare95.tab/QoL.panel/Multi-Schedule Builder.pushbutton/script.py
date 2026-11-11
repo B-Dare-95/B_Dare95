@@ -46,9 +46,10 @@ from Autodesk.Revit.DB import (FilteredElementCollector, BuiltInParameter,
                                SectionType, UnitUtils)
 from Autodesk.Revit.UI import TaskDialog, TaskDialogCommonButtons
 
-from pyrevit import revit, script, forms
+from pyrevit import revit, script
 
 from bd_combo_search import enable_combo_search
+import bd_core as bd
 
 doc = revit.doc
 uidoc = revit.uidoc
@@ -88,11 +89,7 @@ ERROR, OK_GREEN = "#FA4D56", "#A7F0BA"
 
 
 # ---------------------------------------------------------------- helpers
-def id_val(eid):
-    try:
-        return eid.Value
-    except AttributeError:
-        return eid.IntegerValue
+id_val = bd.eid_int
 
 
 _brushes = {}
@@ -1399,11 +1396,11 @@ def show_result(created, notes):
 # ----------------------------------------------------------------- main
 def main():
     if doc.IsFamilyDocument:
-        forms.alert(u"Schedule Builder works in a project model.", title=TITLE)
+        bd.alert(u"Schedule Builder works in a project model.", TITLE)
         return
     cats = collect_categories()
     if not cats:
-        forms.alert(u"No schedulable elements found in this model.", title=TITLE)
+        bd.alert(u"No schedulable elements found in this model.", TITLE)
         return
     res = show_ui(cats)
     if not res["ok"]:
@@ -1429,7 +1426,7 @@ def main():
         t.Commit()
     except Exception as ex:
         t.RollBack()
-        forms.alert(u"Failed - no schedules were created.\n\n{}".format(ex), title=TITLE)
+        bd.alert(u"Failed - no schedules were created.\n\n{}".format(ex), TITLE)
         return
 
     show_result(created, notes)

@@ -44,6 +44,7 @@ from System.Windows import (
 )
 from System.Windows.Markup import XamlReader
 from bd_combo_search import enable_combo_search
+import bd_core as bd
 
 # ─── REVIT HANDLES ────────────────────────────────────────────────────────────
 doc       = __revit__.ActiveUIDocument.Document
@@ -378,12 +379,7 @@ def get_category_by_name(doc, name):
     return None
 
 
-def _eid_int(eid):
-    """Read ElementId integer safely across Revit versions."""
-    try:
-        return eid.IntegerValue
-    except AttributeError:
-        return eid.Value       # Revit 2025+ (Int64)
+_eid_int = bd.eid_int
 
 
 def get_param_value_string(param):

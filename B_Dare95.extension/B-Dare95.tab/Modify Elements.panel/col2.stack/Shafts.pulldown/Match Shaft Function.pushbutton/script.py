@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 
-#Imports
-
 __doc__ = """__________________________________________________
 Description:
 
@@ -17,50 +15,37 @@ How-to:
 __________________________________________________
 Author: Mohamed Bedair"""
 
-from Autodesk.Revit.DB import *
-from Autodesk.Revit.UI import *
-from Autodesk.Revit.UI.Selection import *
-from System.Collections.Generic import List
-from pyrevit import forms, revit
+from Autodesk.Revit.DB import BuiltInCategory
 
-#Revit Variables
-uidoc       = __revit__.ActiveUIDocument
-doc         = __revit__.ActiveUIDocument.Document
-selection   = uidoc.Selection
-active_view = doc.ActiveView
+import bd_core as bd
+
+TOOL = u"Match Shaft Function"
+KEYS = [u"Shaft Function"]
+
+uidoc = __revit__.ActiveUIDocument
+doc = uidoc.Document
+only_shaft = bd.CategoryFilter(BuiltInCategory.OST_ShaftOpening)
+
+source = bd.pick_element(uidoc, u"Pick the source shaft", only_shaft)
+if source is None:
+    bd.alert(u"No source shaft was picked.", TOOL, exit=True)
+
+if bd.get_param(source, u"Shaft Function") is None:
+    bd.alert(u"This project has no Shaft Function parameter.", TOOL,
+             details=u"Run Create Shaft Function first, then try again.", exit=True)
+
+skipped = [0]
 
 
-class CustomISelectionFilter(ISelectionFilter):
-    def AllowElement(self, elem):
-        if elem.Category.Name == "Shaft Openings":
-            return True
+def match(target):
+    failed = bd.run_transaction(doc, TOOL, lambda: bd.copy_params(source, target, KEYS))
+    if failed:
+        skipped[0] += 1
 
-#Select an Element from The UI
-custom_filter = CustomISelectionFilter()
 
-try: shaft_reference = selection.PickObject(ObjectType.Element,custom_filter,"Select A Source Shaft")
-except: forms.alert("Script is canceled.",exitscript=True,title="Script Canceled.")
+bd.pick_repeat(uidoc, u"Pick a shaft to match (Esc to finish)", match,
+               only_shaft, bar_title=u"Pick shafts to match the Shaft Function:")
 
-shaft_element = doc.GetElement(shaft_reference.ElementId)
-
-try:
-    source_shaft_function = shaft_element.LookupParameter("Shaft Function").AsValueString()
-except:
-    forms.alert("The Parameter (Shaft Function) was not found, Command will exit now" ,exitscript=True,title="Parameter not found")
-
-with forms.WarningBar(title="Pick Shaft to match:", handle_esc=True):
-    while True:
-
-        try: target_shaft_reference = selection.PickObject(ObjectType.Element,custom_filter,"Select A Shaft")
-
-        except: break
-
-        target_shaft_element = doc.GetElement(target_shaft_reference.ElementId)
-
-        with Transaction(doc,"Match Shafts") as t:
-
-                t.Start()
-
-                target_shaft_element.LookupParameter("Shaft Function").Set(source_shaft_function)
-
-                t.Commit()
+if skipped[0]:
+    bd.alert(u"{0} couldn't take every value (read-only or missing).".format(
+        bd.plural(skipped[0], u"shaft")), TOOL)

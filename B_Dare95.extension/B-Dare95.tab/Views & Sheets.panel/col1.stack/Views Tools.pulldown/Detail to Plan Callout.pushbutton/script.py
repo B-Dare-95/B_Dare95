@@ -42,8 +42,9 @@ from Autodesk.Revit.DB import (
     View, ViewFamily, ViewFamilyType, ViewPlan, ViewSection, ViewType, Viewport,
     WorksharingUtils, XYZ)
 
-from pyrevit import forms, script
+from pyrevit import script
 from bd_combo_search import enable_combo_search
+import bd_core as bd
 
 doc = __revit__.ActiveUIDocument.Document
 INVALID = ElementId.InvalidElementId
@@ -52,11 +53,7 @@ INVALID = ElementId.InvalidElementId
 # ----------------------------------------------------------------------------
 # Small helpers
 # ----------------------------------------------------------------------------
-def eid_int(eid):
-    try:
-        return eid.Value
-    except AttributeError:
-        return eid.IntegerValue
+eid_int = bd.eid_int
 
 
 def is_invalid(eid):
@@ -68,11 +65,7 @@ def same_id(a, b):
 
 
 def elem_name(el):
-    try:
-        return el.Name
-    except Exception:
-        p = el.get_Parameter(BuiltInParameter.ALL_MODEL_TYPE_NAME)
-        return p.AsString() if p else "<unnamed>"
+    return bd.element_name(el, u"<unnamed>")
 
 
 def err_text(e):
@@ -983,12 +976,12 @@ def main():
     floor_vfts = [t for t in FilteredElementCollector(doc).OfClass(ViewFamilyType)
                   if t.ViewFamily == ViewFamily.FloorPlan]
     if not floor_vfts:
-        forms.alert("This project has no Floor Plan view type.", exitscript=True)
+        bd.alert("This project has no Floor Plan view type.", u"Detail to Plan Callout", exit=True)
     floor_vfts.sort(key=lambda t: elem_name(t).lower())
 
     rows = scan(floor_vfts[0].Id)
     if not rows:
-        forms.alert("No detail callouts drawn in plan views were found.", exitscript=True)
+        bd.alert("No detail callouts drawn in plan views were found.", u"Detail to Plan Callout", exit=True)
 
     plan_templates = [v for v in FilteredElementCollector(doc).OfClass(View)
                       if v.IsTemplate and v.ViewType == ViewType.FloorPlan]

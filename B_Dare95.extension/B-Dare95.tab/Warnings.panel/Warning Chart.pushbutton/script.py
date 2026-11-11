@@ -52,6 +52,7 @@ from Microsoft.Win32 import SaveFileDialog
 
 from Autodesk.Revit.DB import ElementId, Transaction, TemporaryViewMode
 from Autodesk.Revit.UI import IExternalEventHandler, ExternalEvent
+import bd_core as bd
 
 uidoc = __revit__.ActiveUIDocument
 doc = uidoc.Document
@@ -134,12 +135,7 @@ SETTINGS = load_settings()
 # Small helpers
 # ---------------------------------------------------------------------------
 
-def eid_value(eid):
-    """ElementId numeric value, Revit 2024 through 2027."""
-    try:
-        return eid.Value
-    except AttributeError:
-        return eid.IntegerValue
+eid_value = bd.eid_int
 
 
 def brush(hex_string):

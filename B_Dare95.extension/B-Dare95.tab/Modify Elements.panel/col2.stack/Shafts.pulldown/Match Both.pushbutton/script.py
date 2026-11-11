@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 
-#Imports
-
 __doc__ = """__________________________________________________
 Description:
 
@@ -16,54 +14,34 @@ How-to:
 __________________________________________________
 Author: Mohamed Bedair"""
 
-from Autodesk.Revit.DB import *
-from Autodesk.Revit.UI import *
-from Autodesk.Revit.UI.Selection import *
-from System.Collections.Generic import List
-from pyrevit import forms, revit
+from Autodesk.Revit.DB import BuiltInCategory, BuiltInParameter
 
-#Revit Variables
-uidoc       = __revit__.ActiveUIDocument
-doc         = __revit__.ActiveUIDocument.Document
-selection   = uidoc.Selection
-active_view = doc.ActiveView
+import bd_core as bd
+
+TOOL = u"Match Both"
+KEYS = [BuiltInParameter.WALL_BASE_CONSTRAINT, BuiltInParameter.WALL_BASE_OFFSET,
+        BuiltInParameter.WALL_HEIGHT_TYPE, BuiltInParameter.WALL_TOP_OFFSET]
+
+uidoc = __revit__.ActiveUIDocument
+doc = uidoc.Document
+only_shaft = bd.CategoryFilter(BuiltInCategory.OST_ShaftOpening)
+
+source = bd.pick_element(uidoc, u"Pick the source shaft", only_shaft)
+if source is None:
+    bd.alert(u"No source shaft was picked.", TOOL, exit=True)
+
+skipped = [0]
 
 
-class CustomISelectionFilter(ISelectionFilter):
-    def AllowElement(self, elem):
-        if elem.Category.Name == "Shaft Openings":
-            return True
+def match(target):
+    failed = bd.run_transaction(doc, TOOL, lambda: bd.copy_params(source, target, KEYS))
+    if failed:
+        skipped[0] += 1
 
-#Select an Element from The UI
-custom_filter = CustomISelectionFilter()
 
-try: shaft_reference = selection.PickObject(ObjectType.Element,custom_filter,"Select A Source Shaft")
-except: forms.alert("Script is canceled.",exitscript=True,title="Script Canceled.")
+bd.pick_repeat(uidoc, u"Pick a shaft to match (Esc to finish)", match,
+               only_shaft, bar_title=u"Pick shafts to match the base and top:")
 
-shaft_element = doc.GetElement(shaft_reference.ElementId)
-
-source_shaft_base_constraint= shaft_element.get_Parameter(BuiltInParameter.WALL_BASE_CONSTRAINT).AsElementId()
-source_shaft_base_offset = shaft_element.get_Parameter(BuiltInParameter.WALL_BASE_OFFSET).AsDouble()
-
-source_shaft_top_constraint = shaft_element.get_Parameter(BuiltInParameter.WALL_HEIGHT_TYPE).AsElementId()
-source_shaft_top_offset = shaft_element.get_Parameter(BuiltInParameter.WALL_TOP_OFFSET).AsDouble()
-
-with forms.WarningBar(title="Pick Shaft to match:", handle_esc=True):
-    while True:
-
-        try: target_shaft_reference = selection.PickObject(ObjectType.Element,custom_filter,"Select A Shaft")
-
-        except: break
-
-        target_shaft_element = doc.GetElement(target_shaft_reference.ElementId)
-
-        with Transaction(doc,"Match Shafts") as t:
-
-                t.Start()
-
-                target_shaft_element.get_Parameter(BuiltInParameter.WALL_BASE_CONSTRAINT).Set(source_shaft_base_constraint)
-                target_shaft_element.get_Parameter(BuiltInParameter.WALL_BASE_OFFSET).Set(source_shaft_base_offset)
-                target_shaft_element.get_Parameter(BuiltInParameter.WALL_HEIGHT_TYPE).Set(source_shaft_top_constraint)
-                target_shaft_element.get_Parameter(BuiltInParameter.WALL_TOP_OFFSET).Set(source_shaft_top_offset)
-
-                t.Commit()
+if skipped[0]:
+    bd.alert(u"{0} couldn't take every value (read-only or missing).".format(
+        bd.plural(skipped[0], u"shaft")), TOOL)

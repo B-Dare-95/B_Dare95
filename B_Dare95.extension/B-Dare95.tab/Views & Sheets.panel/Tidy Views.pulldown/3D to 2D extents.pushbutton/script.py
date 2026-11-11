@@ -39,6 +39,7 @@ from Autodesk.Revit.DB import (DatumEnds, DatumExtentType, FilteredElementCollec
 from Autodesk.Revit.UI import TaskDialog, TaskDialogCommonButtons
 
 from pyrevit import forms, revit, script
+import bd_core as bd
 
 doc = revit.doc
 cfg = script.get_config()
@@ -547,8 +548,9 @@ def show_result(res, counts, report):
 def main():
     rows, clean, total = scan_project()
     if not rows:
-        forms.alert(u"Every grid and level end is already on 2D extents in all {0} non-3D views. "
-                    u"Nothing to do.".format(total), title=TITLE)
+        bd.alert(u"Every grid and level end is already on 2D extents in all {0} non-3D views. "
+                 u"Nothing to do.".format(total),
+                 TITLE)
         return
     res = show_ui(rows, clean, total)
     if not res["ok"]:
@@ -568,7 +570,7 @@ def main():
         t.Commit()
     except Exception as ex:
         t.RollBack()
-        forms.alert(u"Failed - nothing changed.\n\n{0}".format(ex), title=TITLE)
+        bd.alert(u"Failed - nothing changed.\n\n{0}".format(ex), TITLE)
         return
     show_result(res, counts, report)
 

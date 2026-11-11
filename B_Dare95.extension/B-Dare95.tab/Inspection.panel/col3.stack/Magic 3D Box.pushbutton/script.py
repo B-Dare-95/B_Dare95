@@ -56,7 +56,8 @@ from Autodesk.Revit.DB import (
 from Autodesk.Revit.Exceptions import OperationCanceledException
 from Autodesk.Revit.UI.Selection import PickBoxStyle
 
-from pyrevit import forms, script
+from pyrevit import script
+import bd_core as bd
 
 doc = __revit__.ActiveUIDocument.Document
 uidoc = __revit__.ActiveUIDocument
@@ -93,20 +94,7 @@ def log(msg):
 # ---------------------------------------------------------------------------
 
 def eid_value(eid):
-    """ElementId -> native Python int, across Revit 2024-2027.
-
-    .Value (2025+) hands back a System.Int64 and .IntegerValue a
-    System.Int32. IronPython prints the Int64 as '123L' but it is still a
-    CLR type, so isinstance(x, (int, long)) is False and json refuses it.
-    int() forces a real Python int either way.
-    """
-    if eid is None:
-        return None
-    try:
-        raw = eid.Value
-    except AttributeError:
-        raw = eid.IntegerValue
-    return int(raw)
+    return None if eid is None else bd.eid_int(eid)
 
 
 def same_id(a, b):
@@ -615,14 +603,14 @@ def main():
     elif isinstance(active_view, ViewSection):
         from_section = True
     else:
-        forms.alert("Run this tool from a plan, section or elevation view.",
-                    title=CMD_NAME)
+        bd.alert("Run this tool from a plan, section or elevation view.",
+                 CMD_NAME)
         return
 
     type_id = default_3d_type_id(doc)
     if type_id is None:
-        forms.alert("This project has no 3D view family type.",
-                    title=CMD_NAME)
+        bd.alert("This project has no 3D view family type.",
+                 CMD_NAME)
         return
 
     templates = collect_3d_templates(doc)
@@ -657,11 +645,10 @@ def main():
         if picked.Max.DistanceTo(picked.Min) >= MIN_PICK_DIAGONAL:
             break
 
-        if not forms.alert(
+        if not bd.confirm(
             "Hold the left mouse button down while dragging the rectangle.\n\n"
             "Try again?",
-            title=CMD_NAME, yes=True, no=True,
-        ):
+            CMD_NAME):
             return
 
     bbox = build_section_box(doc, active_view, picked.Min, picked.Max,
@@ -695,19 +682,20 @@ def main():
         t.Commit()
     except Exception:
         t.RollBack()
-        forms.alert("Could not apply the section box.\n\n{0}".format(
-            traceback.format_exc()), title=CMD_NAME)
+        bd.alert("Could not apply the section box.\n\n{0}".format(
+         traceback.format_exc()),
+                 CMD_NAME)
         return
 
     save_settings(doc, template, view_name)
 
     if not box_on:
-        forms.alert(
+        bd.alert(
             "The section box was set but is switched off in '{0}'.\n\n"
             "That view template controls Section Box. Uncheck it in the "
             "template, or pick a different template with Shift-click.".format(
                 element_name(template) or NO_TEMPLATE),
-            title=CMD_NAME)
+            CMD_NAME)
 
     # --- show -------------------------------------------------------------
     uidoc.ActiveView = view3d
@@ -731,5 +719,5 @@ def main():
 try:
     main()
 except Exception:
-    forms.alert("{0} failed.\n\n{1}".format(CMD_NAME, traceback.format_exc()),
-                title=CMD_NAME)
+    bd.alert("{0} failed.\n\n{1}".format(CMD_NAME, traceback.format_exc()),
+             CMD_NAME)

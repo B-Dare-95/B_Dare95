@@ -71,6 +71,7 @@ from System             import (
 )
 from System.Text        import Encoding
 import System.Xml as SysXml
+import bd_core as bd
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -2302,7 +2303,6 @@ else:
     _tracked, _ = load_config()
     _open_in_excel = [p for p in _tracked if is_open_elsewhere(p)]
     if _open_in_excel:
-        from pyrevit import forms
-        forms.alert(_excel_open_message(_open_in_excel), title=u'Add Issue')
+        bd.alert(_excel_open_message(_open_in_excel), u'Add Issue')
     else:
         run_logger()

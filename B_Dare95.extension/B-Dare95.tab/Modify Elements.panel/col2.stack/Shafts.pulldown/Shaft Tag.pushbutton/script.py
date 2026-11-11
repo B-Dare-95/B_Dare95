@@ -40,8 +40,9 @@ from Autodesk.Revit.DB import (
     TextNoteType, Transaction, PlanViewPlane, Level, XYZ,
     RevitLinkInstance, Transform
 )
-from pyrevit import forms, script
+from pyrevit import script
 from bd_combo_search import enable_combo_search
+import bd_core as bd
 
 # ─────────────────────────────────────────────────────────────────────
 # Revit handles
@@ -63,12 +64,7 @@ INSET_FT = 0.25
 # HELPERS
 # ═════════════════════════════════════════════════════════════════════
 
-def safe_id_int(element_id):
-    """.Value with .IntegerValue fallback (Revit 2025+ compatibility)."""
-    try:
-        return element_id.Value
-    except Exception:
-        return element_id.IntegerValue
+safe_id_int = bd.eid_int
 
 # ═════════════════════════════════════════════════════════════════════
 # DATA COLLECTION
@@ -507,7 +503,7 @@ def show_form(plan_views, text_note_types, link_count, linked_shaft_count):
     def on_apply(s, e):
         selected = [plan_views[i] for i, cb in enumerate(view_checkboxes) if cb.IsChecked]
         if not selected:
-            forms.alert("Please check at least one plan view.")
+            bd.alert("Please check at least one plan view.", u"Shaft Tag")
             return
         result['ok']             = True
         result['views']          = selected
@@ -541,31 +537,31 @@ def main():
     link_count      = len(link_names)
 
     if not plan_views:
-        forms.alert("No floor plan views found in the document.",
-                    title="Shaft Function Tag")
+        bd.alert("No floor plan views found in the document.",
+                 "Shaft Function Tag")
         return
 
     if not text_note_types:
-        forms.alert("No text note types found in the document.",
-                    title="Shaft Function Tag")
+        bd.alert("No text note types found in the document.",
+                 "Shaft Function Tag")
         return
 
     if not all_shafts:
-        forms.alert(
+        bd.alert(
             "No shaft openings found in the active document or in any "
             "loaded linked model.",
-            title="Shaft Function Tag")
+            "Shaft Function Tag")
         return
 
     # ── Pre-flight: validate that the parameter exists on at least one shaft
     if not validate_shaft_function_param(all_shafts):
-        forms.alert(
+        bd.alert(
             'The parameter "{}" was not found on any Shaft Opening '
             '(host or linked) in this document.\n\n'
             'Please ensure the parameter exists as an Instance parameter on '
             'the Shaft Opening category before running this script.'.format(
                 SHAFT_FUNCTION_PARAM),
-            title="Parameter Not Found")
+            "Parameter Not Found")
         return
 
     # ── Show dialog ──────────────────────────────────────────────────
@@ -630,6 +626,6 @@ def main():
     if error_views:
         summary += "\n\nFailed views:\n" + "\n".join("  • " + n for n in error_views)
 
-    forms.alert(summary, title="Shaft Function Tag")
+    bd.alert(summary, "Shaft Function Tag")
 
 main()

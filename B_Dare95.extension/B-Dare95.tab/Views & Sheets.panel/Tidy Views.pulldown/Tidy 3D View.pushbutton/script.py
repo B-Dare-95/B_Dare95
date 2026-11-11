@@ -40,7 +40,8 @@ from Autodesk.Revit.DB import (Arc, BoundingBoxXYZ, BuiltInCategory, BuiltInPara
 from Autodesk.Revit.DB import Line as DBLine
 from Autodesk.Revit.UI import TaskDialog, TaskDialogCommonButtons
 
-from pyrevit import forms, revit, script
+from pyrevit import revit, script
+import bd_core as bd
 
 doc = revit.doc
 cfg = script.get_config()
@@ -59,12 +60,7 @@ DEFAULTS = {"g": 1000.0, "l": 2000.0}
 # =========================================================================
 #  Helpers
 # =========================================================================
-def id_val(eid):
-    """ElementId -> Python int on Revit 2024 (.IntegerValue) and 2025+ (.Value)."""
-    try:
-        return int(eid.Value)
-    except AttributeError:
-        return int(eid.IntegerValue)
+id_val = bd.eid_int
 
 
 def scope_box_name(datum):
@@ -969,17 +965,18 @@ def show_result(res, counts, n_grids, n_levels, report):
 def main():
     view = doc.ActiveView
     if not isinstance(view, View3D) or view.IsTemplate:
-        forms.alert(u"Open a 3D view first. The tool tidies the grids and levels that show in it.",
-                    title=TITLE)
+        bd.alert(u"Open a 3D view first. The tool tidies the grids and levels that show in it.",
+                 TITLE)
         return
     grids, levels = view_datums(view)
     if not grids:
-        forms.alert(u"No grids show in this 3D view. The extents are measured from the outermost "
-                    u"grids, so the view needs to show them.", title=TITLE)
+        bd.alert(u"No grids show in this 3D view. The extents are measured from the outermost "
+                 u"grids, so the view needs to show them.",
+                 TITLE)
         return
     found = grid_area(grids)
     if found is None:
-        forms.alert(u"The grids in this view couldn't be read.", title=TITLE)
+        bd.alert(u"The grids in this view couldn't be read.", TITLE)
         return
     fr, area = found
 
@@ -1006,7 +1003,7 @@ def main():
         t.Commit()
     except Exception as ex:
         t.RollBack()
-        forms.alert(u"Failed - nothing changed.\n\n{0}".format(ex), title=TITLE)
+        bd.alert(u"Failed - nothing changed.\n\n{0}".format(ex), TITLE)
         return
     show_result(res, counts, len(grids), len(levels), report)
 

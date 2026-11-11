@@ -62,6 +62,7 @@ from System.Windows.Threading import DispatcherTimer
 from pyrevit import forms, revit, script, HOST_APP, DB, UI, EXEC_PARAMS
 from pyrevit.revit import events
 from pyrevit.compat import get_elementid_value_func
+import bd_core as bd
 
 get_elementid_value = get_elementid_value_func()
 
@@ -1117,16 +1118,12 @@ class RoomVizWindow(forms.WPFWindow):
         room_set = self.require_set()
         if room_set is None:
             return
-        confirmed = forms.alert(
+        confirmed = bd.confirm(
             u"Delete the Set [{}]?\n\n{} room(s) will become unassigned and "
             u"stop being drawn. The rooms themselves are untouched.".format(
                 room_set.name, len(room_set.room_ids)
             ),
-            title="Delete Set",
-            ok=False,
-            yes=True,
-            no=True,
-        )
+            "Delete Set")
         if not confirmed:
             return
         name = room_set.name
@@ -1390,7 +1387,7 @@ def doc_changed(sender, args):
 # Launch
 # ---------------------------------------------------------------------------
 if not collect_rooms(HOST_APP.doc):
-    forms.alert("No placed rooms found in the active document.", exitscript=True)
+    bd.alert("No placed rooms found in the active document.", u"3D Rooms", exit=True)
 
 main_window = RoomVizWindow()
 script.set_envvar(WINDOW_KEY, main_window)

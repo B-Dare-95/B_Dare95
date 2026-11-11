@@ -38,6 +38,7 @@ from System.Windows import RoutedEventHandler
 from System.Windows.Input import MouseButtonEventHandler, KeyEventHandler, Key
 from System.Windows.Markup import XamlReader
 from System.Windows.Threading import Dispatcher, DispatcherFrame
+import bd_core as bd
 
 # ─── REVIT VARIABLES ──────────────────────────────────────────────────────────
 uidoc = __revit__.ActiveUIDocument
@@ -287,12 +288,7 @@ def safe(fn):
         return DASH
 
 
-def eid_value(eid):
-    """ElementId integer, Revit 2024-2027 safe."""
-    try:
-        return eid.Value
-    except AttributeError:
-        return eid.IntegerValue
+eid_value = bd.eid_int
 
 
 def make_element_id(number):

@@ -30,6 +30,7 @@ from System.Windows.Markup import XamlReader
 from System.Windows import Window, MessageBox, MessageBoxButton, MessageBoxResult
 from System.Windows.Controls import ListBoxItem
 from collections import defaultdict
+import bd_core as bd
 
 app   = __revit__.Application
 doc   = __revit__.ActiveUIDocument.Document
@@ -95,8 +96,7 @@ def set_param_value(element, param_name, value):
 
 
 def get_element_id_int(element):
-    eid = element.Id
-    return eid.Value if hasattr(eid, 'Value') else eid.IntegerValue
+    return bd.eid_int(element.Id)
 
 
 def to_alpha_designator(rank):

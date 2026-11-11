@@ -42,10 +42,11 @@ from System.Windows.Interop import WindowInteropHelper
 
 from Autodesk.Revit.DB import ReloadLatestOptions
 
-from pyrevit import revit, forms, script
+from pyrevit import revit, script
 
 from room_register import (ensure_tracker, doc_key, find_register,
                            collect_candidates, dry_run, run_restore, remove_records)
+import bd_core as bd
 
 
 TITLE = "Room Register"
@@ -444,45 +445,50 @@ def show_menu(cands, subtitle, remove_fn):
 def shift_mode(tracker, doc):
     key = doc_key(doc)
     if not key:
-        forms.alert("Save the model first.\n\nAn unsaved document has no stable "
-                    "identity to register.", title=TITLE)
+        bd.alert("Save the model first.\n\nAn unsaved document has no stable "
+                 "identity to register.",
+                 TITLE)
         return
     path = find_register(key)
     if path:
         _open_folder(path)
         return
     reg = tracker.create_register(doc)
-    forms.alert("Register created for '{}'.\n\n{} rooms recorded.\n"
-                "Live tracking runs automatically in every Revit session."
-                .format(reg.data.get("doc_title"), len(reg.rooms)), title=TITLE)
+    bd.alert("Register created for '{}'.\n\n{} rooms recorded.\n"
+             "Live tracking runs automatically in every Revit session."
+             .format(reg.data.get("doc_title"), len(reg.rooms)),
+             TITLE)
 
 
 def restore_mode(tracker, doc):
     reg = tracker.register_for(doc)
     if reg is None:
-        forms.alert("This document has no room register yet.\n\n"
-                    "Shift+Click the button to create one.", title=TITLE)
+        bd.alert("This document has no room register yet.\n\n"
+                 "Shift+Click the button to create one.",
+                 TITLE)
         return
 
     # safety net: catches anything missed if tracking was interrupted this session
     tracker.rescan_doc(doc, "restore")
 
     if doc.IsWorkshared:
-        choice = forms.alert("Reload Latest before restoring?\n\nRooms that other users "
-                             "already restored only become visible after a reload.",
-                             title=TITLE, options=["Reload Latest", "Skip"])
+        choice = bd.choose_option("Reload Latest before restoring?\n\nRooms that other users "
+                                  "already restored only become visible after a reload.",
+                                  TITLE,
+                                  ["Reload Latest", "Skip"])
         if choice == "Reload Latest":
             try:
                 doc.ReloadLatest(ReloadLatestOptions())
             except Exception as e:
-                forms.alert("Reload Latest failed:\n\n{}".format(e), title=TITLE)
+                bd.alert("Reload Latest failed:\n\n{}".format(e), TITLE)
             reg.rescan(doc, "reload latest")
             reg.flush()
 
     cands = collect_candidates(doc, reg)
     if not cands:
-        forms.alert("No unplaced or deleted rooms in the register.\n\n"
-                    "Live tracking is active.", title=TITLE)
+        bd.alert("No unplaced or deleted rooms in the register.\n\n"
+                 "Live tracking is active.",
+                 TITLE)
         return
 
     dry_run(doc, cands)
@@ -494,7 +500,7 @@ def restore_mode(tracker, doc):
         return
     results, error = run_restore(doc, reg, state["selected"], state["allow"])
     if error:
-        forms.alert(error, title=TITLE)
+        bd.alert(error, TITLE)
     elif results:
         report(doc, results)
 
@@ -509,7 +515,7 @@ tracker = ensure_tracker(__revit__)
 doc = revit.doc
 
 if doc is None or doc.IsFamilyDocument:
-    forms.alert("Open a project document first.", title=TITLE)
+    bd.alert("Open a project document first.", TITLE)
 elif SHIFT:
     shift_mode(tracker, doc)
 else:

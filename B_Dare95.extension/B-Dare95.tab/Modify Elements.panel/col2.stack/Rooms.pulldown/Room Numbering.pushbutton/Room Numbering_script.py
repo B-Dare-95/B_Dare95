@@ -32,7 +32,7 @@ from Autodesk.Revit.DB import (
     StorageType,
     Transaction,
 )
-from pyrevit import forms
+
 
 import clr
 clr.AddReference("PresentationFramework")
@@ -43,6 +43,7 @@ clr.AddReference("System")
 from System.Windows import Visibility
 from System.Windows.Markup import XamlReader
 from bd_combo_search import enable_combo_search
+import bd_core as bd
 
 # ╦  ╦╔═╗╦═╗╦╔═╗╔╗ ╦  ╔═╗╔═╗
 # ╚╗╔╝╠═╣╠╦╝║╠═╣╠╩╗║  ║╣ ╚═╗
@@ -1048,7 +1049,7 @@ class RoomGridUI(object):
         # ── Parameter ────────────────────────────────────────────────
         idx = self._param_list.SelectedIndex
         if idx < 0 or not self._param_data:
-            forms.alert('Please select a Room Parameter.', title=TOOL_NAME)
+            bd.alert('Please select a Room Parameter.', TOOL_NAME)
             return
         actual_name, storage_type = self._param_data[idx]
 
@@ -1059,18 +1060,17 @@ class RoomGridUI(object):
                 chosen_key = key
                 break
         if chosen_key is None:
-            forms.alert(
+            bd.alert(
                 'Please select a Reference Corner\n'
                 '(click one of the four arrow tiles).',
-                title=TOOL_NAME
-            )
+                TOOL_NAME)
             return
 
         # ── Start Number ─────────────────────────────────────────────
         try:
             start = int(self._start_tb.Text.strip())
         except (ValueError, AttributeError):
-            forms.alert('Start Number must be a whole number (e.g. 1).', title=TOOL_NAME)
+            bd.alert('Start Number must be a whole number (e.g. 1).', TOOL_NAME)
             return
 
         pfx = self._prefix_tb.Text or ''
@@ -1097,7 +1097,7 @@ class RoomGridUI(object):
         if self._is_single_mode():
             lvl_idx = self._level_combo.SelectedIndex
             if not (0 <= lvl_idx < len(self._level_groups)):
-                forms.alert('Please pick the level to renumber.', title=TOOL_NAME)
+                bd.alert('Please pick the level to renumber.', TOOL_NAME)
                 return
             single_group = self._level_groups[lvl_idx]
 
@@ -1128,40 +1128,37 @@ class RoomGridUI(object):
 grid_info = analyse_grids(doc)
 
 if grid_info is None:
-    forms.alert(
+    bd.alert(
         'Insufficient Grid Lines detected.\n\n'
         'At least 2 non-parallel Grid Lines are required to compute\n'
         'intersection points.  Please add grids and try again.',
-        title=TOOL_NAME,
-        exitscript=True,
-    )
+        TOOL_NAME,
+        exit=True)
 
 # ── Step 2: Rooms + parameters + levels ──────────────────────────────────
 placed_rooms = get_placed_rooms(doc)
 
 if not placed_rooms:
-    forms.alert(
+    bd.alert(
         'No placed Rooms found in the project.\n'
         'Please place Rooms before running this script.',
-        title=TOOL_NAME,
-        exitscript=True,
-    )
+        TOOL_NAME,
+        exit=True)
 
 room_params  = collect_room_writable_params(placed_rooms)
 level_groups = group_rooms_by_level(placed_rooms, doc)
 
 if not level_groups:
-    forms.alert(
+    bd.alert(
         'Could not resolve a Level for any placed Room.',
-        title=TOOL_NAME,
-        exitscript=True,
-    )
+        TOOL_NAME,
+        exit=True)
 
 # ── Step 3: Launch UI ─────────────────────────────────────────────────────
 ui = RoomGridUI(room_params, grid_info, level_groups)
 
 if not ui.confirmed[0]:
-    forms.alert('Cancelled.', title=TOOL_NAME, exitscript=True)
+    bd.alert('Cancelled.', TOOL_NAME, exit=True)
 
 p_name      = ui.param_name[0]
 p_storage   = ui.p_storage_type[0]
@@ -1252,7 +1249,7 @@ level_lines = u'\n'.join(
     for name, n, s, e, pw in level_summaries
 )
 
-forms.alert(
+bd.alert(
     u'Renumbering complete!\n\n'
     u'Parameter    : {param}  [{ptype}]\n'
     u'Reference    : {corner}  (X={rx:.2f}   Y={ry:.2f})\n'
@@ -1270,6 +1267,5 @@ forms.alert(
         tpl    = u's' if total_numbered != 1 else u'',
         sk     = total_skipped,
     ),
-    title=TOOL_NAME,
-)
+    TOOL_NAME)
 # ==================================================

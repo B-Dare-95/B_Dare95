@@ -32,19 +32,20 @@ from System.Windows.Interop import WindowInteropHelper
 from System.Windows.Markup import XamlReader
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 
-from Autodesk.Revit.DB import (
-    Arc, BuiltInCategory, BuiltInParameter, ElementId,
-    FilteredElementCollector, GraphicsStyleType, HorizontalTextAlignment,
-    Level, PlanViewPlane, RevitLinkInstance, TextNote, TextNoteOptions,
-    TextNoteType, Transaction, Transform, UnitTypeId, UnitUtils,
-    VerticalTextAlignment, ViewPlan, XYZ
-)
+from Autodesk.Revit.DB import (Arc, BuiltInCategory, BuiltInParameter,
+                               ElementId, FilteredElementCollector,
+                               GraphicsStyleType, HorizontalTextAlignment,
+                               Level, PlanViewPlane, RevitLinkInstance,
+                               TextNote, TextNoteOptions, TextNoteType,
+                               Transaction, Transform, VerticalTextAlignment,
+                               ViewPlan, XYZ)
 from Autodesk.Revit.DB.Architecture import StairsLanding, StairsRun
 from Autodesk.Revit.Exceptions import OperationCanceledException
 from Autodesk.Revit.UI import TaskDialog
 from Autodesk.Revit.UI.Selection import ISelectionFilter, ObjectType
 
 from pyrevit import script
+import bd_core as bd
 
 
 uidoc = __revit__.ActiveUIDocument
@@ -67,19 +68,13 @@ EXCLUDED_LINE_STYLES = set([
 # --------------------------------------------------------------------------
 # Helpers
 # --------------------------------------------------------------------------
-def eid_int(eid):
-    try:
-        return eid.Value
-    except AttributeError:
-        return eid.IntegerValue
+eid_int = bd.eid_int
 
 
-def mm_to_ft(v):
-    return UnitUtils.ConvertToInternalUnits(v, UnitTypeId.Millimeters)
+mm_to_ft = bd.mm_to_ft
 
 
-def ft_to_mm(v):
-    return UnitUtils.ConvertFromInternalUnits(v, UnitTypeId.Millimeters)
+ft_to_mm = bd.ft_to_mm
 
 
 def type_name(el):

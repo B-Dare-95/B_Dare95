@@ -27,7 +27,7 @@ clr.AddReference("System.Drawing")
 import System
 from System.Windows.Forms import (
     Form, Label, Button, PictureBox, PictureBoxSizeMode,
-    DialogResult, MessageBox, MessageBoxButtons, MessageBoxIcon,
+    DialogResult,
     FormStartPosition, FormBorderStyle, FlatStyle,
     Application
 )
@@ -38,6 +38,7 @@ from System.Drawing import (
 
 # ── pyRevit / Revit API ──────────────────────────────────────────────────────
 from pyrevit import revit, script
+import bd_core as bd
 from Autodesk.Revit.DB import (
     Transaction, BuiltInCategory, ForgeTypeId
 )
@@ -347,29 +348,24 @@ try:
     created = create_shaft_function_parameter()
 
     if created:
-        MessageBox.Show(
-            u"Parameter \u2018Shaft Function\u2019 was created successfully!\n\n"
+        bd.alert(
             u"  \u2022 Category   : Shaft Openings\n"
             u"  \u2022 Type       : Instance / Text\n"
             u"  \u2022 Group      : Identity Data\n"
             u"  \u2022 Vary by Group : Yes",
-            "Parameter Created",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Information
+            u"Create Shaft Function",
+            heading=u"Parameter \u2018Shaft Function\u2019 was created successfully!"
         )
     else:
-        MessageBox.Show(
-            u"The parameter \u2018Shaft Function\u2019 already exists in "
-            u"this project.\n\nNo changes were made.",
-            "Already Exists",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Information
+        bd.alert(
+            u"No changes were made.",
+            u"Create Shaft Function",
+            heading=u"The parameter \u2018Shaft Function\u2019 already exists in this project."
         )
 
 except Exception as ex:
-    MessageBox.Show(
-        u"An error occurred while creating the parameter:\n\n" + str(ex),
-        "Error",
-        MessageBoxButtons.OK,
-        MessageBoxIcon.Error
+    bd.alert(
+        u"{0}".format(ex),
+        u"Create Shaft Function",
+        heading=u"An error occurred while creating the parameter."
     )

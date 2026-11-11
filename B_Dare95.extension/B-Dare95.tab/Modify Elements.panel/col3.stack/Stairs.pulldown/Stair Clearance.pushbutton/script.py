@@ -59,12 +59,13 @@ from Autodesk.Revit.UI import (
 from Autodesk.Revit.UI.Selection import ISelectionFilter, ObjectType
 import Autodesk.Revit.Exceptions as RvtEx
 
-from pyrevit import revit, forms, script
+from pyrevit import revit, script
+import bd_core as bd
 
 doc = revit.doc
 uidoc = revit.uidoc
 
-MM = 304.8
+MM = bd.MM_PER_FT
 DEFAULT_OFFSET_MM = 2100.0
 TOL = 1e-6
 Z_TOL = 1e-4                    # ft, "same elevation" when scanning geometry
@@ -76,20 +77,13 @@ COLLINEAR_TOL = 0.5 / MM        # ft, below this the nosing points are one line
 # ---------------------------------------------------------------------------
 # small helpers
 # ---------------------------------------------------------------------------
-def eid_value(element_id):
-    """ElementId numeric value - Revit 2025+ uses .Value, older uses .IntegerValue."""
-    try:
-        return element_id.Value
-    except AttributeError:
-        return element_id.IntegerValue
+eid_value = bd.eid_int
 
 
-def mm_to_ft(value_mm):
-    return float(value_mm) / MM
+mm_to_ft = bd.mm_to_ft
 
 
-def ft_to_mm(value_ft):
-    return float(value_ft) * MM
+ft_to_mm = bd.ft_to_mm
 
 
 def fmt_mm(value_ft):
@@ -377,13 +371,13 @@ class SettingsWindow(object):
 
     def on_ok(self, sender, args):
         if self.style_list.SelectedItem is None:
-            forms.alert("Pick a line style first.", title="Stair Clear Height Line")
+            bd.alert("Pick a line style first.", "Stair Clear Height Line")
             return
         try:
             offset_mm = float(self.offset_box.Text.strip())
         except ValueError:
-            forms.alert("The vertical offset must be a number in millimetres.",
-                        title="Stair Clear Height Line")
+            bd.alert("The vertical offset must be a number in millimetres.",
+                     "Stair Clear Height Line")
             return
 
         self.result = {
@@ -934,14 +928,16 @@ def main():
     view = doc.ActiveView
 
     if view is None or view.IsTemplate:
-        forms.alert("Open a section or elevation view and run the tool again.",
-                    title="Stair Clear Height Line", exitscript=True)
+        bd.alert("Open a section or elevation view and run the tool again.",
+                 "Stair Clear Height Line",
+                 exit=True)
 
     if not isinstance(view, ViewSection) or \
             view.ViewType not in (ViewType.Section, ViewType.Elevation):
-        forms.alert("This tool only runs in a Section or Elevation view.\n\n"
-                    "Current view is a {0}.".format(view.ViewType),
-                    title="Stair Clear Height Line", exitscript=True)
+        bd.alert("This tool only runs in a Section or Elevation view.\n\n"
+                 "Current view is a {0}.".format(view.ViewType),
+                 "Stair Clear Height Line",
+                 exit=True)
 
     mode = ask_pick_mode()
     if mode is None:
@@ -949,8 +945,9 @@ def main():
 
     line_styles = collect_line_styles(doc)
     if not line_styles:
-        forms.alert("No line styles found in this project.",
-                    title="Stair Clear Height Line", exitscript=True)
+        bd.alert("No line styles found in this project.",
+                 "Stair Clear Height Line",
+                 exit=True)
 
     source_label = "Active model" if mode == "host" else "Linked model"
     settings = SettingsWindow(sorted(line_styles.keys()), source_label).show()

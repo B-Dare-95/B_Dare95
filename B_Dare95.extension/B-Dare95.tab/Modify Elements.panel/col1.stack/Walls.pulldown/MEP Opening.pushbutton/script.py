@@ -56,6 +56,7 @@ from System.Windows import RoutedEventHandler, Visibility
 from System.Windows.Controls import CheckBox, TextChangedEventHandler
 from System.Windows.Markup import XamlReader
 from System.Windows.Threading import Dispatcher, DispatcherFrame, DispatcherPriority
+import bd_core as bd
 
 doc = __revit__.ActiveUIDocument.Document          # noqa: F821
 
@@ -102,12 +103,7 @@ _BIP_CURVE_H = getattr(BuiltInParameter, "RBS_CURVE_HEIGHT_PARAM", None)
 # small helpers
 # ---------------------------------------------------------------------------
 
-def eid_value(element_id):
-    """ElementId -> int, Revit 2025+ safe."""
-    try:
-        return element_id.Value
-    except AttributeError:
-        return element_id.IntegerValue
+eid_value = bd.eid_int
 
 
 def clean_text(value):
@@ -165,8 +161,7 @@ def param_length(element, bip):
     return val if val > 1e-9 else None
 
 
-def to_mm(feet):
-    return feet * 304.8
+to_mm = bd.ft_to_mm
 
 
 # ---------------------------------------------------------------------------

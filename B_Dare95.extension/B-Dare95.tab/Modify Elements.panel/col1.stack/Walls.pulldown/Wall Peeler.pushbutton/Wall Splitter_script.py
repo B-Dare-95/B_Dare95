@@ -23,7 +23,7 @@ Co-authored with Erik Frits and Joven Mark Gumana"""
 from Autodesk.Revit.DB import *
 from Autodesk.Revit.DB.Structure import StructuralType
 from Autodesk.Revit.UI.Selection import *
-from pyrevit import forms
+
 
 import clr
 clr.AddReference('System')
@@ -47,6 +47,7 @@ from System.Windows.Media import (SolidColorBrush, Color,
                                    RectangleGeometry)
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 import System.Windows.Markup as Markup
+import bd_core as bd
 
 # ╦  ╦╔═╗╦═╗╦╔═╗╔╗ ╦  ╔═╗╔═╗
 # ╚╗╔╝╠═╣╠╦╝║╠═╣╠╩╗║  ║╣ ╚═╗
@@ -66,11 +67,7 @@ MATCH_TOL = 0.0033  # ft (~1 mm)   - pairing a copied insert with its original
 DEBUG     = False   # True -> print per-group span report to the pyRevit console
 
 
-def get_id_value(eid):
-    try:
-        return eid.Value
-    except AttributeError:
-        return eid.IntegerValue
+get_id_value = bd.eid_int
 
 
 # ╔═╗╦  ╔═╗╔═╗╔═╗╔═╗╔═╗
@@ -1232,7 +1229,7 @@ def pick_wall():
         ref = uidoc.Selection.PickObject(ObjectType.Element, WallFilter(), "Select Wall to Peel")
         return doc.GetElement(ref)
     except:
-        forms.alert("No wall selected. Exiting.", exitscript=True)
+        bd.alert("No wall selected. Exiting.", u"Wall Peeler", exit=True)
 
 
 def build_layer_data(wall):
@@ -1956,7 +1953,7 @@ layer_data  = build_layer_data(sel_wall)
 real_layers = [ld for ld in layer_data if not ld.is_cb]
 
 if not real_layers:
-    forms.alert("Wall has no real layers to split.", exitscript=True)
+    bd.alert("Wall has no real layers to split.", u"Wall Peeler", exit=True)
 
 # 3. Show WPF picker (modeless + PushFrame so Revit stays responsive)
 win   = LayerPickerWindow(sel_wall, layer_data)
@@ -1977,10 +1974,10 @@ if not win.confirmed[0]:
 groups, host_key, name_map, apply_to_all = win.get_result()
 
 if not groups:
-    forms.alert("Nothing to do.", exitscript=True)
+    bd.alert("Nothing to do.", u"Wall Peeler", exit=True)
 
 if len(groups) == 1 and groups[0]['type'] == 'kept':
-    forms.alert("No layers were selected for splitting. Nothing to do.", exitscript=True)
+    bd.alert("No layers were selected for splitting. Nothing to do.", u"Wall Peeler", exit=True)
 
 # ── Collect target walls ──────────────────────────────────────────────────
 base_type = sel_wall.WallType
@@ -2000,10 +1997,12 @@ else:
 # wall would then be deleted - silently destroying every door and window.
 group_keys = [','.join(str(i) for i in g['indices']) for g in groups]
 if host_key not in group_keys:
-    forms.alert("No host wall was designated.\n\n"
-                "Every door, window and opening in the wall would be lost. "
-                "Re-run the tool and pick a host layer in phase 2.\n\n"
-                "Aborted - nothing was changed.", exitscript=True)
+    bd.alert("No host wall was designated.\n\n"
+             "Every door, window and opening in the wall would be lost. "
+             "Re-run the tool and pick a host layer in phase 2.\n\n"
+             "Aborted - nothing was changed.",
+             u"Wall Peeler",
+             exit=True)
 
 # ── Sanity-check the grouping before touching the model ───────────────────
 ok, report = validate_groups(groups, real_layers)
@@ -2011,9 +2010,10 @@ if DEBUG:
     print('Group layout (measured from the physical exterior face):')
     print(report)
 if not ok:
-    forms.alert("Group widths do not add up to the wall thickness.\n\n"
-                + report + "\n\nAborted - nothing was changed.",
-                exitscript=True)
+    bd.alert("Group widths do not add up to the wall thickness.\n\n"
+             + report + "\n\nAborted - nothing was changed.",
+             u"Wall Peeler",
+             exit=True)
 
 # ── Cache geometry for every target wall BEFORE the transaction ───────────
 # Geometry queries (face normals, curves) must happen outside the transaction.
@@ -2045,14 +2045,15 @@ for w in target_walls:
     }
 
 if skipped_ids:
-    forms.alert("{} wall(s) will be skipped - curved, or the exterior face "
-                "could not be read.\n\nIDs: {}".format(
-                    len(skipped_ids),
-                    ', '.join(str(i) for i in skipped_ids[:25])
-                    + (' ...' if len(skipped_ids) > 25 else '')))
+    bd.alert("{} wall(s) will be skipped - curved, or the exterior face "
+             "could not be read.\n\nIDs: {}".format(
+                 len(skipped_ids),
+                 ', '.join(str(i) for i in skipped_ids[:25])
+                 + (' ...' if len(skipped_ids) > 25 else '')),
+             u"Wall Peeler")
 
 if not wall_geom_cache:
-    forms.alert("No usable walls. Nothing was changed.", exitscript=True)
+    bd.alert("No usable walls. Nothing was changed.", u"Wall Peeler", exit=True)
 
 # ── Execute ───────────────────────────────────────────────────────────────
 t = Transaction(doc, "Wall Peeler — Split Layers")
@@ -2167,4 +2168,4 @@ if total_inserts:
 
 if DEBUG and flipped_fixes:
     msg += "\nRe-aligned orientation on {} wall(s).".format(flipped_fixes)
-forms.alert(msg)
+bd.alert(msg, u"Wall Peeler")

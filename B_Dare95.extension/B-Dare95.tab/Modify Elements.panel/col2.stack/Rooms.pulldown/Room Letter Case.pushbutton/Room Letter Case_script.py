@@ -37,6 +37,7 @@ from System.Windows.Markup import XamlReader
 from System import Array
 import System.Windows
 from bd_combo_search import enable_combo_search
+import bd_core as bd
 
 doc   = __revit__.ActiveUIDocument.Document
 uidoc = __revit__.ActiveUIDocument
@@ -67,14 +68,12 @@ all_rooms = (FilteredElementCollector(doc)
              .ToElements())
 
 if not all_rooms:
-    System.Windows.MessageBox.Show("No rooms found in the project.", "Room Name Formatter")
-    import sys; sys.exit()
+    bd.alert(u"No rooms found in the project.", u"Room Name Formatter", exit=True)
 
 text_params = get_text_parameters(all_rooms)
 
 if not text_params:
-    System.Windows.MessageBox.Show("No text parameters found on rooms.", "Room Name Formatter")
-    import sys; sys.exit()
+    bd.alert(u"No text parameters found on rooms.", u"Room Name Formatter", exit=True)
 
 # ── XAML ─────────────────────────────────────────────────────────────────────
 

@@ -31,18 +31,20 @@ from System.Windows.Threading import Dispatcher, DispatcherFrame
 from System.Windows.Controls import SelectionChangedEventHandler, TextChangedEventHandler
 from System.Windows.Controls import Grid as WpfGrid
 
-from Autodesk.Revit.DB import (FilteredElementCollector, ImportInstance, Options,
-                               GeometryInstance, Curve, Line, Arc, PolyLine, XYZ,
-                               Transaction, TransactionGroup, Level, Wall, WallType,
-                               WallKind, BuiltInCategory, BuiltInParameter, FamilySymbol,
-                               ElementId, ElementTransformUtils, Grid, GridType,
-                               LocationCurve, CurveLoop, Element, SpecTypeId)
+from Autodesk.Revit.DB import (FilteredElementCollector, ImportInstance,
+                               Options, GeometryInstance, Curve, Line, Arc,
+                               PolyLine, XYZ, Transaction, TransactionGroup,
+                               Level, Wall, WallType, WallKind,
+                               BuiltInCategory, BuiltInParameter, FamilySymbol,
+                               ElementId, ElementTransformUtils, Grid,
+                               GridType, LocationCurve, CurveLoop, SpecTypeId)
 from Autodesk.Revit.DB.Structure import StructuralType
 from Autodesk.Revit.DB.Architecture import Railing, RailingType
 from Autodesk.Revit.DB.ExtensibleStorage import (Schema, SchemaBuilder, Entity,
                                                  AccessLevel, ExtensibleStorageFilter)
 from Autodesk.Revit.UI import TaskDialog
 from bd_combo_search import enable_combo_search
+import bd_core as bd
 
 uidoc = __revit__.ActiveUIDocument
 doc = uidoc.Document
@@ -595,18 +597,11 @@ def letter_name(i):
 # REVIT HELPERS
 # =====================================================================
 
-def eid_int(eid):
-    try:
-        return eid.Value
-    except AttributeError:
-        return eid.IntegerValue
+eid_int = bd.eid_int
 
 
 def el_name(e):
-    try:
-        return e.Name
-    except Exception:
-        return Element.Name.GetValue(e)
+    return bd.element_name(e, u"")
 
 
 def layer_name(gobj):

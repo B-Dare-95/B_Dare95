@@ -68,8 +68,9 @@ from System.Windows.Markup import XamlReader
 from System.Windows.Media import BrushConverter
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 
-from pyrevit import forms, script
+from pyrevit import script
 from bd_combo_search import enable_combo_search
+import bd_core as bd
 
 doc = __revit__.ActiveUIDocument.Document
 uidoc = __revit__.ActiveUIDocument
@@ -114,14 +115,7 @@ PLAN_VIEW_TYPES = (
 # ---------------------------------------------------------------------------
 
 
-def eid_value(element_id):
-    """ElementId.Value on Revit 2025+, IntegerValue on 2024. Never assume one."""
-    if element_id is None:
-        return -1
-    try:
-        return element_id.Value
-    except AttributeError:
-        return element_id.IntegerValue
+eid_value = bd.eid_int
 
 
 def is_valid_id(element_id):
@@ -1402,7 +1396,7 @@ def report(made, failures, mode):
     if failures:
         headline += "\n{0} view(s) failed - see the output window.".format(len(failures))
 
-    forms.alert(headline, title="Callout Creator")
+    bd.alert(headline, "Callout Creator")
 
 
 # ---------------------------------------------------------------------------
@@ -1415,10 +1409,9 @@ def pick_region():
     active_view = doc.ActiveView
 
     if not isinstance(active_view, ViewPlan) or active_view.ViewType not in PLAN_VIEW_TYPES:
-        forms.alert(
+        bd.alert(
             "Run this from a plan view - floor, ceiling, structural or area.",
-            title="Callout Creator",
-        )
+            "Callout Creator")
         return None
 
     try:
@@ -1436,12 +1429,12 @@ def pick_region():
 
 def main():
     if doc.IsFamilyDocument:
-        forms.alert("Run this in a project, not a family.", title="Callout Creator")
+        bd.alert("Run this in a project, not a family.", "Callout Creator")
         return
 
     plan_views = collect_plan_views()
     if not plan_views:
-        forms.alert("This model has no plan views.", title="Callout Creator")
+        bd.alert("This model has no plan views.", "Callout Creator")
         return
 
     templates_by_type = collect_templates_by_view_type()

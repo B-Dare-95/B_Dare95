@@ -30,16 +30,18 @@ from datetime import datetime
 from pyrevit import forms, script
 from System.Windows import RoutedEventHandler, Visibility
 from Autodesk.Revit.DB import FilteredElementCollector, Family, FamilyInstance, TransactionGroup
-from Autodesk.Revit.UI.Selection import ObjectType, ISelectionFilter
+from Autodesk.Revit.UI.Selection import ObjectType
 from Autodesk.Revit.Exceptions import OperationCanceledException
 
 import bd_family_cleaner as fc
 import bd_family_cleaner_report as fcr
+import bd_core as bd
 
 uidoc = __revit__.ActiveUIDocument  # noqa: F821
 if uidoc is None or uidoc.Document.IsFamilyDocument:
-    forms.alert("Open a project first. Family Cleaner cleans the families loaded in a project.",
-                title=TOOL_NAME, exitscript=True)
+    bd.alert("Open a project first. Family Cleaner cleans the families loaded in a project.",
+             TOOL_NAME,
+             exit=True)
 doc = uidoc.Document
 
 memory = fc.load_memory()
@@ -81,7 +83,7 @@ for fam in FilteredElementCollector(doc).OfClass(Family):
 items.sort(key=lambda i: (not i["enabled"], i["title"].lower()))
 
 if not items:
-    forms.alert("This project has no editable loadable families.", title=TOOL_NAME, exitscript=True)
+    bd.alert("This project has no editable loadable families.", TOOL_NAME, exit=True)
 
 # ─────────────────────────────────────────────────────────────
 #  Window
@@ -214,7 +216,7 @@ def open_window():
     def on_run(sender, args):
         keys = checklist.selected_keys()
         if not keys:
-            forms.alert("Check at least one family, or use Pick from Model.", title=TOOL_NAME)
+            bd.alert("Check at least one family, or use Pick from Model.", TOOL_NAME)
             return
         try:
             every = int(window.FindName("TxtEvery").Text)
@@ -244,14 +246,8 @@ def open_window():
     return result["action"]
 
 
-class _PlacedFamilies(ISelectionFilter):
-    """Only placed family instances can be picked."""
-
-    def AllowElement(self, element):
-        return isinstance(element, FamilyInstance)
-
-    def AllowReference(self, reference, point):
-        return False
+def _PlacedFamilies():
+    return bd.ClassFilter(FamilyInstance)
 
 
 def pick_from_model():
@@ -314,19 +310,20 @@ if options is None:
 can_save = bool(doc.PathName)
 if doc.IsModified and not options.preview:
     if can_save:
-        answer = forms.alert("This model has unsaved changes. Save it before cleaning?",
-                             title=TOOL_NAME,
-                             options=["Save and continue", "Continue without saving", "Cancel"])
+        answer = bd.choose_option("This model has unsaved changes. Save it before cleaning?",
+                                  TOOL_NAME,
+                                  ["Save and continue", "Continue without saving", "Cancel"])
         if answer is None or answer == "Cancel":
             script.exit()
         if answer == "Save and continue":
             try:
                 doc.Save()
             except Exception as ex:
-                forms.alert(u"Saving failed: {}".format(ex), title=TOOL_NAME, exitscript=True)
+                bd.alert(u"Saving failed: {}".format(ex), TOOL_NAME, exit=True)
     else:
-        if not forms.alert("This model has never been saved, so it can't be saved before or during "
-                           "the clean. Continue anyway?", title=TOOL_NAME, yes=True, no=True):
+        if not bd.confirm("This model has never been saved, so it can't be saved before or during "
+                          "the clean. Continue anyway?",
+                          TOOL_NAME):
             script.exit()
 
 # ─────────────────────────────────────────────────────────────

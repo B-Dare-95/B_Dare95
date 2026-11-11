@@ -43,6 +43,7 @@ from Autodesk.Revit.DB.Mechanical import SpaceTag
 from Autodesk.Revit.UI import TaskDialog
 
 from pyrevit import forms, script
+import bd_core as bd
 
 
 doc = __revit__.ActiveUIDocument.Document
@@ -61,11 +62,7 @@ KIND_SPATIAL = "spatial"
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-def eid_int(eid):
-    try:
-        return eid.Value
-    except AttributeError:
-        return eid.IntegerValue
+eid_int = bd.eid_int
 
 
 def is_valid_id(eid):
@@ -740,14 +737,14 @@ def run_fix(todo, mode):
                     failures.append((rec, why))
         status = t.Commit()
         if status != TransactionStatus.Committed:
-            forms.alert("Revit did not commit the changes (status: {}). Nothing was changed.".format(status),
-                        title=TITLE)
+            bd.alert("Revit did not commit the changes (status: {}). Nothing was changed.".format(status),
+                     TITLE)
             return None, None
     except Exception as ex:
         if t.GetStatus() == TransactionStatus.Started:
             t.RollBack()
-        forms.alert("The fix failed and was rolled back. Nothing was changed.\n\n{}".format(short_error(ex)),
-                    title=TITLE)
+        bd.alert("The fix failed and was rolled back. Nothing was changed.\n\n{}".format(short_error(ex)),
+                 TITLE)
         return None, None
     return results, failures
 
@@ -797,13 +794,13 @@ def show_results(results, leftovers):
 # Main
 # ---------------------------------------------------------------------------
 if doc.IsFamilyDocument:
-    forms.alert("Run this in a project document, not a family.", title=TITLE, exitscript=True)
+    bd.alert("Run this in a project document, not a family.", TITLE, exit=True)
 
 records = collect_orphans()
 if records is None:
     script.exit()
 if not records:
-    forms.alert("No orphaned tags found in this document.", title=TITLE, exitscript=True)
+    bd.alert("No orphaned tags found in this document.", TITLE, exit=True)
 
 choice = show_summary(records)
 if choice is None:
@@ -811,7 +808,7 @@ if choice is None:
 
 todo = [r for r in records if r.category in choice["cats"] and r.action != SKIP]
 if not todo:
-    forms.alert("Nothing to fix in the selected categories.", title=TITLE, exitscript=True)
+    bd.alert("Nothing to fix in the selected categories.", TITLE, exit=True)
 
 results, failures = run_fix(todo, choice["mode"])
 if results is None:

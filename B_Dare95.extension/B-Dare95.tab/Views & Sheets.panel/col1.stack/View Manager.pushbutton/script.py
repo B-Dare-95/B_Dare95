@@ -49,6 +49,7 @@ from Autodesk.Revit.UI import IExternalEventHandler, ExternalEvent
 from pyrevit import forms, script
 from pyrevit.coreutils import envvars
 from bd_combo_search import enable_combo_search
+import bd_core as bd
 
 
 STR_TYPE = clr.GetClrType(String)
@@ -73,12 +74,7 @@ SKIP_VIEW_TYPES = (ViewType.Internal,
 # small helpers
 # ---------------------------------------------------------------------------
 
-def id_val(eid):
-    """ElementId -> int, Revit 2024-2027 safe."""
-    try:
-        return eid.Value
-    except AttributeError:
-        return eid.IntegerValue
+id_val = bd.eid_int
 
 
 # Revit 2025+ swapped ElementId(int) for ElementId(Int64), which leaves a bare
@@ -384,8 +380,8 @@ class ViewManagerHandler(IExternalEventHandler):
                 action(uiapp)
             except Exception as ex:
                 try:
-                    forms.alert(u"View Manager action failed:\n{0}".format(ex),
-                                title="View Manager")
+                    bd.alert(u"View Manager action failed:\n{0}".format(ex),
+                             "View Manager")
                 except Exception:
                     pass
 
@@ -1248,8 +1244,8 @@ def on_apply_click(sender, args):
 def on_refresh_click(sender, args):
     commit_grid_edit()
     if collect_edits():
-        if not forms.alert("You have unsaved edits. Reload and discard them?",
-                           title="View Manager", yes=True, no=True):
+        if not bd.confirm("You have unsaved edits. Reload and discard them?",
+                          "View Manager"):
             return
     queue_action(action_reload)
 

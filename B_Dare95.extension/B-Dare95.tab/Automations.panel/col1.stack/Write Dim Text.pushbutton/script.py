@@ -32,6 +32,7 @@ from Autodesk.Revit.DB import Transaction, SubTransaction, Dimension, SpotDimens
 from Autodesk.Revit.UI import TaskDialog
 from Autodesk.Revit.UI.Selection import ObjectType, ISelectionFilter
 from Autodesk.Revit.Exceptions import OperationCanceledException
+import bd_core as bd
 
 uiapp = __revit__
 uidoc = uiapp.ActiveUIDocument
@@ -41,12 +42,7 @@ doc = uidoc.Document
 # =============================================================================
 # Helpers
 # =============================================================================
-def id_val(element_id):
-    """ElementId -> int, Revit 2024-2027 safe."""
-    try:
-        return element_id.Value
-    except AttributeError:
-        return element_id.IntegerValue
+id_val = bd.eid_int
 
 
 def flatten(pt, view_dir):

@@ -30,20 +30,24 @@ from System.Windows.Interop import WindowInteropHelper
 from System.Windows.Controls import TextChangedEventHandler, SelectionChangedEventHandler
 from System.Windows.Input import MouseButtonEventHandler
 
-from Autodesk.Revit.DB import (
-    BuiltInParameter, DimensionStyleType, DimensionType, Element, ElementTypeGroup,
-    FamilyInstanceReferenceType, FilteredElementCollector, Mullion, Panel, GeometryInstance, Line, LocationCurve, Options,
-    PlanarFace, Reference, ReferenceArray, RevitLinkInstance, Solid,
-    Transaction, Transform, ViewPlan, ViewSection, ViewType, Wall, WallKind, XYZ
-)
+from Autodesk.Revit.DB import (BuiltInParameter, DimensionStyleType,
+                               DimensionType, ElementTypeGroup,
+                               FamilyInstanceReferenceType,
+                               FilteredElementCollector, Mullion, Panel,
+                               GeometryInstance, Line, LocationCurve, Options,
+                               PlanarFace, Reference, ReferenceArray,
+                               RevitLinkInstance, Solid, Transaction,
+                               Transform, ViewPlan, ViewSection, ViewType,
+                               Wall, WallKind, XYZ)
 from Autodesk.Revit.UI import TaskDialog
 from Autodesk.Revit.UI.Selection import ISelectionFilter, ObjectType
 from Autodesk.Revit.Exceptions import OperationCanceledException
+import bd_core as bd
 
 uidoc = __revit__.ActiveUIDocument
 doc = uidoc.Document
 
-FT_TO_MM = 304.8
+FT_TO_MM = bd.MM_PER_FT
 TOL = 1.0 / FT_TO_MM          # 1 mm - duplicate / end-coincidence tolerance
 PARALLEL_DOT = 0.999          # face normal parallel to measuring axis
 PERP_DOT = 0.01               # line perpendicular to measuring axis
@@ -52,21 +56,11 @@ TOOL_NAME = "Curtain Wall Dimension"
 
 
 # ----------------------------------------------------------------- helpers
-def eid_int(eid):
-    try:
-        return eid.Value
-    except AttributeError:
-        return eid.IntegerValue
+eid_int = bd.eid_int
 
 
 def elem_name(elem):
-    try:
-        return Element.Name.GetValue(elem)
-    except Exception:
-        try:
-            return elem.Name
-        except Exception:
-            return "?"
+    return bd.element_name(elem, u"?")
 
 
 def alert(msg):

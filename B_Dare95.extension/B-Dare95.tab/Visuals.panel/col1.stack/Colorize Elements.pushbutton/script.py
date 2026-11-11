@@ -51,6 +51,7 @@ from Autodesk.Revit.DB import (
     ElementParameterFilter, FilterRule,
 )
 from pyrevit import EXEC_PARAMS
+import bd_core
 
 # -- Revit context ------------------------------------------------------------
 
@@ -85,10 +86,7 @@ PALETTE = [
 
 
 def _eid(eid):
-    try:
-        return str(eid.Value)
-    except AttributeError:
-        return str(eid.IntegerValue)
+    return str(bd_core.eid_int(eid))
 
 
 def hex_to_rgb(hexstr):

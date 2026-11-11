@@ -42,7 +42,8 @@ from Autodesk.Revit.DB import (BuiltInCategory, BuiltInParameter, DatumEnds, Dat
 from Autodesk.Revit.DB import Line as DBLine
 from Autodesk.Revit.UI import TaskDialog, TaskDialogCommonButtons
 
-from pyrevit import forms, revit, script
+from pyrevit import revit, script
+import bd_core as bd
 
 doc = revit.doc
 uidoc = revit.uidoc
@@ -68,12 +69,7 @@ LEVEL_VIEW_TYPES = (ViewType.Section, ViewType.Elevation)
 # =========================================================================
 #  Shared helpers
 # =========================================================================
-def id_val(eid):
-    """ElementId -> Python int on Revit 2024 (.IntegerValue) and 2025+ (.Value)."""
-    try:
-        return int(eid.Value)
-    except AttributeError:
-        return int(eid.IntegerValue)
+id_val = bd.eid_int
 
 
 def view_frame(view):
@@ -1495,7 +1491,7 @@ def main():
         t.Commit()
     except Exception as ex:
         t.RollBack()
-        forms.alert(u"Failed - nothing changed.\n\n{0}".format(ex), title=TITLE)
+        bd.alert(u"Failed - nothing changed.\n\n{0}".format(ex), TITLE)
         return
 
     show_result(res, counts, report)

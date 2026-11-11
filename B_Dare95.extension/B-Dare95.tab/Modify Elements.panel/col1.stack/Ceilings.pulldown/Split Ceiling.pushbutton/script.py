@@ -28,6 +28,7 @@ from pyrevit import forms, script, EXEC_PARAMS
 import clr
 clr.AddReference("System")
 from System.Collections.Generic import List
+import bd_core as bd
 
 #==================================================
 # VARIABLES
@@ -49,12 +50,7 @@ HOSTED_FILTER = LogicalOrFilter(ElementClassFilter(FamilyInstance),
 #==================================================
 # FUNCTIONS - general
 #==================================================
-def get_id_int(element_id):
-    """ElementId as int - .Value (2025+) with .IntegerValue fallback."""
-    try:
-        return element_id.Value
-    except AttributeError:
-        return element_id.IntegerValue
+get_id_int = bd.eid_int
 
 
 def get_bip(param):
@@ -265,7 +261,7 @@ def get_targets():
 #1 Get Ceilings
 targets = get_targets()
 if not targets:
-    forms.alert("No Ceiling with more than one boundary loop was selected.", exitscript=True)
+    bd.alert("No Ceiling with more than one boundary loop was selected.", u"Split Ceiling", exit=True)
 
 #2 Work out the pieces
 plans, skipped = [], []
@@ -282,16 +278,17 @@ for ceiling in targets:
     plans.append((ceiling, groups))
 
 if not plans:
-    forms.alert("Nothing to split.", expanded="\n".join(skipped), exitscript=True)
+    bd.alert("Nothing to split.", u"Split Ceiling", details="\n".join(skipped), exit=True)
 
 #3 Pre-checks
 keep = KEEP_ORIGINALS
 if not keep:
     hosted = sum([count_hosted(f) for f, g in plans])
     if hosted:
-        choice = forms.alert("{0} hosted element(s) or opening(s) sit on the selected Ceilings "
-                             "and would be deleted with the originals.".format(hosted),
-                             options=["Keep originals", "Delete originals anyway", "Cancel"])
+        choice = bd.choose_option("{0} hosted element(s) or opening(s) sit on the selected Ceilings "
+                                  "and would be deleted with the originals.".format(hosted),
+                                  u"Split Ceiling",
+                                  ["Keep originals", "Delete originals anyway", "Cancel"])
         if choice == "Keep originals":
             keep = True
         elif choice != "Delete originals anyway":
@@ -332,10 +329,10 @@ try:
     status = t.Commit()
 except Exception as ex:
     t.RollBack()
-    forms.alert("Split failed, nothing was changed.\n\n{0}".format(ex), exitscript=True)
+    bd.alert("Split failed, nothing was changed.\n\n{0}".format(ex), u"Split Ceiling", exit=True)
 
 if status != TransactionStatus.Committed:
-    forms.alert("Revit rolled the split back, nothing was changed.", exitscript=True)
+    bd.alert("Revit rolled the split back, nothing was changed.", u"Split Ceiling", exit=True)
 
 #5 Report
 if new_ids:
@@ -346,4 +343,4 @@ if keep and done:
     msg += "\nOriginals were kept."
 if failed:
     msg += "\n{0} Ceiling(s) skipped or failed - see details.".format(len(failed))
-forms.alert(msg, expanded="\n".join(done + failed) or None)
+bd.alert(msg, u"Split Ceiling", details="\n".join(done + failed) or None)

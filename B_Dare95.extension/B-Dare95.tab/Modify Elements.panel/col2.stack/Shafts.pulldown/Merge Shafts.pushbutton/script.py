@@ -33,6 +33,7 @@ from System.Windows.Markup import XamlReader
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 
 from pyrevit import revit, DB, UI, script
+import bd_core as bd
 
 doc = revit.doc
 uidoc = revit.uidoc
@@ -71,24 +72,13 @@ SKIP_COPY_PARAMS = set([
 # SMALL HELPERS
 # ----------------------------------------------------------------------------
 
-def id_value(eid):
-    """ElementId -> int, Revit 2024-2027 safe."""
-    if eid is None:
-        return -1
-    try:
-        return eid.Value
-    except AttributeError:
-        return eid.IntegerValue
+id_value = bd.eid_int
 
 
 def elem_name(el):
-    """Bypass IronPython's Element.Name overload ambiguity."""
     if el is None:
-        return "<none>"
-    try:
-        return DB.Element.Name.__get__(el)
-    except Exception:
-        return "<unnamed>"
+        return u"<none>"
+    return bd.element_name(el, u"<unnamed>")
 
 
 def get_param(el, bip, fallback_name):

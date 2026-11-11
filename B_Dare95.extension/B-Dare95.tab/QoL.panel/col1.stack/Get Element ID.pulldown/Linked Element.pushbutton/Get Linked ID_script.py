@@ -25,6 +25,7 @@ clr.AddReference('RevitAPIUI')
 from Autodesk.Revit import DB
 from Autodesk.Revit.UI.Selection import ObjectType
 from pyrevit import script
+import bd_core as bd
 
 #VARIABLES
 
@@ -34,12 +35,7 @@ selection   =  uidoc.Selection
 
 #HELPERS
 
-def get_id_value(element_id):
-    """ElementId.Value (Revit 2025+) with IntegerValue fallback (2024 and earlier)."""
-    try:
-        return element_id.Value
-    except AttributeError:
-        return element_id.IntegerValue
+get_id_value = bd.eid_int
 
 
 def get_element_name(element):

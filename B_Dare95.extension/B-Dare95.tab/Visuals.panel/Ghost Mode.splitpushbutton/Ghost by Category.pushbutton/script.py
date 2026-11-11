@@ -41,6 +41,7 @@ from System.Windows.Media import BrushConverter
 
 from pyrevit import script, EXEC_PARAMS
 from pyrevit.coreutils import envvars
+import bd_core as bd
 
 # ── Globals ────────────────────────────────────────────────────────────────────
 UIAPP       = __revit__
@@ -83,12 +84,7 @@ def brush(hex_code):
     return _brush_conv.ConvertFromString(hex_code)
 
 # ── ElementId Compatibility ────────────────────────────────────────────────────
-def eid_value(element_id):
-    """.Value on Revit 2025+, .IntegerValue fallback for 2024."""
-    try:
-        return element_id.Value
-    except AttributeError:
-        return element_id.IntegerValue
+eid_value = bd.eid_int
 
 # ── Revit Helpers (API context only) ───────────────────────────────────────────
 def view_problem(view):

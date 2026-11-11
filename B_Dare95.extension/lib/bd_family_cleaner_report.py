@@ -39,6 +39,7 @@ from pyrevit import script
 from pyrevit.coreutils import envvars
 
 import bd_family_cleaner as fc
+import bd_core as bd
 
 logger = script.get_logger()
 
@@ -65,8 +66,7 @@ def brush(hex_value):
     return _bc.ConvertFromString(hex_value)
 
 
-def plural(n, word, word_pl=None):
-    return u"{0:,} {1}".format(n, word if n == 1 else (word_pl or word + u"s"))
+plural = bd.plural
 
 
 def status_kind(status):

@@ -33,6 +33,7 @@ from pyrevit import forms, script
 from pyrevit.coreutils import envvars
 
 import bd_health as hc
+import bd_core as bd
 
 logger = script.get_logger()
 
@@ -66,8 +67,7 @@ def brush(hex_value):
     return _bc.ConvertFromString(hex_value)
 
 
-def plural(n, word, word_pl=None):
-    return u"{0} {1}".format(hc.number(n), word if n == 1 else (word_pl or word + u"s"))
+plural = bd.plural
 
 
 def element_id(n):
@@ -117,7 +117,7 @@ class HealthEventHandler(IExternalEventHandler):
                 action()
             except Exception as ex:
                 logger.error("{0} error: {1}".format(self.name, ex))
-                forms.alert(u"{0} ran into an error:\n\n{1}".format(self.name, ex))
+                bd.alert(u"{0} ran into an error:\n\n{1}".format(self.name, ex), u"B-Dare95")
 
     def GetName(self):
         return self.name
@@ -326,8 +326,8 @@ def show_section_report(uiapp, title):
     uidoc = uiapp.ActiveUIDocument
     doc = uidoc.Document if uidoc is not None else None
     if doc is None or doc.IsFamilyDocument:
-        forms.alert(u"Open a project model first - this report checks a project, not a family.",
-                    title=report_name)
+        bd.alert(u"Open a project model first - this report checks a project, not a family.",
+                 report_name)
         return
     section_description = hc.find_section(title)[1]
 

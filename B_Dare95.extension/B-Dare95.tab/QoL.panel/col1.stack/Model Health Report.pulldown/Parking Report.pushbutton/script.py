@@ -34,8 +34,9 @@ from System.Windows.Media import BrushConverter, FontFamily
 
 from Autodesk.Revit.UI import ExternalEvent, IExternalEventHandler
 
-from pyrevit import DB, forms, revit, script
+from pyrevit import DB, revit, script
 from pyrevit.coreutils import envvars
+import bd_core as bd
 
 logger = script.get_logger()
 
@@ -51,20 +52,14 @@ def brush(hex_value):
 
 
 # --------------------------------------------------------------- helpers ---
-def id_int(some_id):
-    """ElementId integer value, Revit 2024-2027 safe."""
-    try:
-        return some_id.Value
-    except AttributeError:
-        return some_id.IntegerValue
+id_int = bd.eid_int
 
 
 def fmt_n(n):
     return u"{:,}".format(n)
 
 
-def plural(n, word, word_pl=None):
-    return u"{} {}".format(fmt_n(n), word if n == 1 else (word_pl or word + u"s"))
+plural = bd.plural
 
 
 LEVEL_BIPS = [p for p in [
@@ -228,7 +223,7 @@ class ParkingEventHandler(IExternalEventHandler):
                 action()
             except Exception as ex:
                 logger.error("Parking Report error: {0}".format(ex))
-                forms.alert("Parking Report ran into an error:\n\n{0}".format(ex))
+                bd.alert("Parking Report ran into an error:\n\n{0}".format(ex), u"Parking Report")
 
     def GetName(self):
         return "Parking Report"
@@ -391,7 +386,7 @@ def run():
 
     report = collect(doc)
     if not report["rows"]:
-        forms.alert("There are no parking elements in this model.", title="Parking Report")
+        bd.alert("There are no parking elements in this model.", "Parking Report")
         set_session(None)
         try:
             external_event.Dispose()

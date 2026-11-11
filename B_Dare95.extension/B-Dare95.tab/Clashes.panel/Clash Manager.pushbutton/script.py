@@ -39,6 +39,7 @@ __persistentengine__ = True
 import re
 import codecs
 import urllib
+import bd_core as bd
 
 TAG_RE = re.compile(r"<[^>]+>")
 WS_RE = re.compile(r"\s+")
@@ -508,7 +509,7 @@ class ClashEventHandler(IExternalEventHandler):
                 action()
             except Exception as ex:
                 logger.error("Clash Navigator error: {0}".format(ex))
-                forms.alert("Clash Navigator ran into an error:\n\n{0}".format(ex))
+                bd.alert("Clash Navigator ran into an error:\n\n{0}".format(ex), u"Clash Manager")
 
     def GetName(self):
         return "Clash Navigator"
@@ -533,7 +534,7 @@ def require_doc():
     """Returns the active Document, or None after alerting the user."""
     doc = get_doc()
     if doc is None:
-        forms.alert("No active Revit document. Open a project and try again.")
+        bd.alert("No active Revit document. Open a project and try again.", u"Clash Manager")
         return None
     return doc
 
@@ -631,12 +632,7 @@ def resolve_clash_pair(doc, clash):
     return side1, side2
 
 
-def id_value(element_id):
-    """ElementId -> number, across Revit 2024-2027 (.Value from 2025 on)."""
-    try:
-        return element_id.Value
-    except AttributeError:
-        return element_id.IntegerValue
+id_value = bd.eid_int
 
 
 def host_corners(element, link_instance):
@@ -892,7 +888,7 @@ def safe_handler(func):
             func(sender, args)
         except Exception as ex:
             logger.error("Clash Navigator error: {0}".format(ex))
-            forms.alert("Clash Navigator ran into an error:\n\n{0}".format(ex))
+            bd.alert("Clash Navigator ran into an error:\n\n{0}".format(ex), u"Clash Manager")
     return wrapper
 
 
@@ -979,14 +975,14 @@ def detect_coord_mode(doc, clash):
                 in_range.append(mode)
         if len(in_range) == 1:
             return in_range[0]
-        forms.alert(
+        bd.alert(
             "Can't work out which coordinate system this report uses, because "
             "neither of this clash's elements could be found in the host model "
             "or any loaded link.\n\n"
             "Pick a clash whose elements do resolve, or set "
             "CLASH_POINT_COORD_SYSTEM at the top of the script to one of: "
-            + ", ".join(COORD_MODES)
-        )
+            + ", ".join(COORD_MODES),
+            u"Clash Manager")
         return None
 
     tolerance_ft = UnitUtils.ConvertToInternalUnits(COORD_DETECT_TOLERANCE_M, UnitTypeId.Meters)
@@ -994,14 +990,14 @@ def detect_coord_mode(doc, clash):
     if best_distance > tolerance_ft:
         lines = ["    {0}: {1:,.0f} m away".format(mode, to_meters(dist))
                  for dist, mode, _pt in scored]
-        forms.alert(
+        bd.alert(
             "None of the coordinate conversions put this clash point anywhere near "
             "the elements the report says are clashing:\n\n" + "\n".join(lines) +
             "\n\nThe usual cause is REPORT_LENGTH_UNIT not matching the report "
             "(check the Tolerance cell in the report's summary table -- it carries "
             "the unit), or the elements having been remodelled since the clash test "
-            "was run."
-        )
+            "was run.",
+            u"Clash Manager")
         return None
 
     logger.debug("Clash point coordinate mode: {0} ({1:.2f} m from elements)".format(
@@ -1018,7 +1014,7 @@ def resolve_clash_point(doc, clash):
     report reads x:585799, y:2368832 -- so using them unconverted puts a section
     box a couple of thousand kilometres from the model."""
     if clash["clash_point"] is None:
-        forms.alert("This clash has no clash-point coordinates in the report.")
+        bd.alert("This clash has no clash-point coordinates in the report.", u"Clash Manager")
         return None
 
     mode = CLASH_POINT_COORD_SYSTEM
@@ -1040,7 +1036,7 @@ def point_is_reachable(point, mode):
     origin that the coordinate or unit setting must be wrong."""
     if point.GetLength() <= REVIT_MODEL_LIMIT_FT:
         return True
-    forms.alert(
+    bd.alert(
         "The clash point converts to a location about {0:,.0f} m from this model's "
         "internal origin, which is outside Revit's working range.\n\n"
         "Coordinate mode '{1}' with coordinates read as {2}. Try a different "
@@ -1049,8 +1045,8 @@ def point_is_reachable(point, mode):
             to_meters(point.GetLength()),
             mode,
             "meters" if REPORT_LENGTH_UNIT == UnitTypeId.Meters else "the configured unit",
-        )
-    )
+        ),
+        u"Clash Manager")
     return False
 
 
@@ -1087,15 +1083,16 @@ def resolve_for_view(clash):
 
     resolved = [(el, link) for el, link in resolve_clash_pair(doc, clash) if el is not None]
     if not resolved:
-        forms.alert("Neither Item 1 nor Item 2 could be resolved in the host model or any loaded link.")
+        bd.alert("Neither Item 1 nor Item 2 could be resolved in the host model or any loaded link.", u"Clash Manager")
         return None
 
     view = doc.ActiveView
     # CanUseTemporaryVisibilityModes doubles as a "this is a model view" test:
     # sheets, schedules and legends all return False.
     if view is None or not view.CanUseTemporaryVisibilityModes():
-        forms.alert("The active view can't show model elements this way. "
-                    "Switch to a plan, section or 3D view.")
+        bd.alert("The active view can't show model elements this way. "
+                 "Switch to a plan, section or 3D view.",
+                 u"Clash Manager")
         return None
     return doc, view, resolved
 
@@ -1212,10 +1209,10 @@ def do_clash_box(clash, box_size_m):
 
     view = doc.ActiveView
     if not isinstance(view, View3D):
-        forms.alert("Switch to a 3D view first -- Clash Box sets that view's section box.")
+        bd.alert("Switch to a 3D view first -- Clash Box sets that view's section box.", u"Clash Manager")
         return False
     if view.IsLocked:
-        forms.alert("The active 3D view is locked; unlock it to set a section box.")
+        bd.alert("The active 3D view is locked; unlock it to set a section box.", u"Clash Manager")
         return False
 
     center = resolve_clash_point(doc, clash)
@@ -2189,14 +2186,14 @@ def run():
         if failed:
             problems.append(u"Could not be read:\n  " + u"\n  ".join(failed))
         if problems:
-            forms.alert(u"\n\n".join(problems))
+            bd.alert(u"\n\n".join(problems), u"Clash Manager")
 
     # ------------------------------------------------------------ export
     def on_export_click(sender, args):
         if busy[0]:
             return
         if not reports[0]:
-            forms.alert("Load at least one clash report first.")
+            bd.alert("Load at least one clash report first.", u"Clash Manager")
             return
 
         if len(reports[0]) == 1:
@@ -2322,10 +2319,10 @@ def run():
         try:
             size = float(box_size_box.Text)
         except ValueError:
-            forms.alert("Clash box size must be a number.")
+            bd.alert("Clash box size must be a number.", u"Clash Manager")
             return
         if size <= 0:
-            forms.alert("Clash box size must be greater than zero.")
+            bd.alert("Clash box size must be greater than zero.", u"Clash Manager")
             return
         clash = selected[0]
 

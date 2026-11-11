@@ -30,15 +30,14 @@ from Autodesk.Revit.DB import (
     FilteredElementCollector, BuiltInCategory,
     LocationPoint, TransactionGroup, Transaction
 )
-from System.Windows import (
-    Window, Visibility,
-    MessageBox, MessageBoxButton, MessageBoxResult, MessageBoxImage
-)
+from System.Windows import Window, Visibility
 from System.Windows.Markup import XamlReader
 from System.Windows.Media import SolidColorBrush, Color
 from System.IO import StringReader
 from System.Xml import XmlReader
 import sys
+
+import bd_core as bd
 
 doc = __revit__.ActiveUIDocument.Document  # noqa: F821
 
@@ -306,13 +305,7 @@ if chk_spaces.IsChecked:
     to_delete += [(sp.Id, "Space") for sp in unplaced["Spaces"]]
 
 if not to_delete:
-    MessageBox.Show(
-        "No categories were selected. Nothing to purge.",
-        TOOL_NAME,
-        MessageBoxButton.OK,
-        MessageBoxImage.Information
-    )
-    sys.exit()
+    bd.alert(u"No categories were selected. Nothing to purge.", TOOL_NAME, exit=True)
 
 # ─────────────────────────────────────────────────────────────
 #  Confirmation dialog
@@ -332,15 +325,7 @@ confirm_msg = (
     + u"\n\nTotal: {} element(s)\n\nDo you want to proceed?".format(len(to_delete))
 )
 
-answer = MessageBox.Show(
-    confirm_msg,
-    u"Confirm Deletion",
-    MessageBoxButton.OKCancel,
-    MessageBoxImage.Warning
-)
-
-if answer != MessageBoxResult.OK:
-    sys.exit()
+bd.confirm(confirm_msg, TOOL_NAME, heading=u"Confirm Deletion", default_yes=False, exit=True)
 
 # ─────────────────────────────────────────────────────────────
 #  Execute deletions
@@ -377,9 +362,4 @@ summary = (
     u"  \u26a0  Failed  : {}"
 ).format(deleted_count, failed_count)
 
-MessageBox.Show(
-    summary,
-    TOOL_NAME,
-    MessageBoxButton.OK,
-    MessageBoxImage.Information
-)
+bd.alert(summary, TOOL_NAME)

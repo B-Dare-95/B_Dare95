@@ -24,13 +24,11 @@ clr.AddReference('PresentationFramework')
 clr.AddReference('WindowsBase')
 clr.AddReference('System.Xml')
 
-from Autodesk.Revit.DB import (Element, Level, FilteredElementCollector,
+from Autodesk.Revit.DB import (Level, FilteredElementCollector,
                                BuiltInParameter, BuiltInCategory, Options,
                                ViewDetailLevel, GeometryInstance, Solid,
                                CurveLoop, Line, Transaction, Transform, XYZ,
-                               RevitLinkInstance, TransactionStatus,
-                               IFailuresPreprocessor, FailureSeverity,
-                               FailureProcessingResult)
+                               RevitLinkInstance, TransactionStatus)
 from Autodesk.Revit.DB.Architecture import Railing, RailingType
 from Autodesk.Revit.UI import TaskDialog
 from Autodesk.Revit.UI.Selection import ISelectionFilter, ObjectType
@@ -45,6 +43,7 @@ from System.Windows.Controls import (ListBoxItem, TextChangedEventHandler,
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 
 from pyrevit import forms
+import bd_core as bd
 
 doc   = __revit__.ActiveUIDocument.Document
 uidoc = __revit__.ActiveUIDocument
@@ -78,48 +77,13 @@ MAX_REPORT_ITEMS = 10
 # ─── Revit messages answered silently (same behaviour as Split at Beams) ─────
 
 
-class SilentFailures(IFailuresPreprocessor):
-    """Answers Revit's failure dialogs the way you would by hand: warnings
-    are dismissed (OK) and errors get their default resolution. An error
-    with no resolution rolls the run back and is reported instead of shown."""
-
-    def __init__(self, handled, fatal):
-        self.handled = handled      # {(description, action): count}
-        self.fatal = fatal          # descriptions that forced a rollback
-
-    def PreprocessFailures(self, accessor):
-        resolved = False
-        for fm in accessor.GetFailureMessages():
-            text = fm.GetDescriptionText()
-            severity = fm.GetSeverity()
-            if severity == FailureSeverity.Warning:
-                accessor.DeleteWarning(fm)
-                action = 'OK'
-            elif severity == FailureSeverity.Error and fm.HasResolutions():
-                try:
-                    action = fm.GetDefaultResolutionCaption()
-                except Exception:
-                    action = 'resolved'
-                accessor.ResolveFailure(fm)
-                resolved = True
-            else:
-                self.fatal.append(text)
-                continue
-            key = (text, action)
-            self.handled[key] = self.handled.get(key, 0) + 1
-        if self.fatal:
-            return FailureProcessingResult.ProceedWithRollBack
-        if resolved:
-            return FailureProcessingResult.ProceedWithCommit
-        return FailureProcessingResult.Continue
-
 
 def make_silent(t, handled, fatal):
-    """Attach SilentFailures to a started transaction."""
-    opts = t.GetFailureHandlingOptions()
-    opts.SetFailuresPreprocessor(SilentFailures(handled, fatal))
-    opts.SetClearAfterRollback(True)
-    t.SetFailureHandlingOptions(opts)
+    """Answer Revit's warnings silently (bd_core.SilentFailures)."""
+    log = bd.FailureLog()
+    log.handled = handled
+    log.fatal = fatal
+    bd.make_silent(t, log)
 
 
 def handled_lines(handled):
@@ -173,23 +137,10 @@ def notify(title, message):
 # ─── Compatibility Helpers ────────────────────────────────────────────────────
 
 
-def eid_value(element_id):
-    """ElementId.Value (2025+) with .IntegerValue fallback."""
-    try:
-        return element_id.Value
-    except AttributeError:
-        return element_id.IntegerValue
+eid_value = bd.eid_int
 
 
-def element_name(element):
-    """Element.Name getter - avoids the IronPython Name binding ambiguity."""
-    try:
-        return Element.Name.__get__(element)
-    except Exception:
-        try:
-            return element.Name
-        except Exception:
-            return "<unnamed>"
+element_name = bd.element_name
 
 
 # ─── Railing Type Collection ──────────────────────────────────────────────────

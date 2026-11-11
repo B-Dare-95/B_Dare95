@@ -20,9 +20,10 @@ from Autodesk.Revit.DB import *
 from Autodesk.Revit.UI import *
 from Autodesk.Revit.UI.Selection import *
 from System.Collections.Generic import List
-from pyrevit import forms, revit, script
+from pyrevit import revit, script
 from pyrevit import EXEC_PARAMS
 from pyrevit.script import toggle_icon
+import bd_core as bd
 
 # Revit Variables
 uidoc       = __revit__.ActiveUIDocument
@@ -36,12 +37,7 @@ output      = script.get_output()
 REVIT_VERSION = int(app.VersionNumber)   # e.g. 2024, 2025, 2026
 
 # ── ElementId Compatibility ────────────────────────────────────────────────────
-def get_element_id_value(element_id):
-    """ElementId.IntegerValue was removed in Revit 2026, replaced with .Value.
-    This helper works transparently across all versions."""
-    if hasattr(element_id, 'IntegerValue'):
-        return element_id.IntegerValue   # Revit 2025 and older
-    return element_id.Value              # Revit 2026+
+get_element_id_value = bd.eid_int
 
 # ── Check for View Template ────────────────────────────────────────────────────
 if get_element_id_value(active_view.ViewTemplateId) != -1:

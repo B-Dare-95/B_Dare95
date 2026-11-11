@@ -21,8 +21,9 @@ import os
 
 from Autodesk.Revit.DB import (RoundingMethod, SpecTypeId, Transaction,
                                UnitSystem, UnitTypeId, UnitUtils, Units)
-from pyrevit import forms, script
+from pyrevit import script
 from pyrevit.script import toggle_icon
+import bd_core as bd
 
 
 # ---------------------------------------------------------------------------
@@ -176,16 +177,16 @@ def build_units(target_system, skipped):
 uidoc = __revit__.ActiveUIDocument
 
 if uidoc is None:
-    forms.alert("No active document. Open a model before running this tool.",
-                title="Convert Units",
-                exitscript=True)
+    bd.alert("No active document. Open a model before running this tool.",
+             "Convert Units",
+             exit=True)
 
 doc = uidoc.Document
 
 if doc.IsReadOnly:
-    forms.alert("This document is read-only. Project Units cannot be changed.",
-                title="Convert Units",
-                exitscript=True)
+    bd.alert("This document is read-only. Project Units cannot be changed.",
+             "Convert Units",
+             exit=True)
 
 current_system = get_current_system(doc)
 
@@ -208,9 +209,9 @@ try:
     t.Commit()
 except Exception as e:
     t.RollBack()
-    forms.alert("Unit conversion failed and was rolled back.\n\n{0}".format(e),
-                title="Convert Units",
-                exitscript=True)
+    bd.alert("Unit conversion failed and was rolled back.\n\n{0}".format(e),
+             "Convert Units",
+             exit=True)
 
 # Icon is set from the committed result, never from a stored flag.
 PATH_SCRIPT = os.path.dirname(__file__)

@@ -45,6 +45,7 @@ from System.Windows.Markup import XamlReader
 from System.Windows.Media import SolidColorBrush, ColorConverter
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 from System.Windows.Interop import WindowInteropHelper
+import bd_core as bd
 
 
 MAX_DEPTH = 4      # nested levels below the family being cleaned (Revit's stack, see Revitaal notes)
@@ -68,22 +69,11 @@ TEXT, SUBTEXT, ACCENT = "#F4F4F4", "#A8A8A8", "#F1C21B"
 #  Small helpers
 # =============================================================================
 
-def eid_int(eid):
-    """ElementId as int: .Value (2024+) with .IntegerValue fallback."""
-    try:
-        return eid.Value
-    except AttributeError:
-        return eid.IntegerValue
+eid_int = bd.eid_int
 
 
 def elem_name(e):
-    try:
-        return DB.Element.Name.GetValue(e) or u""
-    except Exception:
-        try:
-            return e.Name or u""
-        except Exception:
-            return u"?"
+    return bd.element_name(e, u"?")
 
 
 def brush(hex_code):

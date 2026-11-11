@@ -26,19 +26,19 @@ clr.AddReference('PresentationFramework')
 clr.AddReference('PresentationCore')
 clr.AddReference('WindowsBase')
 
-from Autodesk.Revit.DB import (
-    FilteredElementCollector, BuiltInCategory, BuiltInParameter,
-    Wall, WallKind, WallUtils, RevitLinkInstance, Level,
-    Line, XYZ, LocationCurve, LocationPoint, FamilyInstance, Opening,
-    ElementId, ElementTransformUtils,
-    Transaction, TransactionGroup, TransactionStatus,
-    Options, ViewDetailLevel, Solid, GeometryInstance, CurveLoop, PlanarFace,
-    GeometryCreationUtilities, BooleanOperationsUtils, BooleanOperationsType,
-    SolidUtils, Outline, BoundingBoxIntersectsFilter, JoinGeometryUtils,
-    IFailuresPreprocessor, FailureSeverity, FailureProcessingResult
-)
+from Autodesk.Revit.DB import (FilteredElementCollector, BuiltInCategory,
+                               BuiltInParameter, Wall, WallKind, WallUtils,
+                               RevitLinkInstance, Level, Line, XYZ,
+                               LocationCurve, LocationPoint, FamilyInstance,
+                               Opening, ElementId, ElementTransformUtils,
+                               Transaction, TransactionGroup,
+                               TransactionStatus, Options, ViewDetailLevel,
+                               Solid, GeometryInstance, CurveLoop, PlanarFace,
+                               GeometryCreationUtilities,
+                               BooleanOperationsUtils, BooleanOperationsType,
+                               SolidUtils, Outline,
+                               BoundingBoxIntersectsFilter, JoinGeometryUtils)
 from Autodesk.Revit.DB.Structure import StructuralType
-from Autodesk.Revit.UI.Selection import ISelectionFilter
 
 from System import EventHandler
 from System.Collections.Generic import List
@@ -47,6 +47,7 @@ from System.Windows.Markup import XamlReader
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 
 from pyrevit import revit, forms, script
+import bd_core as bd
 
 doc = revit.doc
 uidoc = revit.uidoc
@@ -81,11 +82,7 @@ MAX_REPORT_IDS = 30
 PROGRESS_THRESHOLD = 15      # show a progress bar above this many walls
 
 
-def eid_int(eid):
-    try:
-        return eid.Value
-    except AttributeError:
-        return eid.IntegerValue
+eid_int = bd.eid_int
 
 
 def eid_str(eid):
@@ -115,49 +112,13 @@ def param_double(el, bip, default=0.0):
     return p.AsDouble()
 
 
-class SilentFailures(IFailuresPreprocessor):
-    """Answers Revit's failure dialogs the way you would by hand: warnings
-    are dismissed (OK) and errors get their default resolution (e.g.
-    'Unjoin Elements'). An error with no resolution rolls the wall back and
-    is reported instead of shown."""
-
-    def __init__(self, handled, fatal):
-        self.handled = handled      # {(description, action): count}
-        self.fatal = fatal          # descriptions that forced a rollback
-
-    def PreprocessFailures(self, accessor):
-        resolved = False
-        for fm in accessor.GetFailureMessages():
-            text = fm.GetDescriptionText()
-            severity = fm.GetSeverity()
-            if severity == FailureSeverity.Warning:
-                accessor.DeleteWarning(fm)
-                action = 'OK'
-            elif severity == FailureSeverity.Error and fm.HasResolutions():
-                try:
-                    action = fm.GetDefaultResolutionCaption()
-                except Exception:
-                    action = 'resolved'
-                accessor.ResolveFailure(fm)
-                resolved = True
-            else:
-                self.fatal.append(text)
-                continue
-            key = (text, action)
-            self.handled[key] = self.handled.get(key, 0) + 1
-        if self.fatal:
-            return FailureProcessingResult.ProceedWithRollBack
-        if resolved:
-            return FailureProcessingResult.ProceedWithCommit
-        return FailureProcessingResult.Continue
-
 
 def make_silent(t, handled, fatal):
-    """Attach SilentFailures to a started transaction."""
-    opts = t.GetFailureHandlingOptions()
-    opts.SetFailuresPreprocessor(SilentFailures(handled, fatal))
-    opts.SetClearAfterRollback(True)
-    t.SetFailureHandlingOptions(opts)
+    """Answer Revit's warnings silently (bd_core.SilentFailures)."""
+    log = bd.FailureLog()
+    log.handled = handled
+    log.fatal = fatal
+    bd.make_silent(t, log)
 
 
 def set_param(el, bip, value):
@@ -1275,12 +1236,8 @@ def apply_plan(entry, ctx):
 # ---------------------------------------------------------------------------
 # 10. Selection
 # ---------------------------------------------------------------------------
-class WallOnlyFilter(ISelectionFilter):
-    def AllowElement(self, elem):
-        return isinstance(elem, Wall)
-
-    def AllowReference(self, reference, point):
-        return False
+def WallOnlyFilter():
+    return bd.ClassFilter(Wall)
 
 
 def pick_walls():
@@ -1311,8 +1268,8 @@ def view_walls():
 # ---------------------------------------------------------------------------
 def _ask(msg, ask_again):
     if ask_again:
-        return forms.alert(msg + '\n\nSelect more walls?', title=TITLE, yes=True, no=True)
-    forms.alert(msg, title=TITLE)
+        return bd.confirm(msg + '\n\nSelect more walls?', TITLE)
+    bd.alert(msg, TITLE)
     return False
 
 
@@ -1395,7 +1352,7 @@ def process_walls(walls, ctx, ask_again):
     if not lost_all:
         summary.append('')
         summary.append('Proceed?')
-        if not forms.alert('\n'.join(summary), title=TITLE, yes=True, no=True):
+        if not bd.confirm('\n'.join(summary), TITLE):
             return _ask('Cancelled - nothing was changed.', ask_again)
     else:
         summary.append('')
@@ -1410,8 +1367,9 @@ def process_walls(walls, ctx, ask_again):
         opt_safe = 'Skip the {} wall(s) above, adjust the other {}'\
             .format(len(risky), len(safe))
         opt_cancel = 'Cancel'
-        choice = forms.alert('\n'.join(summary), title=TITLE,
-                             options=[opt_all, opt_safe, opt_cancel])
+        choice = bd.choose_option('\n'.join(summary),
+                                  TITLE,
+                                  [opt_all, opt_safe, opt_cancel])
         if choice == opt_all:
             pass
         elif choice == opt_safe:
@@ -1531,8 +1489,9 @@ def main():
     if unloaded:
         STARTUP_NOTES.append('Unloaded links skipped: {}'.format(', '.join(unloaded)))
     if not sources:
-        forms.alert('No source to read beams/slabs from (active model is off '
-                    'and no link is loaded).', title=TITLE)
+        bd.alert('No source to read beams/slabs from (active model is off '
+                 'and no link is loaded).',
+                 TITLE)
         return
 
     ctx = {
@@ -1543,7 +1502,7 @@ def main():
     if settings['scope'] == 'view':
         walls = view_walls()
         if not walls:
-            forms.alert('No walls in the active view.', title=TITLE)
+            bd.alert('No walls in the active view.', TITLE)
             return
         process_walls(walls, ctx, ask_again=False)
         return
@@ -1557,8 +1516,8 @@ def main():
             if walls is None:
                 break       # Esc during the pick
             if not walls:
-                if not forms.alert('No walls were picked. Select more walls?',
-                                   title=TITLE, yes=True, no=True):
+                if not bd.confirm('No walls were picked. Select more walls?',
+                                  TITLE):
                     break
                 continue
         if not process_walls(walls, ctx, ask_again=True):

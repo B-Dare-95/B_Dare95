@@ -24,7 +24,8 @@ from Autodesk.Revit.DB import (
     Transaction,
 )
 
-from pyrevit import forms, script
+from pyrevit import script
+import bd_core as bd
 
 doc = __revit__.ActiveUIDocument.Document
 output = script.get_output()
@@ -39,12 +40,7 @@ LINK = u"\u2194"
 # ---------------------------------------------------------------------------
 
 
-def get_id_value(element_id):
-    """ElementId.Value (Revit 2025+) with an .IntegerValue fallback."""
-    try:
-        return element_id.Value
-    except AttributeError:
-        return element_id.IntegerValue
+get_id_value = bd.eid_int
 
 
 def collect_target_guids():
@@ -113,7 +109,7 @@ def tag(element_id):
 # ---------------------------------------------------------------------------
 
 if doc.IsFamilyDocument:
-    forms.alert("This tool runs on project documents only.", exitscript=True)
+    bd.alert("This tool runs on project documents only.", u"Unjoin False Intersect", exit=True)
 
 warnings = doc.GetWarnings()
 
@@ -161,20 +157,16 @@ for failure in warnings:
             pairs.append((id_a, id_b))
 
 if not pairs:
-    forms.alert(
+    bd.alert(
         "No 'elements are joined but do not intersect' warnings found "
         "in this document.",
-        title="Nothing to unjoin",
-        exitscript=True,
-    )
+        "Nothing to unjoin",
+        exit=True)
 
-if not forms.alert(
+if not bd.confirm(
     "Found {0} warning(s) resolving to {1} element pair(s).\n\n"
     "Unjoin them now?".format(matched_count, len(pairs)),
-    title="Unjoin Disjoint Elements",
-    yes=True,
-    no=True,
-):
+    "Unjoin Disjoint Elements"):
     script.exit()
 
 # ---------------------------------------------------------------------------
@@ -236,11 +228,10 @@ try:
 
 except Exception as ex:
     transaction.RollBack()
-    forms.alert(
+    bd.alert(
         "The run was aborted and everything was rolled back:\n\n{0}".format(ex),
-        title="Unjoin Disjoint Elements",
-        exitscript=True,
-    )
+        "Unjoin Disjoint Elements",
+        exit=True)
 
 # ---------------------------------------------------------------------------
 # Final report
