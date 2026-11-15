@@ -390,7 +390,6 @@ from System.Windows.Controls import (
 from System.Windows.Input import MouseButtonEventHandler, Cursors
 from System.Windows.Media import BrushConverter, ColorConverter, LinearGradientBrush, GradientStop
 from System.Windows.Interop import WindowInteropHelper
-from System.Windows.Markup import XamlReader
 from System.Windows.Media.Imaging import BitmapImage, BitmapCacheOption
 from System.Windows.Threading import DispatcherPriority
 
@@ -1276,148 +1275,7 @@ def zoom_to_box(uidoc, view, low, high):
 
 # ---------------------------------------------------------------- WPF UI
 
-XAML = u"""
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Clash Navigator" Height="660" Width="900"
-        WindowStartupLocation="CenterScreen"
-        Background="#161616">
-    <Window.Resources>
-        <Style x:Key="RoundButton" TargetType="Button">
-            <Setter Property="Background" Value="#393939"/>
-            <Setter Property="Foreground" Value="#F4F4F4"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="10,6"/>
-            <Setter Property="Margin" Value="0,0,0,8"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" CornerRadius="6">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-        <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource RoundButton}">
-            <Setter Property="Background" Value="#F1C21B"/>
-            <Setter Property="Foreground" Value="#161616"/>
-        </Style>
-        <Style x:Key="TabCloseButton" TargetType="Button">
-            <Setter Property="Foreground" Value="#A8A8A8"/>
-            <Setter Property="Width" Value="18"/>
-            <Setter Property="Height" Value="18"/>
-            <Setter Property="Margin" Value="8,0,0,0"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="ToolTip" Value="Close this report"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bg" Background="Transparent" CornerRadius="9">
-                            <TextBlock Text="&#x2715;" FontSize="10" Foreground="{TemplateBinding Foreground}"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bg" Property="Background" Value="#DA1E28"/>
-                                <Setter Property="Foreground" Value="#FFFFFF"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-    </Window.Resources>
-    <Grid Margin="12">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
-
-        <StackPanel Grid.Row="0" Margin="0,0,0,10">
-            <DockPanel Margin="0,0,0,8">
-                <Button x:Name="LoadButton" Content="Load HTML Reports..." DockPanel.Dock="Left"
-                        Width="170" Style="{StaticResource AccentButton}" Margin="0,0,10,0"/>
-                <Button x:Name="ExportButton" Content="Export Results..." DockPanel.Dock="Right"
-                        Width="140" Style="{StaticResource RoundButton}" Margin="10,0,0,0"/>
-                <TextBlock x:Name="ReportLabel" Text="No report loaded" Foreground="#A8A8A8"
-                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-            </DockPanel>
-            <Border BorderBrush="#393939" BorderThickness="0,0,0,1">
-                <WrapPanel x:Name="ReportTabs"/>
-            </Border>
-        </StackPanel>
-
-        <Grid Grid.Row="1">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="260"/>
-            </Grid.ColumnDefinitions>
-
-            <DockPanel Grid.Column="0" Margin="0,0,10,0">
-                <Border DockPanel.Dock="Top" Margin="0,0,0,8" Padding="12,7"
-                        Background="#262626" BorderBrush="#525252" BorderThickness="1">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="Total" Foreground="#A8A8A8" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="SumTotal" Text="-" Foreground="#F4F4F4" FontWeight="Bold"
-                                   FontSize="14" Margin="8,0,28,0" VerticalAlignment="Center"/>
-                        <TextBlock Text="Solved" Foreground="#A8A8A8" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="SumSolved" Text="-" Foreground="#42BE65" FontWeight="Bold"
-                                   FontSize="14" Margin="8,0,28,0" VerticalAlignment="Center"/>
-                        <TextBlock Text="Approved" Foreground="#A8A8A8" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="SumApproved" Text="-" Foreground="#78A9FF" FontWeight="Bold"
-                                   FontSize="14" Margin="8,0,28,0" VerticalAlignment="Center"/>
-                        <TextBlock Text="Remaining" Foreground="#A8A8A8" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="SumRemaining" Text="-" Foreground="#FF8389" FontWeight="Bold"
-                                   FontSize="14" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Border>
-                <Border DockPanel.Dock="Top" Background="#393939" CornerRadius="4,4,0,0" Padding="4,5">
-                    <DockPanel>
-                        <TextBlock Text="Solved" Width="52" TextAlignment="Center"
-                                   Foreground="#A8A8A8" FontWeight="SemiBold"/>
-                        <TextBlock Text="Approved" Width="66" TextAlignment="Center"
-                                   Foreground="#A8A8A8" FontWeight="SemiBold"/>
-                        <TextBlock Text="Clash" Margin="6,0,0,0"
-                                   Foreground="#A8A8A8" FontWeight="SemiBold"/>
-                    </DockPanel>
-                </Border>
-                <ListBox x:Name="ClashList" Background="#262626" Foreground="#F4F4F4"
-                         BorderThickness="0" HorizontalContentAlignment="Stretch"/>
-            </DockPanel>
-
-            <StackPanel Grid.Column="1">
-                <Image x:Name="ClashImage" Height="160" Stretch="Uniform" Margin="0,0,0,10"/>
-                <TextBlock Text="Clash Details" Foreground="#F4F4F4" FontWeight="Bold" Margin="0,0,0,8"/>
-                <TextBlock x:Name="Item1Label" Foreground="#A8A8A8" TextWrapping="Wrap" Margin="0,0,0,6"/>
-                <TextBlock x:Name="Item2Label" Foreground="#A8A8A8" TextWrapping="Wrap" Margin="0,0,0,6"/>
-                <TextBlock x:Name="PointLabel" Foreground="#A8A8A8" TextWrapping="Wrap" Margin="0,0,0,16"/>
-
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="8"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <Button x:Name="FocusButton" Grid.Column="0" Content="Focus"
-                            Style="{StaticResource RoundButton}"/>
-                    <Button x:Name="IsolateButton" Grid.Column="2" Content="Isolate"
-                            Style="{StaticResource RoundButton}"/>
-                </Grid>
-
-                <TextBlock Text="Clash Box Size (m)" Foreground="#A8A8A8" Margin="0,8,0,2"/>
-                <TextBox x:Name="BoxSizeBox" Background="#262626" Foreground="#F4F4F4"
-                         BorderBrush="#525252" Padding="6" Margin="0,0,0,8"/>
-                <Button x:Name="ClashBoxButton" Content="Create Clash Box" Style="{StaticResource RoundButton}"/>
-            </StackPanel>
-        </Grid>
-
-        <TextBlock x:Name="StatusLabel" Grid.Row="2" Margin="0,10,0,0"
-                   Foreground="#A8A8A8" Text="Ready."/>
-    </Grid>
-</Window>
-"""
+# Window layout: ui.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 
 # ---------------------------------------------------------- solved / approved
@@ -1767,7 +1625,7 @@ def run():
             existing.Activate()
             return
 
-    window = XamlReader.Parse(XAML)
+    window = bd.load_window(__file__)
     event_handler = ClashEventHandler()
     external_event = ExternalEvent.Create(event_handler)
 

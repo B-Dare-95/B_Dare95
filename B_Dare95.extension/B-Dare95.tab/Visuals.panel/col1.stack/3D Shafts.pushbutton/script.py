@@ -63,6 +63,7 @@ from pyrevit import forms, revit, DB, UI, EXEC_PARAMS
 from pyrevit.revit import events
 from pyrevit.framework import Convert, List, Color, SolidColorBrush
 from pyrevit.compat import get_elementid_value_func
+import bd_core as bd
 
 get_elementid_value = get_elementid_value_func()
 
@@ -1020,196 +1021,7 @@ class Context(object):
 # ---------------------------------------------------------------------------
 # XAML - inline, Catppuccin Mocha
 # ---------------------------------------------------------------------------
-XAML = u"""
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="3D Shafts - Live Visualizer"
-        Height="640" Width="470" MinHeight="520" MinWidth="420"
-        Background="#161616" WindowStartupLocation="CenterScreen"
-        ResizeMode="CanResize" ShowInTaskbar="True">
-
-  <Window.Resources>
-    <Style x:Key="FlatButton" TargetType="Button">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Background" Value="#525252"/>
-      <Setter Property="FontFamily" Value="Segoe UI"/>
-      <Setter Property="FontSize" Value="11"/>
-      <Setter Property="Height" Value="28"/>
-      <Setter Property="Margin" Value="0,0,6,0"/>
-      <Setter Property="Padding" Value="10,0"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="bd" Background="{TemplateBinding Background}"
-                    CornerRadius="4" Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="Center"
-                                VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#6F6F6F"/>
-              </Trigger>
-              <Trigger Property="IsEnabled" Value="False">
-                <Setter TargetName="bd" Property="Opacity" Value="0.45"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-    <Style x:Key="AccentButton" TargetType="Button"
-           BasedOn="{StaticResource FlatButton}">
-      <Setter Property="Background" Value="#F1C21B"/>
-      <Setter Property="Foreground" Value="#161616"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-    </Style>
-
-    <Style x:Key="Caption" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#A8A8A8"/>
-      <Setter Property="FontFamily" Value="Segoe UI"/>
-      <Setter Property="FontSize" Value="11"/>
-    </Style>
-
-    <Style x:Key="DarkCheck" TargetType="CheckBox">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="FontFamily" Value="Segoe UI"/>
-      <Setter Property="FontSize" Value="11"/>
-      <Setter Property="VerticalContentAlignment" Value="Center"/>
-    </Style>
-
-    <Style x:Key="RowItemStyle" TargetType="ListBoxItem">
-      <Setter Property="Margin" Value="0,0,0,4"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ListBoxItem">
-            <Border x:Name="bd" Background="#262626" CornerRadius="4"
-                    BorderThickness="1" BorderBrush="#262626" Padding="8,6">
-              <ContentPresenter/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsSelected" Value="True">
-                <Setter TargetName="bd" Property="BorderBrush" Value="#F1C21B"/>
-                <Setter TargetName="bd" Property="Background" Value="#393939"/>
-              </Trigger>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#393939"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-    <DataTemplate x:Key="RowTemplate">
-      <Grid>
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="Auto"/>
-          <ColumnDefinition Width="Auto"/>
-          <ColumnDefinition Width="*"/>
-          <ColumnDefinition Width="Auto"/>
-        </Grid.ColumnDefinitions>
-        <CheckBox Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0"
-                  IsChecked="{Binding is_visible, Mode=TwoWay}"/>
-        <Border Grid.Column="1" Width="18" Height="18" CornerRadius="3"
-                Margin="0,0,10,0" Background="{Binding swatch}"/>
-        <TextBlock Grid.Column="2" Text="{Binding name_text}"
-                   Foreground="#F4F4F4" FontFamily="Segoe UI" FontSize="12"
-                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-        <TextBlock Grid.Column="3" Text="{Binding count_text}"
-                   Foreground="#A8A8A8" FontFamily="Segoe UI" FontSize="10"
-                   VerticalAlignment="Center" Margin="8,0,0,0"/>
-      </Grid>
-    </DataTemplate>
-  </Window.Resources>
-
-  <Grid Margin="14">
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="*"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-    </Grid.RowDefinitions>
-
-    <TextBlock Grid.Row="0" Text="{Binding status_message}" Foreground="#F4F4F4"
-               FontFamily="Segoe UI" FontSize="12" TextWrapping="Wrap"
-               Margin="0,0,0,10"/>
-
-    <TextBox Grid.Row="1" x:Name="filter_box" Height="26" Margin="0,0,0,8"
-             Background="#393939" Foreground="#F4F4F4" BorderBrush="#525252"
-             BorderThickness="1" FontFamily="Segoe UI" FontSize="11"
-             VerticalContentAlignment="Center" Padding="6,0"
-             Text="{Binding filter_text, UpdateSourceTrigger=PropertyChanged}"/>
-
-    <ListBox Grid.Row="2" x:Name="rows_list"
-             ItemsSource="{Binding rows}"
-             SelectedItem="{Binding selected_row, Mode=TwoWay}"
-             ItemTemplate="{StaticResource RowTemplate}"
-             ItemContainerStyle="{StaticResource RowItemStyle}"
-             Background="Transparent" BorderThickness="0"
-             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-             MouseDoubleClick="change_color_click"/>
-
-    <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,10,0,0">
-      <Button Content="Change Color" Style="{StaticResource AccentButton}"
-              Click="change_color_click"/>
-      <Button Content="Show All" Style="{StaticResource FlatButton}"
-              Click="show_all_click"/>
-      <Button Content="Hide All" Style="{StaticResource FlatButton}"
-              Click="hide_all_click"/>
-      <Button Content="Reset Palette" Style="{StaticResource FlatButton}"
-              Click="reset_palette_click"/>
-    </StackPanel>
-
-    <Grid Grid.Row="4" Margin="0,14,0,0">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="Auto"/>
-        <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="Auto"/>
-      </Grid.ColumnDefinitions>
-      <TextBlock Grid.Column="0" Text="Transparency"
-                 Style="{StaticResource Caption}" VerticalAlignment="Center"/>
-      <Slider Grid.Column="1" Minimum="0" Maximum="100" Margin="10,0"
-              IsSnapToTickEnabled="True" TickFrequency="5"
-              VerticalAlignment="Center"
-              Value="{Binding transparency, Mode=TwoWay, Delay=120}"/>
-      <TextBlock Grid.Column="2" Text="{Binding transparency_label}"
-                 Foreground="#F4F4F4" FontFamily="Segoe UI" FontSize="11"
-                 FontWeight="SemiBold" VerticalAlignment="Center" Width="34"
-                 TextAlignment="Right"/>
-    </Grid>
-
-    <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0,12,0,0">
-      <CheckBox Content="Selected shafts only" Style="{StaticResource DarkCheck}"
-                IsChecked="{Binding selection_only, Mode=TwoWay}"/>
-    </StackPanel>
-
-    <StackPanel Grid.Row="6" Orientation="Horizontal" Margin="0,14,0,0"
-                HorizontalAlignment="Right">
-      <Button Content="Refresh" Style="{StaticResource FlatButton}"
-              Click="refresh_click"/>
-      <Button Content="Close" Style="{StaticResource FlatButton}"
-              Click="close_click" Margin="0"/>
-    </StackPanel>
-
-    <Border Grid.Row="7" Background="{Binding banner_bg}" CornerRadius="4"
-            Padding="10,6" Margin="0,12,0,0">
-      <StackPanel Orientation="Horizontal">
-        <TextBlock Text="{Binding banner_icon}" FontSize="13"
-                   Foreground="{Binding banner_fg}" VerticalAlignment="Center"
-                   Margin="0,0,6,0"/>
-        <TextBlock Text="{Binding banner_message}" FontFamily="Segoe UI"
-                   FontSize="11" Foreground="{Binding banner_fg}"
-                   TextWrapping="Wrap" VerticalAlignment="Center"/>
-      </StackPanel>
-    </Border>
-  </Grid>
-</Window>
-"""
+# Window layout: ui.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 
 # ---------------------------------------------------------------------------
@@ -1218,7 +1030,7 @@ XAML = u"""
 class MainWindow(forms.WPFWindow):
     def __init__(self):
         try:
-            forms.WPFWindow.__init__(self, XAML, literal_string=True)
+            forms.WPFWindow.__init__(self, bd.window_xaml(__file__), literal_string=True)
         except TypeError:
             # Older pyRevit builds without literal_string support.
             temp_path = os.path.join(
@@ -1226,7 +1038,7 @@ class MainWindow(forms.WPFWindow):
             )
             handle = open(temp_path, "w")
             try:
-                handle.write(XAML.encode("utf-8"))
+                handle.write(bd.window_xaml(__file__).encode("utf-8"))
             finally:
                 handle.close()
             forms.WPFWindow.__init__(self, temp_path)

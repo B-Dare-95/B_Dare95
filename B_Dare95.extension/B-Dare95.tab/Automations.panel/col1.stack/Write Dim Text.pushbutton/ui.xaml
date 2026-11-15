@@ -1,0 +1,76 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Dimension Text Writer" Width="440" SizeToContent="Height"
+        WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
+        Background="{DynamicResource BgBrush}" FontFamily="Segoe UI" FontSize="12"
+        FocusManager.FocusedElement="{Binding ElementName=TbAbove}">
+
+  <Window.Resources>
+    <Style TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
+      <Setter Property="ToolTip" Value="Unchecked = leave this property untouched"/>
+    </Style>
+  </Window.Resources>
+
+  <Border Margin="14" Style="{StaticResource Card}" CornerRadius="6" Padding="16">
+    <StackPanel>
+      <TextBlock Text="Dimension Text Writer" Style="{StaticResource Title}"/>
+      <TextBlock Style="{StaticResource Sub}" Margin="0,4,0,14"
+                 Text="Checked fields are written to every dimension you pick. An empty checked field clears that property."/>
+
+      <Grid Margin="0,0,0,8">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="26"/><ColumnDefinition Width="64"/><ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <CheckBox x:Name="CbAbove" IsChecked="True" Grid.Column="0"/>
+        <TextBlock Text="Top" Style="{StaticResource Label}" Grid.Column="1"/>
+        <TextBox Height="28" x:Name="TbAbove" Grid.Column="2" IsEnabled="{Binding IsChecked, ElementName=CbAbove}"/>
+      </Grid>
+
+      <Grid Margin="0,0,0,8">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="26"/><ColumnDefinition Width="64"/><ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <CheckBox x:Name="CbBelow" IsChecked="True" Grid.Column="0"/>
+        <TextBlock Text="Bottom" Style="{StaticResource Label}" Grid.Column="1"/>
+        <TextBox Height="28" x:Name="TbBelow" Grid.Column="2" IsEnabled="{Binding IsChecked, ElementName=CbBelow}"/>
+      </Grid>
+
+      <Grid Margin="0,0,0,8">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="26"/><ColumnDefinition Width="64"/><ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <CheckBox x:Name="CbPrefix" IsChecked="True" Grid.Column="0"/>
+        <TextBlock Text="Prefix" Style="{StaticResource Label}" Grid.Column="1"/>
+        <TextBox Height="28" x:Name="TbPrefix" Grid.Column="2" IsEnabled="{Binding IsChecked, ElementName=CbPrefix}"/>
+      </Grid>
+
+      <Grid Margin="0,0,0,14">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="26"/><ColumnDefinition Width="64"/><ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <CheckBox x:Name="CbSuffix" IsChecked="True" Grid.Column="0"/>
+        <TextBlock Text="Suffix" Style="{StaticResource Label}" Grid.Column="1"/>
+        <TextBox Height="28" x:Name="TbSuffix" Grid.Column="2" IsEnabled="{Binding IsChecked, ElementName=CbSuffix}"/>
+      </Grid>
+
+      <TextBlock Text="Multi-segment dimensions" Style="{StaticResource Sub}" Margin="0,0,0,6"/>
+      <Grid Margin="0,0,0,14">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <ToggleButton x:Name="TgAll" Content="All segments" Style="{StaticResource Tgl}" Height="30" IsChecked="True" Grid.Column="0"/>
+        <ToggleButton x:Name="TgPicked" Content="Picked segment only" Style="{StaticResource Tgl}" Height="30" Grid.Column="2"/>
+      </Grid>
+
+      <Border Background="{StaticResource SurfaceBrush}" CornerRadius="4" Padding="10,8" Margin="0,0,0,14">
+        <TextBlock Style="{StaticResource Sub}"
+                   Text="Enter = start picking. While picking, text is applied on each click. Press ESC to finish - all changes are one Undo."/>
+      </Border>
+
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+        <Button x:Name="BtnCancel" Content="Cancel" Style="{StaticResource Btn}" Height="32" Margin="0,0,8,0"/>
+        <Button x:Name="BtnStart" Content="Start Picking" Style="{StaticResource AccentBtn}" Height="32"/>
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</Window>

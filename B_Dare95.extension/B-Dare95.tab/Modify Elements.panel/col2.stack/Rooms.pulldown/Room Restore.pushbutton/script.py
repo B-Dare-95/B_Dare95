@@ -35,7 +35,6 @@ from System.Windows import (Thickness, Visibility, FontWeights, TextTrimming, Ro
                             MessageBox, MessageBoxButton, MessageBoxImage, MessageBoxResult)
 from System.Windows.Input import Cursors, MouseButtonEventHandler
 from System.Windows.Controls import StackPanel, TextBlock, CheckBox, Orientation, TextChangedEventHandler
-from System.Windows.Markup import XamlReader
 from System.Windows.Media import BrushConverter, Brushes
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 from System.Windows.Interop import WindowInteropHelper
@@ -81,121 +80,7 @@ def report(doc, results):
 
 
 # ==================================================================== UI
-XAML = u"""
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Room Register - Restore" Width="1120" Height="660"
-        WindowStartupLocation="CenterScreen" Background="#161616"
-        FontFamily="Segoe UI" FontSize="12">
-  <Window.Resources>
-    <Style x:Key="Btn" TargetType="Button">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Padding" Value="14,6"/>
-      <Setter Property="Margin" Value="6,0,0,0"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="bd" Background="{TemplateBinding Background}"
-                    CornerRadius="4" Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#525252"/>
-              </Trigger>
-              <Trigger Property="IsEnabled" Value="False">
-                <Setter Property="Opacity" Value="0.4"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource Btn}">
-      <Setter Property="Background" Value="#F1C21B"/>
-      <Setter Property="Foreground" Value="#161616"/>
-    </Style>
-    <Style x:Key="Danger" TargetType="Button" BasedOn="{StaticResource Btn}">
-      <Setter Property="Background" Value="#DA1E28"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-    </Style>
-    <Style x:Key="Tgl" TargetType="ToggleButton">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Padding" Value="12,6"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ToggleButton">
-            <Border x:Name="bd" Background="{TemplateBinding Background}"
-                    CornerRadius="4" Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#F1C21B"/>
-                <Setter Property="Foreground" Value="#161616"/>
-              </Trigger>
-              <Trigger Property="IsEnabled" Value="False">
-                <Setter Property="Opacity" Value="0.4"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-  </Window.Resources>
-
-  <Grid Margin="16">
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="*"/>
-      <RowDefinition Height="Auto"/>
-    </Grid.RowDefinitions>
-
-    <StackPanel Grid.Row="0">
-      <TextBlock Text="Recoverable rooms" Foreground="#F4F4F4" FontSize="18" FontWeight="SemiBold"/>
-      <TextBlock x:Name="SubText" Foreground="#A8A8A8" Margin="0,4,0,12"/>
-    </StackPanel>
-
-    <DockPanel Grid.Row="1" Margin="0,0,0,8">
-      <TextBlock DockPanel.Dock="Left" Text="Search" Foreground="#A8A8A8"
-                 VerticalAlignment="Center" Margin="0,0,8,0"/>
-      <ToggleButton x:Name="RebuildToggle" DockPanel.Dock="Right" Style="{StaticResource Tgl}"
-                    Margin="8,0,0,0" Content="Rebuild blocked deleted rooms unplaced"/>
-      <TextBox x:Name="SearchBox" Background="#262626" Foreground="#F4F4F4"
-               BorderBrush="#525252" CaretBrush="#F4F4F4" Padding="6,5"/>
-    </DockPanel>
-
-    <Border Grid.Row="2" Background="#262626" CornerRadius="4,4,0,0" Padding="8,6">
-      <StackPanel x:Name="HeaderRow" Orientation="Horizontal"/>
-    </Border>
-
-    <Border Grid.Row="3" Background="#262626" CornerRadius="0,0,4,4"
-            BorderBrush="#393939" BorderThickness="0,1,0,0">
-      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-        <StackPanel x:Name="RowsPanel" Margin="0,4,0,4"/>
-      </ScrollViewer>
-    </Border>
-
-    <DockPanel Grid.Row="4" Margin="0,12,0,0">
-      <TextBlock x:Name="CountText" Foreground="#A8A8A8" VerticalAlignment="Center"/>
-      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-        <Button x:Name="RemoveBtn" Content="Remove from register" Style="{StaticResource Danger}"
-                Margin="0,0,18,0"/>
-        <Button x:Name="SelectReadyBtn" Content="Select ready" Style="{StaticResource Btn}"/>
-        <Button x:Name="ClearBtn" Content="Clear" Style="{StaticResource Btn}"/>
-        <Button x:Name="CancelBtn" Content="Cancel" Style="{StaticResource Btn}"/>
-        <Button x:Name="RestoreBtn" Content="Restore selected" Style="{StaticResource Primary}"/>
-      </StackPanel>
-    </DockPanel>
-  </Grid>
-</Window>
-"""
+# Window layout: ui.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 COLS = [("Status", 80), ("Number", 80), ("Name", 200), ("Level", 130),
         ("Data as of", 130), ("Note", 360)]
@@ -247,7 +132,7 @@ def _restorable(c, allow):
 
 def show_menu(cands, subtitle, remove_fn):
     """remove_fn(uids) -> number removed; permanently drops Deleted records."""
-    win = XamlReader.Parse(XAML)
+    win = bd.load_window(__file__)
     search = win.FindName("SearchBox")
     toggle = win.FindName("RebuildToggle")
     header = win.FindName("HeaderRow")

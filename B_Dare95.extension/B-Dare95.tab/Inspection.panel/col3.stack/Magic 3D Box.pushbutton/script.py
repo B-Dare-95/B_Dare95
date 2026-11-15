@@ -29,7 +29,6 @@ from System import EventHandler
 from System.Collections.Generic import List
 from System.Windows import RoutedEventHandler
 from System.Windows.Controls import TextChangedEventHandler
-from System.Windows.Markup import XamlReader
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 
 from Autodesk.Revit.DB import (
@@ -227,145 +226,7 @@ def find_3d_view(document, name):
 # Settings window
 # ---------------------------------------------------------------------------
 
-SETTINGS_XAML = """
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Magic 3D Box - Settings"
-        Width="430" Height="520"
-        WindowStartupLocation="CenterScreen"
-        ResizeMode="NoResize"
-        Background="#161616"
-        FontFamily="Segoe UI">
-
-  <Window.Resources>
-
-    <Style x:Key="Label" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#A8A8A8"/>
-      <Setter Property="FontSize" Value="12"/>
-      <Setter Property="Margin" Value="0,0,0,6"/>
-    </Style>
-
-    <Style x:Key="Field" TargetType="TextBox">
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="CaretBrush" Value="#F1C21B"/>
-      <Setter Property="BorderBrush" Value="#525252"/>
-      <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="Padding" Value="8,6"/>
-      <Setter Property="FontSize" Value="13"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="TextBox">
-            <Border Background="{TemplateBinding Background}"
-                    BorderBrush="{TemplateBinding BorderBrush}"
-                    BorderThickness="{TemplateBinding BorderThickness}"
-                    CornerRadius="6">
-              <ScrollViewer x:Name="PART_ContentHost"
-                            Margin="{TemplateBinding Padding}"/>
-            </Border>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-    <Style x:Key="Chip" TargetType="Button">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="FontSize" Value="13"/>
-      <Setter Property="Height" Value="34"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="bd" Background="{TemplateBinding Background}"
-                    CornerRadius="6" Padding="10,0">
-              <ContentPresenter VerticalAlignment="Center"
-                                HorizontalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="bd" Property="Opacity" Value="0.85"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-    <Style x:Key="TypeItem" TargetType="ListBoxItem">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="FontSize" Value="13"/>
-      <Setter Property="Padding" Value="10,7"/>
-      <Setter Property="Margin" Value="0,0,0,3"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ListBoxItem">
-            <Border x:Name="bd" Background="Transparent" CornerRadius="6">
-              <ContentPresenter Margin="{TemplateBinding Padding}"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#525252"/>
-              </Trigger>
-              <Trigger Property="IsSelected" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#F1C21B"/>
-                <Setter Property="Foreground" Value="#161616"/>
-                <Setter Property="FontWeight" Value="SemiBold"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-  </Window.Resources>
-
-  <Border Background="#262626" CornerRadius="10" Margin="10" Padding="18">
-    <Grid>
-      <Grid.RowDefinitions>
-        <RowDefinition Height="Auto"/>
-        <RowDefinition Height="Auto"/>
-        <RowDefinition Height="Auto"/>
-        <RowDefinition Height="*"/>
-        <RowDefinition Height="Auto"/>
-        <RowDefinition Height="Auto"/>
-      </Grid.RowDefinitions>
-
-      <TextBlock Grid.Row="0" Text="Magic 3D Box"
-                 Foreground="#F1C21B" FontSize="18" FontWeight="SemiBold"
-                 Margin="0,0,0,14"/>
-
-      <TextBlock Grid.Row="1" Text="View template"
-                 Style="{StaticResource Label}"/>
-
-      <TextBox Grid.Row="2" x:Name="TemplateFilter"
-               Style="{StaticResource Field}" Margin="0,0,0,8"/>
-
-      <Border Grid.Row="3" Background="#393939" CornerRadius="6" Padding="6">
-        <ListBox x:Name="TemplateList"
-                 Background="Transparent" BorderThickness="0"
-                 ItemContainerStyle="{StaticResource TypeItem}"
-                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
-      </Border>
-
-      <StackPanel Grid.Row="4" Margin="0,14,0,0">
-        <TextBlock Text="3D view name" Style="{StaticResource Label}"/>
-        <TextBox x:Name="ViewName" Style="{StaticResource Field}"/>
-      </StackPanel>
-
-      <StackPanel Grid.Row="5" Orientation="Horizontal"
-                  HorizontalAlignment="Right" Margin="0,16,0,0">
-        <Button x:Name="CancelBtn" Content="Cancel" Width="90"
-                Background="#525252" Style="{StaticResource Chip}"
-                Margin="0,0,8,0"/>
-        <Button x:Name="OkBtn" Content="Run" Width="110"
-                Background="#F1C21B" Foreground="#161616"
-                FontWeight="SemiBold" Style="{StaticResource Chip}"/>
-      </StackPanel>
-
-    </Grid>
-  </Border>
-</Window>
-"""
+# Window layout: ui.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 
 def show_settings(available, current_template, current_name):
@@ -374,7 +235,7 @@ def show_settings(available, current_template, current_name):
     'accepted' is separate because <None> is a valid template choice and
     cannot be signalled by returning None on its own.
     """
-    window = XamlReader.Parse(SETTINGS_XAML)
+    window = bd.load_window(__file__)
 
     tpl_filter = window.FindName("TemplateFilter")
     tpl_list = window.FindName("TemplateList")

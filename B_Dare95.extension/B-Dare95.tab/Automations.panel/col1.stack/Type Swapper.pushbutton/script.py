@@ -44,6 +44,7 @@ from System.Windows import (
 from System.Windows.Media import SolidColorBrush, Color
 import System
 from bd_combo_search import enable_combo_search
+import bd_core as bd
 
 doc = revit.doc
 
@@ -135,198 +136,7 @@ def _all_types(cat_id):
 #  XAML  –  main window skeleton
 # ══════════════════════════════════════════════════════════════════════════════
 
-WINDOW_XAML = u"""
-<Window
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Type Swapper \u2014 Bulk Family Type Replacement"
-    Height="660" Width="1000"
-    MinHeight="520" MinWidth="740"
-    WindowStartupLocation="CenterScreen"
-    ResizeMode="CanResizeWithGrip"
-    Background="#161616">
-
-  <Grid Margin="16">
-    <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="230"/>
-      <ColumnDefinition Width="12"/>
-      <ColumnDefinition Width="*"/>
-    </Grid.ColumnDefinitions>
-
-    <!-- ═══════════════════════════  LEFT  ═══════════════════════════ -->
-    <Border Grid.Column="0" Background="#262626" CornerRadius="9" Padding="12">
-      <DockPanel>
-
-        <!-- Section label -->
-        <TextBlock DockPanel.Dock="Top"
-            Text="CATEGORY"
-            Foreground="#F1C21B" FontSize="10" FontWeight="Bold"
-            Margin="2,0,0,8"/>
-
-        <!-- Search box -->
-        <TextBox DockPanel.Dock="Top" x:Name="SearchBox"
-            Background="#393939" Foreground="#F4F4F4" CaretBrush="#F4F4F4"
-            BorderBrush="#525252" BorderThickness="1"
-            Padding="8,6" Margin="0,0,0,6" FontSize="12"/>
-
-        <!-- Category list -->
-        <ListBox x:Name="CategoryList"
-            Background="Transparent" BorderThickness="0"
-            Foreground="#F4F4F4" FontSize="12"
-            HorizontalContentAlignment="Stretch"
-            ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-          <ListBox.ItemContainerStyle>
-            <Style TargetType="ListBoxItem">
-              <Setter Property="Padding" Value="8,5"/>
-              <Setter Property="Margin"  Value="0,1"/>
-              <Setter Property="Foreground" Value="#F4F4F4"/>
-              <Setter Property="Template">
-                <Setter.Value>
-                  <ControlTemplate TargetType="ListBoxItem">
-                    <Border x:Name="Bd" Background="Transparent"
-                        CornerRadius="6" Padding="{TemplateBinding Padding}">
-                      <ContentPresenter/>
-                    </Border>
-                    <ControlTemplate.Triggers>
-                      <Trigger Property="IsSelected" Value="True">
-                        <Setter TargetName="Bd" Property="Background" Value="#F1C21B"/>
-                        <Setter Property="Foreground" Value="#161616"/>
-                      </Trigger>
-                      <MultiTrigger>
-                        <MultiTrigger.Conditions>
-                          <Condition Property="IsMouseOver" Value="True"/>
-                          <Condition Property="IsSelected"  Value="False"/>
-                        </MultiTrigger.Conditions>
-                        <Setter TargetName="Bd" Property="Background" Value="#3D3D55"/>
-                      </MultiTrigger>
-                    </ControlTemplate.Triggers>
-                  </ControlTemplate>
-                </Setter.Value>
-              </Setter>
-            </Style>
-          </ListBox.ItemContainerStyle>
-        </ListBox>
-
-      </DockPanel>
-    </Border>
-
-    <!-- ═══════════════════════════  RIGHT  ═══════════════════════════ -->
-    <Border Grid.Column="2" Background="#262626" CornerRadius="9" Padding="16,14">
-      <Grid>
-        <Grid.RowDefinitions>
-          <RowDefinition Height="Auto"/>   <!-- column headers  -->
-          <RowDefinition Height="Auto"/>   <!-- separator       -->
-          <RowDefinition Height="*"/>      <!-- rows / hint     -->
-          <RowDefinition Height="Auto"/>   <!-- confirm bar     -->
-        </Grid.RowDefinitions>
-
-        <!-- Column headers + Add Row button -->
-        <Grid Grid.Row="0" Margin="0,0,0,8">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="36"/>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="90"/>
-          </Grid.ColumnDefinitions>
-
-          <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock Text="FROM TYPE" Foreground="#A8A8A8"
-                FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
-            <TextBlock Text="  (instances present)" Foreground="#6F6F6F"
-                FontSize="10" VerticalAlignment="Center"/>
-          </StackPanel>
-
-          <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock Text="TO TYPE" Foreground="#A8A8A8"
-                FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
-            <TextBlock Text="  (any loaded type)" Foreground="#6F6F6F"
-                FontSize="10" VerticalAlignment="Center"/>
-          </StackPanel>
-
-          <Button Grid.Column="3" x:Name="AddRowBtn"
-              Content="&#xFF0B;  Add Row"
-              Foreground="#F4F4F4" FontSize="11"
-              Cursor="Hand" IsEnabled="False" HorizontalAlignment="Right">
-            <Button.Template>
-              <ControlTemplate TargetType="Button">
-                <Border x:Name="ABd" Background="#393939"
-                    CornerRadius="6" Padding="10,5">
-                  <ContentPresenter HorizontalAlignment="Center"
-                                    VerticalAlignment="Center"/>
-                </Border>
-                <ControlTemplate.Triggers>
-                  <Trigger Property="IsEnabled" Value="False">
-                    <Setter TargetName="ABd" Property="Background" Value="#252535"/>
-                    <Setter Property="Foreground" Value="#525252"/>
-                  </Trigger>
-                  <Trigger Property="IsMouseOver" Value="True">
-                    <Setter TargetName="ABd" Property="Background" Value="#525252"/>
-                  </Trigger>
-                </ControlTemplate.Triggers>
-              </ControlTemplate>
-            </Button.Template>
-          </Button>
-        </Grid>
-
-        <Separator Grid.Row="1" Background="#3D3D55" Margin="0,0,0,10"/>
-
-        <!-- Hint  OR  scrollable rows -->
-        <Grid Grid.Row="2">
-          <TextBlock x:Name="HintLabel"
-              Text="&#8592; Select a category to start building swap pairs"
-              Foreground="#6F6F6F" FontSize="13"
-              HorizontalAlignment="Center" VerticalAlignment="Center"/>
-
-          <ScrollViewer x:Name="RowsScroll"
-              VerticalScrollBarVisibility="Auto"
-              HorizontalScrollBarVisibility="Disabled"
-              Visibility="Collapsed">
-            <StackPanel x:Name="RowsPanel" Margin="0,2,4,2"/>
-          </ScrollViewer>
-        </Grid>
-
-        <!-- Confirm bar -->
-        <Grid Grid.Row="3" Margin="0,10,0,0">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="Auto"/>
-          </Grid.ColumnDefinitions>
-          <TextBlock x:Name="StatusLabel" Grid.Column="0"
-              Foreground="#A8A8A8" FontSize="11"
-              VerticalAlignment="Center"
-              TextWrapping="Wrap" Margin="2,0,12,0"/>
-          <Button x:Name="ConfirmBtn" Grid.Column="1"
-              Content="CONFIRM SWAP"
-              Foreground="#161616"
-              FontSize="13" FontWeight="Bold"
-              Cursor="Hand" IsEnabled="False">
-            <Button.Template>
-              <ControlTemplate TargetType="Button">
-                <Border x:Name="CBd" Background="#F1C21B"
-                    CornerRadius="9" Padding="22,10">
-                  <ContentPresenter HorizontalAlignment="Center"
-                                    VerticalAlignment="Center"/>
-                </Border>
-                <ControlTemplate.Triggers>
-                  <Trigger Property="IsEnabled" Value="False">
-                    <Setter TargetName="CBd" Property="Background" Value="#525252"/>
-                    <Setter Property="Foreground" Value="#6F6F6F"/>
-                  </Trigger>
-                  <Trigger Property="IsMouseOver" Value="True">
-                    <Setter TargetName="CBd" Property="Background" Value="#FFB800"/>
-                  </Trigger>
-                </ControlTemplate.Triggers>
-              </ControlTemplate>
-            </Button.Template>
-          </Button>
-        </Grid>
-
-      </Grid>
-    </Border>
-
-  </Grid>
-</Window>
-"""
+# Window layout: ui.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 # ── Remove-button XAML  (parsed once per added row, no .format() needed) ─────
 _RM_BTN_XAML = u"""
@@ -371,7 +181,7 @@ _RM_BTN_XAML = u"""
 #  Build window
 # ══════════════════════════════════════════════════════════════════════════════
 
-win = XamlReader.Parse(WINDOW_XAML)
+win = bd.load_window(__file__)
 
 search_box   = win.FindName('SearchBox')
 cat_list     = win.FindName('CategoryList')

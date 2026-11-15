@@ -31,7 +31,6 @@ from System.Collections.Generic import HashSet, List
 from System.Windows import (Thickness, CornerRadius, VerticalAlignment, HorizontalAlignment, TextAlignment,
                             TextTrimming, Visibility, RoutedEventHandler)
 from System.Windows.Controls import Border, DockPanel, Dock, CheckBox, TextBlock, StackPanel
-from System.Windows.Markup import XamlReader
 from System.Windows.Media import SolidColorBrush, ColorConverter
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 from System.Windows.Interop import WindowInteropHelper
@@ -1056,115 +1055,7 @@ KINDS = {
 #  The window
 # =============================================================================
 
-XAML = u"""
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Purge" Width="760" SizeToContent="Height" MaxHeight="940"
-        WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
-        Background="#161616" FontFamily="Segoe UI">
-  <Window.Resources>
-    <Style x:Key="Card" TargetType="Border">
-      <Setter Property="Background" Value="#262626"/>
-      <Setter Property="CornerRadius" Value="8"/>
-      <Setter Property="Padding" Value="14,12"/>
-      <Setter Property="Margin" Value="0,0,0,8"/>
-    </Style>
-    <Style x:Key="Hint" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#A8A8A8"/>
-      <Setter Property="FontSize" Value="11"/>
-      <Setter Property="TextWrapping" Value="Wrap"/>
-    </Style>
-    <Style TargetType="CheckBox">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="FontSize" Value="12"/>
-      <Setter Property="VerticalContentAlignment" Value="Center"/>
-      <Setter Property="Cursor" Value="Hand"/>
-    </Style>
-    <Style x:Key="Input" TargetType="TextBox">
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="CaretBrush" Value="#F4F4F4"/>
-      <Setter Property="BorderBrush" Value="#525252"/>
-      <Setter Property="Padding" Value="6,4"/>
-      <Setter Property="VerticalContentAlignment" Value="Center"/>
-    </Style>
-    <Style x:Key="Secondary" TargetType="Button">
-      <Setter Property="Background" Value="#525252"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="FontSize" Value="12"/>
-      <Setter Property="Height" Value="30"/>
-      <Setter Property="MinWidth" Value="64"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border Background="{TemplateBinding Background}" CornerRadius="6" Padding="12,4">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style x:Key="Primary" TargetType="Button">
-      <Setter Property="Background" Value="#F1C21B"/>
-      <Setter Property="Foreground" Value="#161616"/>
-      <Setter Property="FontWeight" Value="Bold"/>
-      <Setter Property="FontSize" Value="13"/>
-      <Setter Property="Height" Value="34"/>
-      <Setter Property="MinWidth" Value="100"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border Background="{TemplateBinding Background}" CornerRadius="6" Padding="16,6">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-  </Window.Resources>
-  <StackPanel Margin="20">
-    <TextBlock x:Name="TbTitle" Foreground="#F4F4F4" FontSize="16" FontWeight="Bold"/>
-    <TextBlock x:Name="TbSub" Style="{StaticResource Hint}" Margin="0,2,0,12"/>
-
-    <Border Style="{StaticResource Card}">
-      <TextBlock x:Name="TbInfo" Style="{StaticResource Hint}" FontSize="12"/>
-    </Border>
-
-    <Border Style="{StaticResource Card}">
-      <StackPanel>
-        <DockPanel Margin="0,0,0,8">
-          <Button x:Name="BtnNone" DockPanel.Dock="Right" Content="None" Style="{StaticResource Secondary}" Margin="6,0,0,0"/>
-          <Button x:Name="BtnAll" DockPanel.Dock="Right" Content="All" Style="{StaticResource Secondary}"/>
-          <CheckBox x:Name="ChkUsed" DockPanel.Dock="Right" Content="Show used items too" Margin="10,0,10,0"
-                    VerticalAlignment="Center"/>
-          <Grid>
-            <TextBox x:Name="SearchBox" Style="{StaticResource Input}" Height="30"/>
-            <TextBlock x:Name="SearchHint" Text="Search..." Foreground="#6F6F6F" FontSize="12"
-                       Margin="9,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
-          </Grid>
-        </DockPanel>
-        <DockPanel x:Name="HeaderRow" Margin="34,0,10,4"/>
-        <ScrollViewer MaxHeight="420" VerticalScrollBarVisibility="Auto">
-          <StackPanel x:Name="ListPanel"/>
-        </ScrollViewer>
-        <TextBlock x:Name="TbEmpty" Style="{StaticResource Hint}" Margin="4,8,0,0" Visibility="Collapsed"/>
-        <TextBlock x:Name="TbCount" Style="{StaticResource Hint}" Margin="0,8,0,0"/>
-      </StackPanel>
-    </Border>
-
-    <Border x:Name="BdStatus" Background="#262626" CornerRadius="6" Padding="10,8" Margin="0,0,0,10">
-      <TextBlock x:Name="TbStatus" Foreground="#A8A8A8" FontSize="12" TextWrapping="Wrap"/>
-    </Border>
-
-    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-      <Button x:Name="BtnClose" Content="Close" Style="{StaticResource Secondary}" Height="34" MinWidth="88" Margin="0,0,10,0"/>
-      <Button x:Name="BtnPurge" Content="Purge" Style="{StaticResource Primary}"/>
-    </StackPanel>
-  </StackPanel>
-</Window>
-"""
+# Window layout: bd_purge.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 STATUS = {"info": ("#262626", "#A8A8A8"), "ok": ("#0E2A18", "#A7F0BA"), "warn": ("#3A2E06", "#FDDC69")}
 PILL = {"unused": ("#3A2E06", "#FDDC69"), "used": ("#2E2E2E", "#A8A8A8"), "all": ("#393939", "#C6C6C6")}
@@ -1179,7 +1070,7 @@ class PurgeWindow(object):
         self.tool = tool
         self.cache = cache
         self.rows = []  # (row, border, box)
-        w = XamlReader.Parse(XAML)
+        w = bd.load_window(__file__, "bd_purge.xaml")
         self.w = w
         self.ui = dict((n, w.FindName(n)) for n in (
             "TbTitle", "TbSub", "TbInfo", "BtnNone", "BtnAll", "ChkUsed", "SearchBox", "SearchHint", "HeaderRow",

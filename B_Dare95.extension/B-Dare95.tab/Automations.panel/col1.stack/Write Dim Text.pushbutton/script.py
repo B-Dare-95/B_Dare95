@@ -21,12 +21,8 @@ clr.AddReference("PresentationFramework")
 clr.AddReference("PresentationCore")
 clr.AddReference("WindowsBase")
 
-from System import EventHandler
 from System.Windows import RoutedEventHandler
 from System.Windows.Input import Key, KeyEventHandler
-from System.Windows.Interop import WindowInteropHelper
-from System.Windows.Markup import XamlReader
-from System.Windows.Threading import Dispatcher, DispatcherFrame
 
 from Autodesk.Revit.DB import Transaction, SubTransaction, Dimension, SpotDimension
 from Autodesk.Revit.UI import TaskDialog
@@ -74,152 +70,11 @@ class DimensionFilter(ISelectionFilter):
 
 
 # =============================================================================
-# UI  (IBM Carbon palette)
+# UI  (layout: ui.xaml, colours and styles: lib/bd_theme.xaml)
 # =============================================================================
-XAML = """
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Dimension Text Writer" Width="440" SizeToContent="Height"
-        WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
-        Background="#161616" FontFamily="Segoe UI" FontSize="12"
-        FocusManager.FocusedElement="{Binding ElementName=TbAbove}">
-
-  <Window.Resources>
-    <Style x:Key="Label" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="VerticalAlignment" Value="Center"/>
-    </Style>
-    <Style x:Key="Sub" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#A8A8A8"/>
-      <Setter Property="TextWrapping" Value="Wrap"/>
-    </Style>
-
-    <Style TargetType="TextBox">
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="CaretBrush" Value="#F4F4F4"/>
-      <Setter Property="BorderBrush" Value="#525252"/>
-      <Setter Property="Height" Value="28"/>
-      <Setter Property="Padding" Value="6,0"/>
-      <Setter Property="VerticalContentAlignment" Value="Center"/>
-    </Style>
-
-    <Style TargetType="CheckBox">
-      <Setter Property="VerticalAlignment" Value="Center"/>
-      <Setter Property="ToolTip" Value="Unchecked = leave this property untouched"/>
-    </Style>
-
-    <Style x:Key="Btn" TargetType="Button">
-      <Setter Property="Height" Value="32"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="4" Padding="14,0">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-    <Style x:Key="Mode" TargetType="ToggleButton">
-      <Setter Property="Height" Value="30"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ToggleButton">
-            <Border x:Name="Bd" Background="#393939" CornerRadius="4" Padding="10,0">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#F1C21B"/>
-                <Setter Property="Foreground" Value="#161616"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-  </Window.Resources>
-
-  <Border Margin="14" Background="#262626" CornerRadius="6" Padding="16">
-    <StackPanel>
-      <TextBlock Text="Dimension Text Writer" Style="{StaticResource Label}" FontSize="16" FontWeight="SemiBold"/>
-      <TextBlock Style="{StaticResource Sub}" Margin="0,4,0,14"
-                 Text="Checked fields are written to every dimension you pick. An empty checked field clears that property."/>
-
-      <Grid Margin="0,0,0,8">
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="26"/><ColumnDefinition Width="64"/><ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
-        <CheckBox x:Name="CbAbove" IsChecked="True" Grid.Column="0"/>
-        <TextBlock Text="Top" Style="{StaticResource Label}" Grid.Column="1"/>
-        <TextBox x:Name="TbAbove" Grid.Column="2" IsEnabled="{Binding IsChecked, ElementName=CbAbove}"/>
-      </Grid>
-
-      <Grid Margin="0,0,0,8">
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="26"/><ColumnDefinition Width="64"/><ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
-        <CheckBox x:Name="CbBelow" IsChecked="True" Grid.Column="0"/>
-        <TextBlock Text="Bottom" Style="{StaticResource Label}" Grid.Column="1"/>
-        <TextBox x:Name="TbBelow" Grid.Column="2" IsEnabled="{Binding IsChecked, ElementName=CbBelow}"/>
-      </Grid>
-
-      <Grid Margin="0,0,0,8">
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="26"/><ColumnDefinition Width="64"/><ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
-        <CheckBox x:Name="CbPrefix" IsChecked="True" Grid.Column="0"/>
-        <TextBlock Text="Prefix" Style="{StaticResource Label}" Grid.Column="1"/>
-        <TextBox x:Name="TbPrefix" Grid.Column="2" IsEnabled="{Binding IsChecked, ElementName=CbPrefix}"/>
-      </Grid>
-
-      <Grid Margin="0,0,0,14">
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="26"/><ColumnDefinition Width="64"/><ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
-        <CheckBox x:Name="CbSuffix" IsChecked="True" Grid.Column="0"/>
-        <TextBlock Text="Suffix" Style="{StaticResource Label}" Grid.Column="1"/>
-        <TextBox x:Name="TbSuffix" Grid.Column="2" IsEnabled="{Binding IsChecked, ElementName=CbSuffix}"/>
-      </Grid>
-
-      <TextBlock Text="Multi-segment dimensions" Style="{StaticResource Sub}" Margin="0,0,0,6"/>
-      <Grid Margin="0,0,0,14">
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
-        <ToggleButton x:Name="TgAll" Content="All segments" Style="{StaticResource Mode}" IsChecked="True" Grid.Column="0"/>
-        <ToggleButton x:Name="TgPicked" Content="Picked segment only" Style="{StaticResource Mode}" Grid.Column="2"/>
-      </Grid>
-
-      <Border Background="#393939" CornerRadius="4" Padding="10,8" Margin="0,0,0,14">
-        <TextBlock Style="{StaticResource Sub}"
-                   Text="Enter = start picking. While picking, text is applied on each click. Press ESC to finish - all changes are one Undo."/>
-      </Border>
-
-      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-        <Button x:Name="BtnCancel" Content="Cancel" Style="{StaticResource Btn}" Background="#525252" Foreground="#F4F4F4" Margin="0,0,8,0"/>
-        <Button x:Name="BtnStart" Content="Start Picking" Style="{StaticResource Btn}" Background="#F1C21B" Foreground="#161616" FontWeight="SemiBold"/>
-      </StackPanel>
-    </StackPanel>
-  </Border>
-</Window>
-"""
-
-
 def show_ui():
     """Returns (values, mode) or None if cancelled. values = [(api_property, text), ...]"""
-    window = XamlReader.Parse(XAML)
-    WindowInteropHelper(window).Owner = uiapp.MainWindowHandle
+    window = bd.load_window(__file__)
 
     f = window.FindName
     fields = [
@@ -231,7 +86,6 @@ def show_ui():
     tg_all, tg_picked = f("TgAll"), f("TgPicked")
 
     result = {"go": False, "values": [], "mode": "all"}
-    frame = DispatcherFrame()
 
     def on_mode(sender, args):
         is_all = sender is tg_all
@@ -259,18 +113,13 @@ def show_ui():
             args.Handled = True
             on_start(sender, args)
 
-    def on_closed(sender, args):
-        frame.Continue = False
-
     tg_all.Click += RoutedEventHandler(on_mode)
     tg_picked.Click += RoutedEventHandler(on_mode)
     f("BtnStart").Click += RoutedEventHandler(on_start)
     f("BtnCancel").Click += RoutedEventHandler(on_cancel)
     window.PreviewKeyDown += KeyEventHandler(on_key)
-    window.Closed += EventHandler(on_closed)
 
-    window.Show()
-    Dispatcher.PushFrame(frame)
+    bd.show_modal(window, uiapp)
 
     if not result["go"]:
         return None

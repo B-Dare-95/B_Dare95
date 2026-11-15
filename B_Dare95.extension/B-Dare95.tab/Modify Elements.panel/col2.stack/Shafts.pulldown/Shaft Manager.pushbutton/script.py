@@ -43,7 +43,6 @@ from System.Windows import (
     Thickness, CornerRadius, GridLength, GridUnitType, Visibility,
     VerticalAlignment, HorizontalAlignment, TextTrimming
 )
-from System.Windows.Markup import XamlReader
 from bd_combo_search import enable_combo_search
 import bd_core as bd
 
@@ -107,187 +106,7 @@ HDR_LABELS = [
 # Colour tokens: {BG}, {CARD}, etc.
 # WPF markup extensions: {{StaticResource X}}, {{TemplateBinding X}} —
 # the double-braces are collapsed to single after colour substitution.
-BROWSER_XAML = """
-<Window
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Shaft Opening Editor"
-    Width="1000" Height="640"
-    MinWidth="740" MinHeight="440"
-    WindowStartupLocation="CenterScreen"
-    Background="{BG}"
-    Foreground="{TEXT}"
-    FontFamily="Segoe UI"
-    FontSize="13">
-
-    <Window.Resources>
-
-        <!-- ── Slim ScrollBar ── -->
-        <Style x:Key="ScrollThumbStyle" TargetType="Thumb">
-            <Setter Property="Background" Value="{MUTED}"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Thumb">
-                        <Border Background="{{TemplateBinding Background}}" CornerRadius="3"/>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{SUBTEXT}"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style TargetType="ScrollBar">
-            <Setter Property="Background" Value="{CARD}"/>
-            <Setter Property="Width"      Value="6"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ScrollBar">
-                        <Grid Background="{CARD}">
-                            <Track Name="PART_Track" IsDirectionReversed="True">
-                                <Track.Thumb>
-                                    <Thumb Style="{{StaticResource ScrollThumbStyle}}"/>
-                                </Track.Thumb>
-                            </Track>
-                        </Grid>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- ── Save / Accent button ── -->
-        <Style x:Key="SaveBtnStyle" TargetType="Button">
-            <Setter Property="Background"      Value="{ACCENT}"/>
-            <Setter Property="Foreground"      Value="{BG}"/>
-            <Setter Property="FontWeight"      Value="SemiBold"/>
-            <Setter Property="FontSize"        Value="13"/>
-            <Setter Property="Height"          Value="36"/>
-            <Setter Property="Cursor"          Value="Hand"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd"
-                                Background="{{TemplateBinding Background}}"
-                                CornerRadius="6">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed"  Value="True">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.70"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled"  Value="False">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.40"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- ── Cancel / Secondary button ── -->
-        <Style x:Key="CancelBtnStyle" TargetType="Button">
-            <Setter Property="Background"      Value="{SURFACE}"/>
-            <Setter Property="Foreground"      Value="{TEXT}"/>
-            <Setter Property="FontSize"        Value="13"/>
-            <Setter Property="Height"          Value="36"/>
-            <Setter Property="Cursor"          Value="Hand"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush"     Value="{MUTED}"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd"
-                                Background="{{TemplateBinding Background}}"
-                                BorderBrush="{{TemplateBinding BorderBrush}}"
-                                BorderThickness="{{TemplateBinding BorderThickness}}"
-                                CornerRadius="6">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.75"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-    </Window.Resources>
-
-    <Border Padding="16" Background="{BG}">
-        <DockPanel>
-
-            <!-- ── Title bar + search ── -->
-            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12" LastChildFill="False">
-                <TextBlock x:Name="TitleLabel"
-                           DockPanel.Dock="Left"
-                           FontSize="15" FontWeight="SemiBold"
-                           Foreground="{TEXT}"
-                           VerticalAlignment="Center"/>
-                <Border DockPanel.Dock="Right"
-                        Background="{SURFACE}" CornerRadius="6"
-                        BorderBrush="{MUTED}" BorderThickness="1"
-                        Width="230">
-                    <TextBox x:Name="SearchBox"
-                             Background="Transparent" BorderThickness="0"
-                             Foreground="{TEXT}" CaretBrush="{ACCENT}"
-                             Padding="8,5" FontSize="12"
-                             ToolTip="Search by ID or Shaft Function…"/>
-                </Border>
-            </DockPanel>
-
-            <!-- ── Footer: status + buttons ── -->
-            <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
-                <TextBlock x:Name="StatusLabel"
-                           FontSize="11" Foreground="{SUBTEXT}"
-                           HorizontalAlignment="Center"
-                           Margin="0,0,0,8"/>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="12"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <Button x:Name="CancelButton" Grid.Column="0"
-                            Content="Cancel"
-                            Style="{{StaticResource CancelBtnStyle}}"/>
-                    <Button x:Name="SaveButton"   Grid.Column="2"
-                            Content="Save Changes"
-                            Style="{{StaticResource SaveBtnStyle}}"/>
-                </Grid>
-            </StackPanel>
-
-            <!-- ── List card ── -->
-            <!-- RowsPanel margin: 8 L / 14 R (8 padding + 6 scrollbar width)   -->
-            <!-- keeps column headers aligned with rows even when bar is visible. -->
-            <Border Background="{CARD}" CornerRadius="8">
-                <ScrollViewer VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel x:Name="RowsPanel" Margin="8,8,14,8"/>
-                </ScrollViewer>
-            </Border>
-
-        </DockPanel>
-    </Border>
-</Window>
-""".replace("{BG}",      BG) \
-   .replace("{CARD}",    CARD) \
-   .replace("{SURFACE}", SURFACE) \
-   .replace("{MUTED}",   MUTED) \
-   .replace("{TEXT}",    TEXT) \
-   .replace("{SUBTEXT}", SUBTEXT) \
-   .replace("{ACCENT}",  ACCENT) \
-   .replace("{{",        "{") \
-   .replace("}}",        "}")
+# Window layout: ui.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 
 # ─── REVIT HELPERS ─────────────────────────────────────────────────────────────
@@ -693,7 +512,7 @@ def show_shaft_browser(shafts, levels):
     Uses Show() + Dispatcher.PushFrame() so Revit stays interactive
     while the window is open.
     """
-    window     = XamlReader.Parse(BROWSER_XAML)
+    window     = bd.load_window(__file__)
     title_lbl  = window.FindName("TitleLabel")
     search_box = window.FindName("SearchBox")
     status_lbl = window.FindName("StatusLabel")

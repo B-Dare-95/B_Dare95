@@ -24,7 +24,6 @@ from System.Windows.Controls import (
     Button, StackPanel, TextBlock, Border, DockPanel, Dock, WrapPanel, Orientation
 )
 from System.Windows.Controls.Primitives import UniformGrid
-from System.Windows.Markup import XamlReader
 from System.Windows.Media import BrushConverter, Brushes
 from System.Windows.Input import Mouse, Cursors
 from System.Windows.Interop import WindowInteropHelper
@@ -34,6 +33,7 @@ from Autodesk.Revit.DB import ElementId, XYZ, ViewType
 from Autodesk.Revit.UI import TaskDialog
 
 import change_tracker as ct
+import bd_core as bd
 
 uidoc = __revit__.ActiveUIDocument
 doc = uidoc.Document
@@ -125,208 +125,7 @@ def ordered_kinds(rec):
 # =============================================================================
 # XAML
 # =============================================================================
-XAML = u"""
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Change Tracker" Width="1240" Height="820" MinWidth="940" MinHeight="560"
-        WindowStartupLocation="CenterScreen" Background="#161616"
-        FontFamily="IBM Plex Sans, Segoe UI" FontSize="13" Foreground="#F4F4F4">
-  <Window.Resources>
-    <Style x:Key="PrimaryBtn" TargetType="Button">
-      <Setter Property="Background" Value="#F1C21B"/>
-      <Setter Property="Foreground" Value="#161616"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="Height" Value="34"/>
-      <Setter Property="Padding" Value="16,0"/>
-      <Setter Property="Margin" Value="8,0,0,0"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Opacity" Value="0.85"/></Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-    <Style x:Key="GhostBtn" TargetType="Button">
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="BorderBrush" Value="#525252"/>
-      <Setter Property="Height" Value="34"/>
-      <Setter Property="Padding" Value="14,0"/>
-      <Setter Property="Margin" Value="8,0,0,0"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                    BorderThickness="1" CornerRadius="4" Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="#525252"/></Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-    <Style x:Key="ChipBtn" TargetType="ToggleButton">
-      <Setter Property="Background" Value="Transparent"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="BorderBrush" Value="#525252"/>
-      <Setter Property="FontSize" Value="12"/>
-      <Setter Property="Height" Value="30"/>
-      <Setter Property="Padding" Value="12,0"/>
-      <Setter Property="Margin" Value="0,0,6,0"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ToggleButton">
-            <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                    BorderThickness="1" CornerRadius="15" Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-      <Style.Triggers>
-        <Trigger Property="IsChecked" Value="True">
-          <Setter Property="Background" Value="#F1C21B"/>
-          <Setter Property="BorderBrush" Value="#F1C21B"/>
-          <Setter Property="Foreground" Value="#161616"/>
-          <Setter Property="FontWeight" Value="SemiBold"/>
-        </Trigger>
-      </Style.Triggers>
-    </Style>
-
-    <Style x:Key="HeadBtn" TargetType="Button">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="#333333"/></Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-    <Style x:Key="RowBtn" TargetType="Button">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                    BorderThickness="1" CornerRadius="4" Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="BorderBrush" Value="#6F6F6F"/></Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-  </Window.Resources>
-
-  <Grid Margin="20">
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="*"/>
-      <RowDefinition Height="Auto"/>
-    </Grid.RowDefinitions>
-
-    <DockPanel Grid.Row="0" LastChildFill="True">
-      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-        <Button x:Name="RefreshBtn" Style="{StaticResource PrimaryBtn}" Content="Refresh now"/>
-        <Button x:Name="ExpandBtn" Style="{StaticResource GhostBtn}" Content="Expand all"/>
-        <Button x:Name="CollapseBtn" Style="{StaticResource GhostBtn}" Content="Collapse all"/>
-      </StackPanel>
-      <StackPanel>
-        <TextBlock Text="Change Tracker" FontSize="22" FontWeight="SemiBold"/>
-        <TextBlock x:Name="DocText" Foreground="#A8A8A8" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
-      </StackPanel>
-    </DockPanel>
-
-    <Border Grid.Row="1" Background="#262626" CornerRadius="6" Padding="12" Margin="0,16,0,14">
-      <StackPanel>
-        <DockPanel>
-          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
-            <TextBlock Text="Sort by" Foreground="#A8A8A8" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
-            <ToggleButton x:Name="SortTimeBtn" Style="{StaticResource ChipBtn}" Content="Time"/>
-            <ToggleButton x:Name="SortCreatedBtn" Style="{StaticResource ChipBtn}" Content="Created By"/>
-            <ToggleButton x:Name="SortModifiedBtn" Style="{StaticResource ChipBtn}" Content="Modified By" Margin="0"/>
-          </StackPanel>
-          <Grid DockPanel.Dock="Left" Width="300" Margin="0,0,14,0">
-            <TextBox x:Name="SearchBox" Height="34" Padding="10,0" VerticalContentAlignment="Center"
-                     Background="#161616" Foreground="#F4F4F4" BorderBrush="#525252" CaretBrush="#F4F4F4"/>
-            <TextBlock x:Name="SearchHint" Text="Filter by ID, type, user, change..." Foreground="#6F6F6F"
-                       Margin="12,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
-          </Grid>
-          <WrapPanel VerticalAlignment="Center">
-            <ToggleButton x:Name="ChipAll" Style="{StaticResource ChipBtn}" IsChecked="True"/>
-            <ToggleButton x:Name="ChipNew" Style="{StaticResource ChipBtn}"/>
-            <ToggleButton x:Name="ChipDeleted" Style="{StaticResource ChipBtn}"/>
-            <ToggleButton x:Name="ChipMoved" Style="{StaticResource ChipBtn}"/>
-            <ToggleButton x:Name="ChipResized" Style="{StaticResource ChipBtn}"/>
-            <ToggleButton x:Name="ChipData" Style="{StaticResource ChipBtn}"/>
-          </WrapPanel>
-        </DockPanel>
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
-          <TextBlock Text="Show changes from the" Foreground="#A8A8A8" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
-          <ToggleButton x:Name="Win4w" Style="{StaticResource ChipBtn}" Content="Last 4 weeks"/>
-          <ToggleButton x:Name="Win3w" Style="{StaticResource ChipBtn}" Content="Last 3 weeks"/>
-          <ToggleButton x:Name="Win2w" Style="{StaticResource ChipBtn}" Content="Last 2 weeks"/>
-          <ToggleButton x:Name="Win1w" Style="{StaticResource ChipBtn}" Content="Last week"/>
-          <ToggleButton x:Name="Win1d" Style="{StaticResource ChipBtn}" Content="Last day"/>
-          <ToggleButton x:Name="Win1h" Style="{StaticResource ChipBtn}" Content="Last hour" Margin="0"/>
-        </StackPanel>
-      </StackPanel>
-    </Border>
-
-    <Grid Grid.Row="2">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="16"/>
-        <ColumnDefinition Width="400"/>
-      </Grid.ColumnDefinitions>
-      <Border Grid.Column="0" Background="#262626" CornerRadius="6" Padding="8">
-        <ScrollViewer VerticalScrollBarVisibility="Auto">
-          <StackPanel x:Name="TreePanel"/>
-        </ScrollViewer>
-      </Border>
-      <Border Grid.Column="2" Background="#262626" CornerRadius="6" Padding="18">
-        <ScrollViewer VerticalScrollBarVisibility="Auto">
-          <StackPanel x:Name="DetailPanel"/>
-        </ScrollViewer>
-      </Border>
-    </Grid>
-
-    <Border Grid.Row="3" Background="#393939" CornerRadius="4" Padding="12,8" Margin="0,14,0,0">
-      <DockPanel>
-        <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="#42BE65" VerticalAlignment="Center"/>
-        <TextBlock x:Name="StatusText" Margin="10,0,0,0" FontSize="12" TextTrimming="CharacterEllipsis"/>
-      </DockPanel>
-    </Border>
-  </Grid>
-</Window>
-"""
+# Window layout: ui.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 
 # =============================================================================
@@ -336,7 +135,7 @@ class ReportWindow(object):
 
     def __init__(self, reg, reg_path):
         self.reg, self.reg_path = reg, reg_path
-        self.win = XamlReader.Parse(XAML)
+        self.win = bd.load_window(__file__)
         find = self.win.FindName
         self.tree_panel = find("TreePanel")
         self.detail_panel = find("DetailPanel")

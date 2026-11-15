@@ -3,7 +3,8 @@
 
 One place for the small pieces every button used to carry its own copy of:
 ElementId numbers, mm <-> feet, names, plurals, parameters, transactions,
-silent Revit warnings, picking, selecting and message boxes.
+silent Revit warnings, picking, selecting, message boxes and loading
+themed WPF windows from ui.xaml files.
 
 Usage in a button script:
 
@@ -23,6 +24,9 @@ Rules for this file (it reaches every user on the next auto-update):
 
 Author: Mohamed Bedair
 """
+
+import os
+import re
 
 import System
 from System.Collections.Generic import List
@@ -519,3 +523,211 @@ def revit_version(app_or_doc):
         return int(app.VersionNumber)
     except Exception:
         return 0
+
+
+# =============================================================================
+# WINDOWS (ui.xaml + lib/bd_theme.xaml)
+# =============================================================================
+# Each tool keeps its window layout in a ui.xaml next to its script. The shared
+# colours and styles live once in lib/bd_theme.xaml and are merged in here, so
+# a ui.xaml only holds layout plus any styles unique to that tool.
+_THEME_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bd_theme.xaml")
+_RES_OPEN = re.compile(r"<Window\.Resources\s*>")
+_RES_CLOSE = u"</Window.Resources>"
+_WINDOW_OPEN = re.compile(r"<Window\b[^>]*>")
+
+
+def _read_text(path):
+    """Whole text file as unicode (UTF-8, with or without a BOM)."""
+    return System.IO.File.ReadAllText(path)
+
+
+def _theme_inner():
+    """The inside of bd_theme.xaml, without its <ResourceDictionary> root."""
+    text = _read_text(_THEME_FILE)
+    root = text.find(u"<ResourceDictionary")
+    start = text.find(u">", root) + 1
+    end = text.rfind(u"</ResourceDictionary>")
+    if root < 0 or end < start:
+        raise ValueError(u"bd_theme.xaml has no <ResourceDictionary> root")
+    return text[start:end]
+
+
+def _one_line(text):
+    """XAML on a single line, so error line numbers still match the tool's file."""
+    return u" ".join(line.strip() for line in text.splitlines())
+
+
+def theme_resources():
+    """The inside of bd_theme.xaml on a single line."""
+    return _one_line(_theme_inner())
+
+
+_TOKEN = re.compile(r"<!--.*?-->|<[^<>]+>", re.S)
+_FIRST_TAG = re.compile(r"<([\w.:]+)([^>]*)>", re.S)
+
+
+def _item_key(text):
+    """x:Key of a resource, or the TargetType of an implicit Style."""
+    m = _FIRST_TAG.match(text)
+    if not m:
+        return None
+    attrs = dict(re.findall(r'([\w.:]+)\s*=\s*"([^"]*)"', m.group(2)))
+    if u"x:Key" in attrs:
+        return attrs[u"x:Key"]
+    target = attrs.get(u"TargetType")
+    if m.group(1) == u"Style" and target:
+        return target.replace(u"{x:Type", u"").strip(u" {}")
+    return None
+
+
+def _top_items(fragment):
+    """[(key, text)] for each top-level element of a XAML fragment."""
+    items, depth, start = [], 0, 0
+    for m in _TOKEN.finditer(fragment):
+        tok = m.group(0)
+        if tok.startswith(u"<!--") or tok.startswith(u"<?"):
+            continue
+        if tok.startswith(u"</"):
+            depth -= 1
+            if depth == 0:
+                text = fragment[start:m.end()]
+                items.append((_item_key(text), text))
+        elif tok.endswith(u"/>"):
+            if depth == 0:
+                items.append((_item_key(tok), tok))
+        else:
+            if depth == 0:
+                start = m.start()
+            depth += 1
+    return items
+
+
+def _flat_xaml(xaml_text):
+    """Theme resources added straight into <Window.Resources>, without a
+    wrapping ResourceDictionary, for loaders that fill Window.Resources
+    before parsing (pyRevit's forms.WPFWindow). A local resource with the
+    same key wins: that theme entry is left out."""
+    theme = _top_items(_theme_inner())
+    m = _RES_OPEN.search(xaml_text)
+    if m:
+        end = xaml_text.find(_RES_CLOSE, m.end())
+        if end < 0:
+            raise ValueError(u"<Window.Resources> is not closed")
+        local = set(k for k, _ in _top_items(xaml_text[m.end():end]) if k)
+        add = u" ".join(_one_line(t) for k, t in theme if k not in local)
+        return xaml_text[:m.end()] + add + xaml_text[m.end():]
+    m = _WINDOW_OPEN.search(xaml_text)
+    if not m:
+        raise ValueError(u"No <Window> root element")
+    add = u" ".join(_one_line(t) for k, t in theme)
+    return (xaml_text[:m.end()] + u"<Window.Resources>" + add + u"</Window.Resources>"
+            + xaml_text[m.end():])
+
+
+def build_xaml(xaml_text):
+    """Window XAML text with the theme merged into its resources.
+
+    Local styles in <Window.Resources> stay and win over the theme, so a tool
+    can override a theme style with the same key (or extend it with BasedOn).
+    """
+    theme = theme_resources()
+    m = _RES_OPEN.search(xaml_text)
+    if m:
+        end = xaml_text.find(_RES_CLOSE, m.end())
+        if end < 0:
+            raise ValueError(u"<Window.Resources> is not closed")
+        local = xaml_text[m.end():end]
+        if local.lstrip().startswith(u"<ResourceDictionary"):
+            raise ValueError(u"Put local styles straight inside <Window.Resources>, "
+                             u"without a <ResourceDictionary>")
+        merged = (u"<ResourceDictionary><ResourceDictionary.MergedDictionaries>"
+                  u"<ResourceDictionary>" + theme + u"</ResourceDictionary>"
+                  u"</ResourceDictionary.MergedDictionaries>")
+        return (xaml_text[:m.end()] + merged + local + u"</ResourceDictionary>"
+                + xaml_text[end:])
+    m = _WINDOW_OPEN.search(xaml_text)
+    if not m:
+        raise ValueError(u"No <Window> root element")
+    return (xaml_text[:m.end()] + u"<Window.Resources>" + theme + u"</Window.Resources>"
+            + xaml_text[m.end():])
+
+
+def _xaml_path(path, name):
+    if path.lower().endswith(".xaml"):
+        return path
+    folder = path if os.path.isdir(path) else os.path.dirname(path)
+    return os.path.join(folder, name)
+
+
+def _raw_xaml(path, name, replace):
+    text = _read_text(_xaml_path(path, name))
+    for old, new in (replace or {}).items():
+        text = text.replace(old, new)
+    return text
+
+
+def window_xaml(path, name="ui.xaml", replace=None):
+    """Themed XAML text for pyRevit's forms.WPFWindow:
+
+        forms.WPFWindow.__init__(self, bd.window_xaml(__file__), literal_string=True)
+
+    Same arguments as load_window. pyRevit puts its own brushes into the
+    window's resources before loading, so the theme is added next to them
+    here instead of replacing them.
+    """
+    return _flat_xaml(_raw_xaml(path, name, replace))
+
+
+def load_window(path, name="ui.xaml", replace=None):
+    """Load a themed WPF window.
+
+    path: the tool's own __file__ (loads the ui.xaml next to it), its folder,
+    or the full path of a .xaml file. name picks another file in that folder
+    for tools with more than one window. replace swaps placeholder text in
+    the file before loading, for parts only known at run time:
+
+        window = bd.load_window(__file__)
+        picker = bd.load_window(__file__, "picker.xaml")
+        report = bd.load_window(__file__, "report.xaml", {"%%ROWS%%": rows})
+
+    In the .xaml, the <Window> itself must use DynamicResource for its
+    Background / Foreground; everything inside can use StaticResource.
+    """
+    import clr
+    clr.AddReference("PresentationFramework")
+    from System.Windows.Markup import XamlReader
+    full = _xaml_path(path, name)
+    xaml = build_xaml(_raw_xaml(full, name, replace))
+    try:
+        return XamlReader.Parse(xaml)
+    except Exception as ex:
+        raise Exception(u"{0}: {1}".format(os.path.basename(full), ex))
+
+
+def show_modal(window, owner=None):
+    """Show a window and wait here until it is closed (the extension's
+    replacement for ShowDialog).
+
+    owner: __revit__, a UIApplication or a window handle - keeps the window
+    on top of Revit. Leave it out for no owner.
+    """
+    import clr
+    clr.AddReference("PresentationFramework")
+    clr.AddReference("WindowsBase")
+    from System.Windows.Interop import WindowInteropHelper
+    from System.Windows.Threading import Dispatcher, DispatcherFrame
+
+    frame = DispatcherFrame()
+
+    def _closed(sender, args):
+        frame.Continue = False
+
+    window.Closed += System.EventHandler(_closed)
+    if owner is not None:
+        try:
+            WindowInteropHelper(window).Owner = getattr(owner, "MainWindowHandle", owner)
+        except Exception:
+            pass
+    window.Show()
+    Dispatcher.PushFrame(frame)

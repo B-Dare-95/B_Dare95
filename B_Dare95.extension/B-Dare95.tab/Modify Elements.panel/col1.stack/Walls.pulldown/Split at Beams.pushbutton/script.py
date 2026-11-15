@@ -43,7 +43,6 @@ from Autodesk.Revit.DB.Structure import StructuralType
 from System import EventHandler
 from System.Collections.Generic import List
 from System.Windows import RoutedEventHandler
-from System.Windows.Markup import XamlReader
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 
 from pyrevit import revit, forms, script
@@ -112,7 +111,6 @@ def param_double(el, bip, default=0.0):
     return p.AsDouble()
 
 
-
 def make_silent(t, handled, fatal):
     """Answer Revit's warnings silently (bd_core.SilentFailures)."""
     log = bd.FailureLog()
@@ -169,155 +167,7 @@ def save_settings(s):
         pass
 
 
-XAML = """
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Split Walls at Beams &amp; Slabs"
-        Width="480" SizeToContent="Height" ResizeMode="NoResize"
-        WindowStartupLocation="CenterScreen"
-        Background="#161616" Foreground="#F4F4F4"
-        FontFamily="Segoe UI" FontSize="12">
-  <Window.Resources>
-    <Style x:Key="Chip" TargetType="ToggleButton">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="BorderBrush" Value="#525252"/>
-      <Setter Property="Padding" Value="10,6"/>
-      <Setter Property="Margin" Value="0,0,6,6"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ToggleButton">
-            <Border x:Name="Bd" Background="{TemplateBinding Background}"
-                    BorderBrush="{TemplateBinding BorderBrush}"
-                    BorderThickness="1" CornerRadius="4"
-                    Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="BorderBrush" Value="#F1C21B"/>
-              </Trigger>
-              <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#F1C21B"/>
-                <Setter TargetName="Bd" Property="BorderBrush" Value="#F1C21B"/>
-                <Setter Property="Foreground" Value="#161616"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-    <Style x:Key="Primary" TargetType="Button">
-      <Setter Property="Foreground" Value="#161616"/>
-      <Setter Property="Background" Value="#F1C21B"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="Padding" Value="20,7"/>
-      <Setter Property="Margin" Value="8,0,0,0"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="Bd" Background="{TemplateBinding Background}"
-                    CornerRadius="4" Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-    <Style x:Key="Secondary" TargetType="Button">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Padding" Value="20,7"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="Bd" Background="{TemplateBinding Background}"
-                    CornerRadius="4" Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#525252"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-    <Style x:Key="Card" TargetType="Border">
-      <Setter Property="Background" Value="#262626"/>
-      <Setter Property="CornerRadius" Value="6"/>
-      <Setter Property="Padding" Value="12,10,12,6"/>
-      <Setter Property="Margin" Value="0,0,0,10"/>
-    </Style>
-    <Style x:Key="Head" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#A8A8A8"/>
-      <Setter Property="FontSize" Value="11"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="Margin" Value="0,0,0,8"/>
-    </Style>
-    <Style x:Key="Hint" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#A8A8A8"/>
-      <Setter Property="FontSize" Value="11"/>
-      <Setter Property="TextWrapping" Value="Wrap"/>
-      <Setter Property="Margin" Value="0,0,0,6"/>
-    </Style>
-  </Window.Resources>
-
-  <StackPanel Margin="16">
-    <TextBlock Text="Split Walls at Beams &amp; Slabs" FontSize="18" FontWeight="SemiBold"/>
-    <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,14"
-               Text="Stretches walls to rest on the structural slab below and stop at the slab soffit above, and cuts them where beams pass through. Beams and slabs are read from the active model and/or loaded links."/>
-
-    <Border Style="{StaticResource Card}">
-      <StackPanel>
-        <TextBlock Style="{StaticResource Head}" Text="FIT WALLS TO"/>
-        <WrapPanel>
-          <ToggleButton x:Name="chipSlabs" Style="{StaticResource Chip}" Content="Structural slabs (base &amp; top)"/>
-          <ToggleButton x:Name="chipBeams" Style="{StaticResource Chip}" Content="Beams (lower top / cut)"/>
-        </WrapPanel>
-        <TextBlock Style="{StaticResource Head}" Text="READ BEAMS AND SLABS FROM" Margin="0,4,0,8"/>
-        <WrapPanel>
-          <ToggleButton x:Name="chipHost" Style="{StaticResource Chip}" Content="Active model"/>
-          <ToggleButton x:Name="chipLinks" Style="{StaticResource Chip}" Content="Loaded links"/>
-        </WrapPanel>
-        <TextBlock Style="{StaticResource Hint}"
-                   Text="Base and top constraints stay as they are; only Base Offset and Top Offset (or Unconnected Height) change."/>
-      </StackPanel>
-    </Border>
-
-    <Border Style="{StaticResource Card}">
-      <StackPanel>
-        <TextBlock Style="{StaticResource Head}" Text="WALLS TO PROCESS"/>
-        <WrapPanel>
-          <ToggleButton x:Name="rbScopePick" Style="{StaticResource Chip}" Content="Pick walls (rectangle)"/>
-          <ToggleButton x:Name="rbScopeView" Style="{StaticResource Chip}" Content="All walls in active view"/>
-        </WrapPanel>
-        <TextBlock Style="{StaticResource Hint}"
-                   Text="Pick: walls already selected are processed first, then you can keep picking until you stop."/>
-      </StackPanel>
-    </Border>
-
-    <TextBlock x:Name="txtStatus" Foreground="#FA4D56" TextWrapping="Wrap" Margin="0,0,0,8"/>
-
-    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-      <Button x:Name="btnCancel" Style="{StaticResource Secondary}" Content="Cancel" IsCancel="True"/>
-      <Button x:Name="btnRun" Style="{StaticResource Primary}" Content="Run" IsDefault="True"/>
-    </StackPanel>
-  </StackPanel>
-</Window>
-"""
+# Window layout: ui.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 
 def make_radio_handler(group):
@@ -329,7 +179,7 @@ def make_radio_handler(group):
 
 
 def show_settings(current):
-    window = XamlReader.Parse(XAML)
+    window = bd.load_window(__file__)
     find = window.FindName
 
     chips = {

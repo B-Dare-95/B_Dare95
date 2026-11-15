@@ -1,0 +1,77 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Duplicate Views" Height="580" Width="420"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource BgBrush}" ResizeMode="NoResize">
+
+<Window.Resources>
+    <Style x:Key="RoundedButton" TargetType="Button">
+        <Setter Property="Foreground" Value="{StaticResource BgBrush}"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}" CornerRadius="6" BorderThickness="0">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="8,0,8,0"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="RoundedButtonMuted" TargetType="Button" BasedOn="{StaticResource RoundedButton}">
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="Background" Value="{StaticResource MutedBrush}"/>
+    </Style>
+</Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Select a View to Duplicate" Foreground="{StaticResource TextBrush}"
+                   FontSize="16" FontWeight="Bold" Margin="0,0,0,10"/>
+
+        <Grid Grid.Row="1" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="150"/>
+            </Grid.ColumnDefinitions>
+            <TextBox Grid.Column="0" Name="SearchBox" Height="28" Padding="6,4" Margin="0,0,6,0"
+                     Background="{StaticResource SurfaceBrush}" Foreground="{StaticResource TextBrush}" BorderBrush="{StaticResource MutedBrush}"/>
+            <ComboBox Grid.Column="1" Name="TypeFilterBox" Height="28"
+                      Background="{StaticResource SurfaceBrush}" Foreground="{StaticResource BgBrush}"/>
+        </Grid>
+
+        <ListBox Grid.Row="2" Name="ViewListBox" Background="{StaticResource CardBrush}" Foreground="{StaticResource TextBrush}"
+                 BorderBrush="{StaticResource MutedBrush}" Margin="0,0,0,10"/>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,10">
+            <TextBlock Text="Number of Duplicates:" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <TextBox Name="CountBox" Width="60" Height="26" Text="1"
+                     Background="{StaticResource SurfaceBrush}" Foreground="{StaticResource TextBrush}" BorderBrush="{StaticResource MutedBrush}"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="4" Margin="0,0,0,10">
+            <TextBlock Text="Duplicate Option:" Foreground="{StaticResource TextBrush}" Margin="0,0,0,6"/>
+            <RadioButton Name="RbDuplicate" Content="Duplicate View" GroupName="opt"
+                         Foreground="{StaticResource TextBrush}" IsChecked="True" Margin="0,0,0,4"/>
+            <RadioButton Name="RbDetailing" Content="Duplicate with Detailing" GroupName="opt"
+                         Foreground="{StaticResource TextBrush}" Margin="0,0,0,4"/>
+            <RadioButton Name="RbDependent" Content="Duplicate as Dependent" GroupName="opt"
+                         Foreground="{StaticResource TextBrush}"/>
+        </StackPanel>
+
+        <TextBlock Grid.Row="5" Name="ErrorText" Foreground="#FF8389" Margin="0,0,0,8" TextWrapping="Wrap"/>
+
+        <Button Grid.Row="6" Name="NextButton" Content="Continue" Height="34"
+                Background="{StaticResource AccentBrush}" Style="{StaticResource RoundedButton}"/>
+    </Grid>
+</Window>

@@ -42,7 +42,6 @@ import System.Windows.Input as WinInput
 from System.Windows import (
     Thickness, CornerRadius, GridLength, GridUnitType, Visibility
 )
-from System.Windows.Markup import XamlReader
 from bd_combo_search import enable_combo_search
 import bd_core as bd
 
@@ -54,11 +53,9 @@ cfg       = script.get_config()
 
 # ─── THEME ────────────────────────────────────────────────────────────────────
 BG      = "#161616"
-CARD    = "#262626"
 SURFACE = "#393939"
 MUTED   = "#525252"
 TEXT    = "#F4F4F4"
-SUBTEXT = "#000000"   # kept as-is (used for scrollbar-thumb hover in XAML)
 ACCENT  = "#F1C21B"
 
 def _brush(hex_str):
@@ -74,294 +71,8 @@ BG_BRUSH      = _brush(BG)
 DARK_BRUSH    = Media.SolidColorBrush(Media.Color.FromRgb(20, 20, 20))
 TRANS_BRUSH   = Media.Brushes.Transparent
 
-# ─── XAML ─────────────────────────────────────────────────────────────────────
-XAML_TEMPLATE = """
-<Window
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Choose Category"
-    Width="390" MinHeight="120" MaxHeight="750"
-    SizeToContent="Height"
-    WindowStartupLocation="CenterScreen"
-    ResizeMode="NoResize"
-    Background="{BG}"
-    Foreground="{TEXT}"
-    FontFamily="Segoe UI"
-    FontSize="13">
-
-    <Window.Resources>
-
-        <!-- ── Slim ScrollBar ── -->
-        <Style x:Key="ScrollThumbStyle" TargetType="Thumb">
-            <Setter Property="Background" Value="{MUTED}"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Thumb">
-                        <Border Background="{TemplateBinding Background}" CornerRadius="3"/>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{SUBTEXT}"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style TargetType="ScrollBar">
-            <Setter Property="Background" Value="{CARD}"/>
-            <Setter Property="Width" Value="6"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ScrollBar">
-                        <Grid Background="{CARD}">
-                            <Track Name="PART_Track" IsDirectionReversed="True">
-                                <Track.Thumb>
-                                    <Thumb Style="{StaticResource ScrollThumbStyle}"/>
-                                </Track.Thumb>
-                            </Track>
-                        </Grid>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- ── RadioButton (category row) ── -->
-        <Style TargetType="RadioButton">
-            <Setter Property="Foreground" Value="{TEXT}"/>
-            <Setter Property="Margin"     Value="0,2,0,2"/>
-            <Setter Property="Cursor"     Value="Hand"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="RadioButton">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="18"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Border x:Name="Ring"
-                                    Grid.Column="0"
-                                    Width="14" Height="14"
-                                    CornerRadius="7"
-                                    Background="{SURFACE}"
-                                    BorderBrush="{MUTED}"
-                                    BorderThickness="1.5"
-                                    VerticalAlignment="Center"/>
-                            <Ellipse x:Name="Dot"
-                                     Grid.Column="0"
-                                     Width="6" Height="6"
-                                     Fill="{BG}"
-                                     HorizontalAlignment="Center"
-                                     VerticalAlignment="Center"
-                                     Visibility="Collapsed"/>
-                            <ContentPresenter Grid.Column="1"
-                                              Margin="8,0,0,0"
-                                              VerticalAlignment="Center"/>
-                        </Grid>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Ring" Property="Background"  Value="{ACCENT}"/>
-                                <Setter TargetName="Ring" Property="BorderBrush" Value="{ACCENT}"/>
-                                <Setter TargetName="Dot"  Property="Visibility"  Value="Visible"/>
-                            </Trigger>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Ring" Property="BorderBrush" Value="{ACCENT}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- ── Accent (confirm) button ── -->
-        <Style x:Key="AccentButton" TargetType="Button">
-            <Setter Property="Background"      Value="{ACCENT}"/>
-            <Setter Property="Foreground"      Value="{BG}"/>
-            <Setter Property="FontWeight"      Value="SemiBold"/>
-            <Setter Property="FontSize"        Value="13"/>
-            <Setter Property="Height"          Value="36"/>
-            <Setter Property="Cursor"          Value="Hand"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd"
-                                Background="{TemplateBinding Background}"
-                                CornerRadius="6">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.7"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.4"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- ── Ghost button (+ Add Filter) ── -->
-        <Style x:Key="GhostButton" TargetType="Button">
-            <Setter Property="Background"      Value="Transparent"/>
-            <Setter Property="Foreground"      Value="{TEXT}"/>
-            <Setter Property="FontSize"        Value="12"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Cursor"          Value="Hand"/>
-            <Setter Property="Padding"         Value="0"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <TextBlock x:Name="Tb"
-                                   Text="{TemplateBinding Content}"
-                                   Foreground="{TemplateBinding Foreground}"
-                                   FontSize="{TemplateBinding FontSize}"
-                                   VerticalAlignment="Center"/>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Tb" Property="Foreground" Value="{ACCENT}"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Tb" Property="Opacity" Value="0.35"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Only these / Everything except -->
-        <Style x:Key="ExceptCheck" TargetType="CheckBox">
-            <Setter Property="Foreground" Value="{TEXT}"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="CheckBox">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="18"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Border x:Name="CheckBorder" Grid.Column="0" Width="14" Height="14"
-                                    CornerRadius="3" Background="{SURFACE}" BorderBrush="{MUTED}"
-                                    BorderThickness="1.5" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="CheckMark" Grid.Column="0" Text="&#x2714;" FontSize="10"
-                                       Foreground="{BG}" HorizontalAlignment="Center"
-                                       VerticalAlignment="Center" Visibility="Collapsed"/>
-                            <ContentPresenter Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                        </Grid>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="CheckBorder" Property="Background" Value="{ACCENT}"/>
-                                <Setter TargetName="CheckBorder" Property="BorderBrush" Value="{ACCENT}"/>
-                                <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
-                            </Trigger>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="CheckBorder" Property="BorderBrush" Value="{ACCENT}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-    </Window.Resources>
-
-    <Border Padding="16" Background="{BG}">
-        <StackPanel>
-
-            <!-- Header -->
-            <TextBlock x:Name="HeaderText" Text="Choose Category"
-                       FontSize="15" FontWeight="SemiBold"
-                       Foreground="{TEXT}"
-                       Margin="0,0,0,10"/>
-
-            <TextBlock x:Name="FilterHint" FontSize="11" Foreground="#A8A8A8" TextWrapping="Wrap"
-                       Margin="2,0,0,10"/>
-
-            <!-- Search box -->
-            <Border Background="{SURFACE}" CornerRadius="6" Margin="0,0,0,10"
-                    BorderBrush="{MUTED}" BorderThickness="1">
-                <TextBox x:Name="SearchBox"
-                         Background="Transparent"
-                         BorderThickness="0"
-                         Foreground="{TEXT}"
-                         CaretBrush="{ACCENT}"
-                         Padding="8,6"
-                         FontSize="12"
-                         ToolTip="Filter categories..."/>
-            </Border>
-
-            <!-- Everything except -->
-            <CheckBox x:Name="ChkExcept" Content="Everything except the matching elements"
-                      Style="{StaticResource ExceptCheck}" Margin="0,0,0,8"
-                      ToolTip="Select everything in the box except the elements of this category that match the rules"/>
-
-            <!-- Category list (RadioButtons) -->
-            <Border Background="{CARD}" CornerRadius="8"
-                    Padding="10,8" Margin="0,0,0,14">
-                <ScrollViewer MaxHeight="300"
-                              VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled"
-                              Padding="0,0,4,0">
-                    <StackPanel x:Name="CategoryPanel"/>
-                </ScrollViewer>
-            </Border>
-
-            <!-- Divider -->
-            <Border Height="1" Background="{MUTED}" Opacity="0.4" Margin="0,0,0,12"/>
-
-            <!-- Parameter Filters header -->
-            <DockPanel Margin="0,0,0,8" LastChildFill="False">
-                <TextBlock Text="PARAMETER FILTERS"
-                           Foreground="{TEXT}" FontSize="10" FontWeight="SemiBold"
-                           VerticalAlignment="Center"
-                           DockPanel.Dock="Left"/>
-                <Button x:Name="AddRowBtn"
-                        Content="+ Add Filter"
-                        Style="{StaticResource GhostButton}"
-                        DockPanel.Dock="Right"
-                        IsEnabled="False"/>
-            </DockPanel>
-
-            <!-- Column labels — widths mirror the row grid -->
-            <Grid Margin="0,0,0,5">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="10"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="34"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="Parameter"
-                           Foreground="{TEXT}" FontSize="11" Margin="4,0,0,0"/>
-                <TextBlock Grid.Column="2" Text="Value"
-                           Foreground="{TEXT}" FontSize="11" Margin="4,0,0,0"/>
-            </Grid>
-
-            <!-- Dynamic filter rows (and connector pills) injected by Python -->
-            <StackPanel x:Name="RowsPanel" Margin="0,0,0,12"/>
-
-            <!-- Confirm button -->
-            <Button x:Name="ConfirmBtn"
-                    Content="Make A Selection"
-                    Style="{StaticResource AccentButton}"
-                    IsEnabled="False"/>
-
-        </StackPanel>
-    </Border>
-</Window>
-""".replace("{BG}", BG).replace("{CARD}", CARD).replace("{SURFACE}", SURFACE) \
-   .replace("{MUTED}", MUTED).replace("{TEXT}", TEXT).replace("{SUBTEXT}", SUBTEXT) \
-   .replace("{ACCENT}", ACCENT)
-
+# ─── WINDOW ───────────────────────────────────────────────────────────────────
+# ui.xaml next to this script; colours and styles come from lib/bd_theme.xaml.
 
 # ─── REVIT HELPERS ────────────────────────────────────────────────────────────
 
@@ -673,7 +384,7 @@ def show_category_picker(all_categories):
 
     Returns None when the user closes without confirming.
     """
-    window = XamlReader.Parse(XAML_TEMPLATE)
+    window = bd.load_window(__file__)
 
     search_box  = window.FindName("SearchBox")
     cat_panel   = window.FindName("CategoryPanel")
@@ -978,7 +689,7 @@ def show_category_picker(all_categories):
     create_filter_row()
     update_confirm()
     enable_combo_search(window)
-    window.ShowDialog()
+    bd.show_modal(window, __revit__)
     return result_holder[0]
 
 

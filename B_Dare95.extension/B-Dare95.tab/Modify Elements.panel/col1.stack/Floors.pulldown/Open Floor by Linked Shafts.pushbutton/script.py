@@ -43,7 +43,6 @@ from System.Windows import (
 from System.Windows.Controls import (
     CheckBox, StackPanel, TextBlock, Border, Orientation, TextChangedEventHandler
 )
-from System.Windows.Markup import XamlReader
 from System.Windows.Media import BrushConverter
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 
@@ -186,108 +185,7 @@ def get_target_floor():
 # Link selection menu
 # ---------------------------------------------------------------------------
 
-MENU_XAML = u"""
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Floor Opener - Choose Links"
-        Width="540" Height="640"
-        WindowStartupLocation="CenterScreen"
-        Background="#161616">
-    <Window.Resources>
-        <Style x:Key="RoundButton" TargetType="Button">
-            <Setter Property="Background" Value="#F1C21B"/>
-            <Setter Property="Foreground" Value="#161616"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" CornerRadius="6">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-        <Style x:Key="QuietButton" TargetType="Button" BasedOn="{StaticResource RoundButton}">
-            <Setter Property="Background" Value="#525252"/>
-            <Setter Property="Foreground" Value="#F4F4F4"/>
-            <Setter Property="FontWeight" Value="Normal"/>
-        </Style>
-        <Style x:Key="RoundTextBox" TargetType="TextBox">
-            <Setter Property="Background" Value="#393939"/>
-            <Setter Property="Foreground" Value="#F4F4F4"/>
-            <Setter Property="BorderBrush" Value="#525252"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="8,6"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="CaretBrush" Value="#F4F4F4"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="TextBox">
-                        <Border Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="6">
-                            <ScrollViewer x:Name="PART_ContentHost"
-                                          Margin="{TemplateBinding Padding}"
-                                          VerticalAlignment="Center"/>
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-    </Window.Resources>
-
-    <Grid Margin="20">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
-
-        <TextBlock Grid.Row="0" Text="Choose links to process"
-                   Foreground="#F4F4F4" FontSize="18" FontWeight="Bold"
-                   Margin="0,0,0,4"/>
-        <TextBlock Grid.Row="1" x:Name="SubtitleText"
-                   Foreground="#A8A8A8" FontSize="12" TextWrapping="Wrap"
-                   Margin="0,0,0,12"/>
-
-        <TextBox Grid.Row="2" x:Name="SearchBox"
-                 Style="{StaticResource RoundTextBox}" Margin="0,0,0,10"/>
-
-        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,10">
-            <Button x:Name="SelectAllBtn" Content="Select all" Width="96" Height="26"
-                    Style="{StaticResource QuietButton}" FontSize="12" Margin="0,0,8,0"/>
-            <Button x:Name="SelectNoneBtn" Content="Select none" Width="96" Height="26"
-                    Style="{StaticResource QuietButton}" FontSize="12"/>
-        </StackPanel>
-
-        <Border Grid.Row="4" Background="#0D0D0D" CornerRadius="8" Padding="8">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <StackPanel x:Name="LinkList"/>
-            </ScrollViewer>
-        </Border>
-
-        <TextBlock Grid.Row="5" x:Name="StatusText"
-                   Foreground="#A8A8A8" FontSize="12" Margin="0,10,0,0"/>
-
-        <StackPanel Grid.Row="6" Orientation="Horizontal"
-                    HorizontalAlignment="Right" Margin="0,14,0,0">
-            <Button x:Name="CancelBtn" Content="Cancel" Width="90" Height="32"
-                    Style="{StaticResource QuietButton}" Margin="0,0,8,0"/>
-            <Button x:Name="OkBtn" Content="Cut openings" Width="140" Height="32"
-                    Style="{StaticResource RoundButton}"/>
-        </StackPanel>
-    </Grid>
-</Window>
-"""
+# Window layout: ui.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 
 def push_frame_show(window):
@@ -359,7 +257,7 @@ def show_link_menu(sources, floor_id_text):
     mutable dict for the result because IronPython 2.7 has no `nonlocal`."""
     result = {"confirmed": False}
 
-    window = XamlReader.Parse(MENU_XAML)
+    window = bd.load_window(__file__)
     subtitle = window.FindName("SubtitleText")
     search_box = window.FindName("SearchBox")
     link_list = window.FindName("LinkList")

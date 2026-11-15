@@ -31,10 +31,7 @@ from Autodesk.Revit.DB import (
     LocationPoint, TransactionGroup, Transaction
 )
 from System.Windows import Window, Visibility
-from System.Windows.Markup import XamlReader
 from System.Windows.Media import SolidColorBrush, Color
-from System.IO import StringReader
-from System.Xml import XmlReader
 import sys
 
 import bd_core as bd
@@ -78,147 +75,13 @@ unplaced = {
 #  XAML  (Catppuccin dark — bg #161616, accent #F1C21B)
 # ─────────────────────────────────────────────────────────────
 
-XAML = """
-<Window
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Wipe Unplaced Elements"
-    Width="380"
-    SizeToContent="Height"
-    WindowStartupLocation="CenterScreen"
-    ResizeMode="NoResize"
-    Background="#161616"
-    FontFamily="Segoe UI">
-
-    <Window.Resources>
-
-        <!-- Card border -->
-        <Style x:Key="Card" TargetType="Border">
-            <Setter Property="Background"     Value="#262626"/>
-            <Setter Property="CornerRadius"   Value="8"/>
-            <Setter Property="Padding"        Value="14,12"/>
-            <Setter Property="Margin"         Value="0,0,0,8"/>
-        </Style>
-
-        <!-- CheckBox -->
-        <Style TargetType="CheckBox">
-            <Setter Property="Foreground"              Value="#F4F4F4"/>
-            <Setter Property="FontSize"                Value="13"/>
-            <Setter Property="FontWeight"              Value="SemiBold"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-            <Setter Property="Cursor"                  Value="Hand"/>
-        </Style>
-
-        <!-- Count label (hidden by default) -->
-        <Style x:Key="CountLbl" TargetType="TextBlock">
-            <Setter Property="FontSize"   Value="11"/>
-            <Setter Property="Margin"     Value="22,5,0,0"/>
-            <Setter Property="Visibility" Value="Collapsed"/>
-        </Style>
-
-        <!-- OK button -->
-        <Style x:Key="BtnOK" TargetType="Button">
-            <Setter Property="Background"   Value="#F1C21B"/>
-            <Setter Property="Foreground"   Value="#161616"/>
-            <Setter Property="FontWeight"   Value="Bold"/>
-            <Setter Property="FontSize"     Value="13"/>
-            <Setter Property="Height"       Value="34"/>
-            <Setter Property="Width"        Value="88"/>
-            <Setter Property="Cursor"       Value="Hand"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
-                                CornerRadius="6" Padding="12,6">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Cancel button -->
-        <Style x:Key="BtnCancel" TargetType="Button">
-            <Setter Property="Background"   Value="#525252"/>
-            <Setter Property="Foreground"   Value="#F4F4F4"/>
-            <Setter Property="FontSize"     Value="13"/>
-            <Setter Property="Height"       Value="34"/>
-            <Setter Property="Width"        Value="88"/>
-            <Setter Property="Cursor"       Value="Hand"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
-                                CornerRadius="6" Padding="12,6">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-    </Window.Resources>
-
-    <StackPanel Margin="20">
-
-        <!-- ── Header ── -->
-        <TextBlock Text="Wipe Unplaced Elements"
-                   Foreground="#F4F4F4"
-                   FontSize="16" FontWeight="Bold"
-                   Margin="0,0,0,4"/>
-        <TextBlock Text="Select the categories you want to purge from this document."
-                   Foreground="#A8A8A8" FontSize="11"
-                   TextWrapping="Wrap"
-                   Margin="0,0,0,18"/>
-
-        <!-- ── Rooms ── -->
-        <Border Style="{StaticResource Card}">
-            <StackPanel>
-                <CheckBox x:Name="ChkRooms" Content="Rooms"/>
-                <TextBlock x:Name="LblRooms" Style="{StaticResource CountLbl}"/>
-            </StackPanel>
-        </Border>
-
-        <!-- ── Areas ── -->
-        <Border Style="{StaticResource Card}">
-            <StackPanel>
-                <CheckBox x:Name="ChkAreas" Content="Areas"/>
-                <TextBlock x:Name="LblAreas" Style="{StaticResource CountLbl}"/>
-            </StackPanel>
-        </Border>
-
-        <!-- ── MEP Spaces ── -->
-        <Border Style="{StaticResource Card}">
-            <StackPanel>
-                <CheckBox x:Name="ChkSpaces" Content="MEP Spaces"/>
-                <TextBlock x:Name="LblSpaces" Style="{StaticResource CountLbl}"/>
-            </StackPanel>
-        </Border>
-
-        <!-- ── Buttons ── -->
-        <StackPanel Orientation="Horizontal"
-                    HorizontalAlignment="Right"
-                    Margin="0,18,0,0">
-            <Button x:Name="BtnCancel" Content="Cancel"
-                    Style="{StaticResource BtnCancel}"
-                    Margin="0,0,10,0"/>
-            <Button x:Name="BtnOK" Content="OK"
-                    Style="{StaticResource BtnOK}"/>
-        </StackPanel>
-
-    </StackPanel>
-</Window>
-"""
+# Window layout: ui.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 # ─────────────────────────────────────────────────────────────
 #  Build window & wire up events
 # ─────────────────────────────────────────────────────────────
 
-window    = XamlReader.Load(XmlReader.Create(StringReader(XAML)))
+window    = bd.load_window(__file__)
 
 chk_rooms  = window.FindName("ChkRooms")
 chk_areas  = window.FindName("ChkAreas")

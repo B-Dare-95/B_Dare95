@@ -24,7 +24,6 @@ clr.AddReference("WindowsBase")
 
 from System import EventHandler
 from System.Windows import RoutedEventHandler
-from System.Windows.Markup import XamlReader
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 from System.Windows.Interop import WindowInteropHelper
 from System.Windows.Controls import TextChangedEventHandler, SelectionChangedEventHandler
@@ -531,140 +530,7 @@ def dimension_wall(wall, source, view, kind, settings):
 
 
 # ---------------------------------------------------------------------- UI
-XAML = """
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Curtain Wall Dimension" Width="460" SizeToContent="Height"
-        WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
-        Background="#161616" Foreground="#F4F4F4"
-        FontFamily="Segoe UI" FontSize="12">
-  <Window.Resources>
-    <Style x:Key="Btn" TargetType="Button">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Padding" Value="18,7"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="bd" Background="{TemplateBinding Background}"
-                    CornerRadius="4" Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="bd" Property="Opacity" Value="0.85"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style x:Key="Accent" TargetType="Button" BasedOn="{StaticResource Btn}">
-      <Setter Property="Background" Value="#F1C21B"/>
-      <Setter Property="Foreground" Value="#161616"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-    </Style>
-    <Style x:Key="Toggle" TargetType="ToggleButton">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Padding" Value="10,7"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ToggleButton">
-            <Border x:Name="bd" Background="{TemplateBinding Background}"
-                    CornerRadius="4" Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#F1C21B"/>
-                <Setter Property="Foreground" Value="#161616"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style x:Key="Box" TargetType="TextBox">
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="BorderBrush" Value="#525252"/>
-      <Setter Property="CaretBrush" Value="#F4F4F4"/>
-      <Setter Property="Padding" Value="6,5"/>
-    </Style>
-    <Style x:Key="Item" TargetType="ListBoxItem">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ListBoxItem">
-            <Border x:Name="bd" Background="Transparent" Padding="8,5" CornerRadius="3">
-              <ContentPresenter/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#393939"/>
-              </Trigger>
-              <Trigger Property="IsSelected" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#F1C21B"/>
-                <Setter Property="Foreground" Value="#161616"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-  </Window.Resources>
-
-  <Border Padding="18">
-    <StackPanel>
-      <TextBlock Text="Curtain Wall Dimension" FontSize="18" FontWeight="SemiBold"/>
-      <TextBlock x:Name="SubTitle" Foreground="#A8A8A8" Margin="0,2,0,14" TextWrapping="Wrap"/>
-
-      <Border Background="#262626" CornerRadius="4" Padding="12">
-        <StackPanel>
-          <TextBlock Text="DIMENSION TYPE" Foreground="#A8A8A8" FontSize="11" Margin="0,0,0,6"/>
-          <TextBox x:Name="SearchBox" Style="{StaticResource Box}"/>
-          <ListBox x:Name="TypeList" Height="190" Margin="0,6,0,0"
-                   Background="#262626" BorderBrush="#393939"
-                   ItemContainerStyle="{StaticResource Item}"/>
-        </StackPanel>
-      </Border>
-
-      <Border Background="#262626" CornerRadius="4" Padding="12" Margin="0,10,0,0">
-        <StackPanel>
-          <TextBlock Text="PICK FROM" Foreground="#A8A8A8" FontSize="11" Margin="0,0,0,6"/>
-          <Grid Margin="0,0,0,12">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="*"/>
-              <ColumnDefinition Width="8"/>
-              <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <ToggleButton x:Name="HostBtn" Grid.Column="0" Content="Host model"
-                          Style="{StaticResource Toggle}" IsChecked="True"/>
-            <ToggleButton x:Name="LinkBtn" Grid.Column="2" Content="Linked models"
-                          Style="{StaticResource Toggle}"/>
-          </Grid>
-
-          <TextBlock Text="SPACING FACTOR" Foreground="#A8A8A8" FontSize="11" Margin="0,0,0,6"/>
-          <StackPanel Orientation="Horizontal">
-            <TextBox x:Name="FactorBox" Style="{StaticResource Box}" Width="70" Text="1.0"/>
-            <TextBlock Text="  multiplies the estimated offsets" Foreground="#A8A8A8"
-                       VerticalAlignment="Center"/>
-          </StackPanel>
-          <TextBlock x:Name="Preview" Foreground="#A8A8A8" Margin="0,10,0,0" TextWrapping="Wrap"/>
-        </StackPanel>
-      </Border>
-
-      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
-        <Button x:Name="CancelBtn" Content="Cancel" Style="{StaticResource Btn}" Margin="0,0,8,0"/>
-        <Button x:Name="OkBtn" Content="Start Picking" Style="{StaticResource Accent}"/>
-      </StackPanel>
-    </StackPanel>
-  </Border>
-</Window>
-"""
+# Window layout: ui.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 
 def collect_dim_types():
@@ -693,7 +559,7 @@ def show_settings(view, kind, has_links, start_linked):
         alert("No linear dimension types found in this project.")
         return None
 
-    window = XamlReader.Parse(XAML)
+    window = bd.load_window(__file__)
     find = window.FindName
     subtitle = find("SubTitle")
     search = find("SearchBox")

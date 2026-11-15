@@ -22,17 +22,13 @@ clr.AddReference("PresentationFramework")
 clr.AddReference("PresentationCore")
 clr.AddReference("WindowsBase")
 
-from System import EventHandler
 from System.Windows import FontWeights, RoutedEventHandler, TextAlignment, TextTrimming, Thickness, \
     VerticalAlignment, Visibility
-from System.Windows.Markup import XamlReader
 from System.Windows.Controls import Canvas, CheckBox, Orientation, StackPanel, TextBlock, \
     TextChangedEventHandler
 from System.Windows.Controls.Primitives import ToggleButton
 from System.Windows.Media import ColorConverter, DoubleCollection, SolidColorBrush
 from System.Windows.Shapes import Ellipse, Line as WLine
-from System.Windows.Threading import Dispatcher, DispatcherFrame
-from System.Windows.Interop import WindowInteropHelper
 
 from Autodesk.Revit.DB import (DatumEnds, DatumExtentType, FilteredElementCollector, Grid,
                                Level, Transaction, View, ViewType)
@@ -123,175 +119,8 @@ def scan_project():
 
 
 # =========================================================================
-#  Window
+#  Window  (layout: ui.xaml, colours and styles: lib/bd_theme.xaml)
 # =========================================================================
-XAML = u"""
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="2D Extents" SizeToContent="WidthAndHeight"
-        ResizeMode="NoResize" WindowStartupLocation="CenterScreen"
-        Background="#161616" FontFamily="Segoe UI" FontSize="12">
-  <Window.Resources>
-    <Style x:Key="Btn" TargetType="Button">
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Height" Value="30"/>
-      <Setter Property="Padding" Value="12,0"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="bd" Background="{TemplateBinding Background}"
-                    CornerRadius="6" Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#525252"/>
-              </Trigger>
-              <Trigger Property="IsEnabled" Value="False">
-                <Setter Property="Opacity" Value="0.4"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style x:Key="AccentBtn" TargetType="Button" BasedOn="{StaticResource Btn}">
-      <Setter Property="Background" Value="#F1C21B"/>
-      <Setter Property="Foreground" Value="#161616"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-    </Style>
-    <Style x:Key="Tgl" TargetType="ToggleButton">
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Height" Value="26"/>
-      <Setter Property="Padding" Value="8,0"/>
-      <Setter Property="Margin" Value="0,0,4,4"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ToggleButton">
-            <Border x:Name="bd" Background="{TemplateBinding Background}"
-                    CornerRadius="6" Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#525252"/>
-              </Trigger>
-              <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#F1C21B"/>
-                <Setter Property="Foreground" Value="#161616"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style TargetType="TextBox">
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="BorderBrush" Value="#525252"/>
-      <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="CaretBrush" Value="#F4F4F4"/>
-      <Setter Property="Height" Value="28"/>
-      <Setter Property="Padding" Value="6,0"/>
-      <Setter Property="VerticalContentAlignment" Value="Center"/>
-    </Style>
-    <Style TargetType="CheckBox">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="VerticalContentAlignment" Value="Center"/>
-      <Setter Property="Cursor" Value="Hand"/>
-    </Style>
-    <Style x:Key="Head" TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
-      <Setter Property="FontSize" Value="14"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="Margin" Value="0,0,0,2"/>
-    </Style>
-    <Style x:Key="Sub" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#A8A8A8"/>
-      <Setter Property="TextWrapping" Value="Wrap"/>
-    </Style>
-    <Style x:Key="Card" TargetType="Border">
-      <Setter Property="Background" Value="#262626"/>
-      <Setter Property="CornerRadius" Value="8"/>
-      <Setter Property="Padding" Value="12"/>
-    </Style>
-  </Window.Resources>
-
-  <StackPanel Margin="12">
-    <TextBlock Text="2D Extents" Foreground="#F4F4F4" FontSize="20" FontWeight="Bold"/>
-    <TextBlock Style="{StaticResource Sub}" Margin="0,2,0,12"
-               Text="Switch grid and level ends from 3D to 2D extents in every non-3D view. Nothing moves."/>
-    <Grid>
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="480"/>
-        <ColumnDefinition Width="12"/>
-        <ColumnDefinition Width="290"/>
-      </Grid.ColumnDefinitions>
-
-      <!-- Views -->
-      <Border Grid.Column="0" Style="{StaticResource Card}">
-        <StackPanel>
-          <TextBlock Text="VIEWS" Foreground="#F1C21B" FontSize="11" FontWeight="Bold" Margin="0,0,0,8"/>
-          <WrapPanel x:Name="pnlKinds"/>
-          <Grid Margin="0,6,0,0">
-            <TextBox x:Name="txtSearch"/>
-            <TextBlock x:Name="txtHint" Text="Search views" Foreground="#6F6F6F"
-                       Margin="9,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
-          </Grid>
-          <DockPanel Margin="0,6,0,4">
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-              <Button x:Name="btnAll" Content="All" Style="{StaticResource Btn}" Height="24" Margin="0,0,4,0"/>
-              <Button x:Name="btnNone" Content="None" Style="{StaticResource Btn}" Height="24"/>
-            </StackPanel>
-            <TextBlock x:Name="txtCount" Style="{StaticResource Sub}" VerticalAlignment="Center"/>
-          </DockPanel>
-          <Border Background="#161616" CornerRadius="6" Height="360">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-              <StackPanel x:Name="pnlList" Margin="4"/>
-            </ScrollViewer>
-          </Border>
-          <TextBlock x:Name="txtClean" Style="{StaticResource Sub}" FontSize="11" Margin="0,8,0,0"/>
-        </StackPanel>
-      </Border>
-
-      <!-- Datums -->
-      <StackPanel Grid.Column="2">
-        <Border Style="{StaticResource Card}" Margin="0,0,0,10">
-          <StackPanel>
-            <TextBlock Text="SWITCH" Foreground="#F1C21B" FontSize="11" FontWeight="Bold" Margin="0,0,0,8"/>
-            <CheckBox x:Name="chkGrids" Style="{StaticResource Head}" Content="Grids"/>
-            <TextBlock x:Name="txtGrids" Style="{StaticResource Sub}" FontSize="11" Margin="22,0,0,10"/>
-            <CheckBox x:Name="chkLevels" Style="{StaticResource Head}" Content="Levels"/>
-            <TextBlock x:Name="txtLevels" Style="{StaticResource Sub}" FontSize="11" Margin="22,0,0,0"/>
-          </StackPanel>
-        </Border>
-        <Border Style="{StaticResource Card}">
-          <StackPanel>
-            <TextBlock Text="WHAT CHANGES" Foreground="#F1C21B" FontSize="11" FontWeight="Bold" Margin="0,0,0,8"/>
-            <Border Background="#161616" CornerRadius="6" Padding="2" HorizontalAlignment="Left">
-              <Canvas x:Name="cvPreview" Width="262" Height="120" ClipToBounds="True"/>
-            </Border>
-            <TextBlock Style="{StaticResource Sub}" FontSize="11" Margin="0,8,0,0"
-                       Text="Each end keeps its place. From now on, dragging a grid or level head in a view changes that view only, and the 3D extent stays put."/>
-          </StackPanel>
-        </Border>
-      </StackPanel>
-    </Grid>
-
-    <DockPanel Margin="0,12,0,0">
-      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-        <Button x:Name="btnCancel" Content="Cancel" Style="{StaticResource Btn}" Width="84" Margin="0,0,8,0"/>
-        <Button x:Name="btnApply" Content="Apply" Style="{StaticResource AccentBtn}" Width="84"/>
-      </StackPanel>
-      <TextBlock x:Name="txtMsg" Foreground="#A8A8A8" VerticalAlignment="Center" TextWrapping="Wrap"/>
-    </DockPanel>
-  </StackPanel>
-</Window>
-"""
-
 _brushes = {}
 
 
@@ -356,7 +185,7 @@ def opt_bool(name, default):
 
 
 def show_ui(rows, clean, total):
-    w = XamlReader.Parse(XAML)
+    w = bd.load_window(__file__)
     f = w.FindName
     result = {"ok": False}
 
@@ -379,6 +208,7 @@ def show_ui(rows, clean, total):
             continue
         t = ToggleButton()
         t.Style = w.FindResource("Tgl")
+        t.Margin = Thickness(0, 0, 4, 4)
         t.Content = u"{0} ({1})".format(label, n)
         t.IsChecked = opt_bool("kind_" + key, True)
         pnl_kinds.Children.Add(t)
@@ -478,18 +308,7 @@ def show_ui(rows, clean, total):
     btn_apply.Click += RoutedEventHandler(on_apply)
     f("btnCancel").Click += RoutedEventHandler(lambda s, e: w.Close())
 
-    frame = DispatcherFrame()
-
-    def on_closed(s, e):
-        frame.Continue = False
-
-    w.Closed += EventHandler(on_closed)
-    try:
-        WindowInteropHelper(w).Owner = __revit__.MainWindowHandle
-    except Exception:
-        pass
-    w.Show()
-    Dispatcher.PushFrame(frame)
+    bd.show_modal(w, __revit__)
     return result
 
 

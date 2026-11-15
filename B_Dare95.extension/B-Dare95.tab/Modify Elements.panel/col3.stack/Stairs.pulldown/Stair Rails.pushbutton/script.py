@@ -29,7 +29,6 @@ from System import EventHandler
 from System.Collections.Generic import List
 from System.Windows import RoutedEventHandler
 from System.Windows.Controls import SelectionChangedEventHandler, TextChangedEventHandler
-from System.Windows.Markup import XamlReader
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 
 from Autodesk.Revit.DB import (Arc, BuiltInParameter, CurveLoop, ElementId,
@@ -1004,203 +1003,14 @@ def railings_on_stairs(stairs):
 # user interface
 # --------------------------------------------------------------------------- #
 
-XAML = u"""
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Stair Railing Manager"
-        Height="720" Width="840" MinHeight="640" MinWidth="740"
-        WindowStartupLocation="CenterScreen"
-        Background="#161616" FontFamily="Segoe UI">
-  <Window.Resources>
-    <Style TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-    </Style>
-    <Style TargetType="CheckBox">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Margin" Value="0,4,0,4"/>
-    </Style>
-    <Style TargetType="TextBox">
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="BorderBrush" Value="#525252"/>
-      <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="Padding" Value="5,4,5,4"/>
-      <Setter Property="CaretBrush" Value="#F1C21B"/>
-    </Style>
-    <Style TargetType="ListBox">
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="BorderBrush" Value="#525252"/>
-      <Setter Property="BorderThickness" Value="1"/>
-    </Style>
-    <Style x:Key="CardStyle" TargetType="Border">
-      <Setter Property="Background" Value="#262626"/>
-      <Setter Property="CornerRadius" Value="6"/>
-      <Setter Property="Padding" Value="12"/>
-    </Style>
-    <Style x:Key="AccentButton" TargetType="Button">
-      <Setter Property="Foreground" Value="#161616"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border Background="#F1C21B" CornerRadius="5" Padding="18,8,18,8">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style x:Key="GhostButton" TargetType="Button">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border Background="#525252" CornerRadius="5" Padding="18,8,18,8">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-  </Window.Resources>
-
-  <Grid Margin="16">
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="*"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-    </Grid.RowDefinitions>
-
-    <StackPanel Grid.Row="0" Margin="0,0,0,12">
-      <TextBlock Text="Stair Railing Manager" FontSize="18" FontWeight="SemiBold"/>
-      <TextBlock x:Name="SubtitleText" Foreground="#A8A8A8" FontSize="12" Margin="0,3,0,0"/>
-    </StackPanel>
-
-    <Grid Grid.Row="1">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="14"/>
-        <ColumnDefinition Width="*"/>
-      </Grid.ColumnDefinitions>
-
-      <Border Grid.Column="0" Style="{StaticResource CardStyle}">
-        <Grid>
-          <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-          </Grid.RowDefinitions>
-          <CheckBox x:Name="InnerEnabled" Grid.Row="0" IsChecked="True"
-                    FontWeight="SemiBold" Content="Inner side - one continuous railing"/>
-          <TextBlock Grid.Row="1" Foreground="#A8A8A8" FontSize="11" TextWrapping="Wrap"
-                     Margin="0,0,0,8"
-                     Text="Chains the inner edge of every run into a single open path."/>
-          <TextBox x:Name="InnerSearch" Grid.Row="2" Margin="0,0,0,6"/>
-          <ListBox x:Name="InnerList" Grid.Row="3"/>
-          <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,9,0,0">
-            <TextBlock Text="Inner offset (mm)" FontSize="11" VerticalAlignment="Center"
-                       Margin="0,0,8,0"/>
-            <TextBox x:Name="InnerOffset" Text="0" Width="72"/>
-          </StackPanel>
-        </Grid>
-      </Border>
-
-      <Border Grid.Column="2" Style="{StaticResource CardStyle}">
-        <Grid>
-          <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-          </Grid.RowDefinitions>
-          <CheckBox x:Name="OuterEnabled" Grid.Row="0" IsChecked="True"
-                    FontWeight="SemiBold" Content="Outer side - one railing per run"/>
-          <TextBlock Grid.Row="1" Foreground="#A8A8A8" FontSize="11" TextWrapping="Wrap"
-                     Margin="0,0,0,8"
-                     Text="Each run gets its own separate railing on its outer edge."/>
-          <TextBox x:Name="OuterSearch" Grid.Row="2" Margin="0,0,0,6"/>
-          <ListBox x:Name="OuterList" Grid.Row="3"/>
-          <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,9,0,0">
-            <TextBlock Text="Outer offset (mm)" FontSize="11" VerticalAlignment="Center"
-                       Margin="0,0,8,0"/>
-            <TextBox x:Name="OuterOffset" Text="0" Width="72"/>
-          </StackPanel>
-        </Grid>
-      </Border>
-    </Grid>
-
-    <Border Grid.Row="2" Style="{StaticResource CardStyle}" Margin="0,14,0,0">
-      <Grid>
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="Auto"/>
-          <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
-
-        <!-- plan of a switchback stair: which edge is inner, which is outer -->
-        <Canvas Grid.Column="0" Width="206" Height="100" Margin="0,0,20,0">
-          <Rectangle Canvas.Left="8"  Canvas.Top="6"  Width="104" Height="22"
-                     Fill="#393939" Stroke="#525252" StrokeThickness="1"/>
-          <Rectangle Canvas.Left="8"  Canvas.Top="28" Width="42"  Height="62"
-                     Fill="#393939" Stroke="#525252" StrokeThickness="1"/>
-          <Rectangle Canvas.Left="70" Canvas.Top="28" Width="42"  Height="62"
-                     Fill="#393939" Stroke="#525252" StrokeThickness="1"/>
-
-          <Line X1="8" Y1="40" X2="50" Y2="40" Stroke="#525252" StrokeThickness="1"/>
-          <Line X1="8" Y1="52" X2="50" Y2="52" Stroke="#525252" StrokeThickness="1"/>
-          <Line X1="8" Y1="64" X2="50" Y2="64" Stroke="#525252" StrokeThickness="1"/>
-          <Line X1="8" Y1="76" X2="50" Y2="76" Stroke="#525252" StrokeThickness="1"/>
-          <Line X1="70" Y1="40" X2="112" Y2="40" Stroke="#525252" StrokeThickness="1"/>
-          <Line X1="70" Y1="52" X2="112" Y2="52" Stroke="#525252" StrokeThickness="1"/>
-          <Line X1="70" Y1="64" X2="112" Y2="64" Stroke="#525252" StrokeThickness="1"/>
-          <Line X1="70" Y1="76" X2="112" Y2="76" Stroke="#525252" StrokeThickness="1"/>
-
-          <Polyline Points="50,90 50,28 70,28 70,90" Stroke="#F1C21B" StrokeThickness="2.5"
-                    StrokeLineJoin="Round" Fill="Transparent"/>
-          <Line X1="8"   Y1="90" X2="8"   Y2="28" Stroke="#78A9FF" StrokeThickness="2.5"/>
-          <Line X1="112" Y1="90" X2="112" Y2="28" Stroke="#78A9FF" StrokeThickness="2.5"/>
-
-          <Line X1="126" Y1="34" X2="146" Y2="34" Stroke="#F1C21B" StrokeThickness="2.5"/>
-          <TextBlock Canvas.Left="152" Canvas.Top="27" FontSize="11" Foreground="#F4F4F4"
-                     Text="Inner"/>
-          <Line X1="126" Y1="58" X2="146" Y2="58" Stroke="#78A9FF" StrokeThickness="2.5"/>
-          <TextBlock Canvas.Left="152" Canvas.Top="51" FontSize="11" Foreground="#F4F4F4"
-                     Text="Outer"/>
-          <TextBlock Canvas.Left="126" Canvas.Top="74" FontSize="10" Foreground="#A8A8A8"
-                     Text="plan view"/>
-        </Canvas>
-
-        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-          <CheckBox x:Name="DeleteExisting" Content="Delete existing railings on the selected stairs"/>
-          <CheckBox x:Name="HostToRun" IsChecked="True"
-                    Content="Host each outer railing on its own run (single-storey only)"/>
-          <CheckBox x:Name="FlipOuter" Content="Flip the outer railings"/>
-          <TextBlock Foreground="#A8A8A8" FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap"
-                     Text="Offsets are in mm, positive = inwards onto the tread."/>
-        </StackPanel>
-      </Grid>
-    </Border>
-
-    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
-      <TextBlock x:Name="StatusText" Foreground="#A8A8A8" FontSize="11"
-                 VerticalAlignment="Center" Margin="0,0,14,0"/>
-      <Button x:Name="CancelButton" Style="{StaticResource GhostButton}" Content="Cancel" Margin="0,0,10,0"/>
-      <Button x:Name="CreateButton" Style="{StaticResource AccentButton}" Content="Create Railings"/>
-    </StackPanel>
-  </Grid>
-</Window>
-"""
+# Window layout: ui.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 
 class RailingDialog(object):
     """Blocking WPF dialog driven by Dispatcher.PushFrame."""
 
     def __init__(self, subtitle, railing_types):
-        self.window = XamlReader.Parse(XAML)
+        self.window = bd.load_window(__file__)
         self.types = railing_types
         self.result = None
         self._frame = [None]

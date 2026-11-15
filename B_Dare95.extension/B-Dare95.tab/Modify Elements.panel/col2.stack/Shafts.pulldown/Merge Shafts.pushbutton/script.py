@@ -29,7 +29,6 @@ from System import EventHandler
 from System.Collections.Generic import List
 from System.Windows import Visibility, RoutedEventHandler
 from System.Windows.Controls import CheckBox, TextChangedEventHandler
-from System.Windows.Markup import XamlReader
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 
 from pyrevit import revit, DB, UI, script
@@ -583,144 +582,11 @@ def merge_group(g, do_union, do_delete, do_copy):
 # UI
 # ----------------------------------------------------------------------------
 
-XAML = u"""
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Merge Shafts" Height="700" Width="900"
-        WindowStartupLocation="CenterScreen" Background="#161616">
-  <Window.Resources>
-
-    <Style TargetType="TextBox">
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="BorderBrush" Value="#525252"/>
-      <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="Padding" Value="6,4"/>
-      <Setter Property="FontSize" Value="12"/>
-      <Setter Property="Height" Value="28"/>
-    </Style>
-
-    <Style x:Key="ItemCheck" TargetType="CheckBox">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="FontSize" Value="12"/>
-      <Setter Property="Margin" Value="8,5,8,5"/>
-      <Setter Property="VerticalContentAlignment" Value="Center"/>
-    </Style>
-
-    <Style x:Key="OptCheck" TargetType="CheckBox">
-      <Setter Property="Foreground" Value="#A8A8A8"/>
-      <Setter Property="FontSize" Value="12"/>
-      <Setter Property="Margin" Value="0,4,18,4"/>
-      <Setter Property="VerticalContentAlignment" Value="Center"/>
-    </Style>
-
-    <Style x:Key="AccentButton" TargetType="Button">
-      <Setter Property="Foreground" Value="#161616"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="FontSize" Value="12"/>
-      <Setter Property="Height" Value="32"/>
-      <Setter Property="MinWidth" Value="130"/>
-      <Setter Property="Margin" Value="8,0,0,0"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="bd" Background="#F1C21B" CornerRadius="6" Padding="14,4">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="bd" Property="Opacity" Value="0.85"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-    <Style x:Key="GhostButton" TargetType="Button">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="FontSize" Value="12"/>
-      <Setter Property="Height" Value="28"/>
-      <Setter Property="MinWidth" Value="90"/>
-      <Setter Property="Margin" Value="8,0,0,0"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="bd" Background="#393939" BorderBrush="#525252"
-                    BorderThickness="1" CornerRadius="6" Padding="10,3">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#525252"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-  </Window.Resources>
-
-  <Grid Margin="16">
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="*"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-    </Grid.RowDefinitions>
-
-    <StackPanel Grid.Row="0" Margin="0,0,0,12">
-      <TextBlock Text="Merge Shafts" Foreground="#F1C21B" FontSize="20" FontWeight="Bold"/>
-      <TextBlock x:Name="tbHeader" Foreground="#A8A8A8" FontSize="12" Margin="0,4,0,0"
-                 TextWrapping="Wrap"/>
-    </StackPanel>
-
-    <Grid Grid.Row="1" Margin="0,0,0,8">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="Auto"/>
-        <ColumnDefinition Width="Auto"/>
-      </Grid.ColumnDefinitions>
-      <TextBox x:Name="tbSearch" Grid.Column="0"/>
-      <Button x:Name="btnAll" Grid.Column="1" Content="Select All" Style="{StaticResource GhostButton}"/>
-      <Button x:Name="btnNone" Grid.Column="2" Content="Select None" Style="{StaticResource GhostButton}"/>
-    </Grid>
-
-    <Border Grid.Row="2" Background="#262626" BorderBrush="#525252" BorderThickness="1"
-            CornerRadius="8" Padding="4">
-      <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel x:Name="spGroups"/>
-      </ScrollViewer>
-    </Border>
-
-    <Border Grid.Row="3" Background="#262626" BorderBrush="#525252" BorderThickness="1"
-            CornerRadius="8" Padding="12,8" Margin="0,10,0,0">
-      <WrapPanel>
-        <CheckBox x:Name="chkUnion" Style="{StaticResource OptCheck}" IsChecked="True"
-                  Content="Union overlapping / touching outlines"/>
-        <CheckBox x:Name="chkDelete" Style="{StaticResource OptCheck}" IsChecked="True"
-                  Content="Delete original shafts"/>
-        <CheckBox x:Name="chkCopy" Style="{StaticResource OptCheck}" IsChecked="True"
-                  Content="Copy parameters shared by all members"/>
-      </WrapPanel>
-    </Border>
-
-    <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right"
-                Margin="0,12,0,0">
-      <Button x:Name="btnCancel" Content="Cancel" Style="{StaticResource GhostButton}"/>
-      <Button x:Name="btnRun" Content="Merge Selected" Style="{StaticResource AccentButton}"/>
-    </StackPanel>
-  </Grid>
-</Window>
-"""
+# Window layout: ui.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 
 def show_window(groups, total_groups, skipped):
-    window = XamlReader.Parse(XAML)
+    window = bd.load_window(__file__)
 
     tb_header = window.FindName("tbHeader")
     tb_search = window.FindName("tbSearch")

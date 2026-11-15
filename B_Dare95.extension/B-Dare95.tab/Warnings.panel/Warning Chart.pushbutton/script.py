@@ -40,7 +40,6 @@ from System.Windows import (Window, Point, Size, Thickness, Visibility, Clipboar
 from System.Windows.Controls import (TextBlock, Border, DockPanel, Dock, Canvas,
                                      TextChangedEventHandler)
 from System.Windows.Input import MouseButtonEventHandler, MouseEventHandler, Cursors
-from System.Windows.Markup import XamlReader
 from System.Windows.Media import (SolidColorBrush, ColorConverter, PathGeometry,
                                   PathFigure, LineSegment, ArcSegment, SweepDirection,
                                   EllipseGeometry, TranslateTransform, PixelFormats)
@@ -302,66 +301,12 @@ PICKER_SWATCHES = [
     "#D4EFDF", "#7DCEA0", "#52BE80", "#27AE60", "#FFE95C", "#FFC800", "#F39C12", "#E8542A",
 ]
 
-PICKER_XAML = """
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Choose a color" SizeToContent="WidthAndHeight"
-        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
-        AllowsTransparency="True" WindowStyle="None" Background="Transparent"
-        ShowInTaskbar="False">
-  <Window.Resources>
-    <Style x:Key="Flat" TargetType="Button">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="Padding" Value="18,6"/>
-      <Setter Property="FontSize" Value="12"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="Bd" CornerRadius="6" Background="{TemplateBinding Background}"
-                    Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-  </Window.Resources>
-  <Border Background="#161616" CornerRadius="10" BorderBrush="#525252" BorderThickness="1">
-    <StackPanel Margin="18">
-      <TextBlock Text="Choose a color" Foreground="#F4F4F4" FontSize="16" FontWeight="SemiBold"
-                 Margin="0,0,0,14"/>
-      <WrapPanel x:Name="SwatchHost" Width="296"/>
-      <StackPanel Orientation="Horizontal" Margin="0,16,0,0" VerticalAlignment="Center">
-        <TextBlock Text="Selected:" Foreground="#A8A8A8" FontSize="12" VerticalAlignment="Center"
-                   Margin="0,0,10,0"/>
-        <Border x:Name="Preview" Width="110" Height="26" CornerRadius="4"
-                BorderBrush="#525252" BorderThickness="1"/>
-        <TextBox x:Name="HexBox" Width="110" Height="26" Margin="10,0,0,0"
-                 Background="#393939" Foreground="#F4F4F4" BorderBrush="#525252"
-                 BorderThickness="1" VerticalContentAlignment="Center" Padding="6,0"
-                 FontSize="12"/>
-      </StackPanel>
-      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
-        <Button x:Name="OkBtn" Content="OK" Style="{StaticResource Flat}"
-                Background="#F1C21B" Foreground="#161616" Margin="0,0,8,0"/>
-        <Button x:Name="CancelBtn" Content="Cancel" Style="{StaticResource Flat}"/>
-      </StackPanel>
-    </StackPanel>
-  </Border>
-</Window>
-"""
+# Window layout: picker.xaml, settings.xaml, ui.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 
 def pick_color(start_hex, owner):
     """Returns a hex string, or None if cancelled."""
-    win = XamlReader.Parse(PICKER_XAML)
+    win = bd.load_window(__file__, "picker.xaml")
     host = win.FindName("SwatchHost")
     preview = win.FindName("Preview")
     hexbox = win.FindName("HexBox")
@@ -425,120 +370,10 @@ def pick_color(start_hex, owner):
 # Settings dialog
 # ---------------------------------------------------------------------------
 
-SETTINGS_XAML = """
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Chart Settings" Width="470" SizeToContent="Height"
-        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
-        AllowsTransparency="True" WindowStyle="None" Background="Transparent"
-        ShowInTaskbar="False">
-  <Window.Resources>
-    <Style x:Key="Flat" TargetType="Button">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="Padding" Value="18,7"/>
-      <Setter Property="FontSize" Value="12"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="Bd" CornerRadius="6" Background="{TemplateBinding Background}"
-                    Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style x:Key="Tgl" TargetType="ToggleButton">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Padding" Value="16,6"/>
-      <Setter Property="FontSize" Value="12"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ToggleButton">
-            <Border x:Name="Bd" CornerRadius="6" Background="{TemplateBinding Background}"
-                    Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#F1C21B"/>
-                <Setter Property="Foreground" Value="#161616"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style TargetType="CheckBox">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="FontSize" Value="12"/>
-      <Setter Property="Margin" Value="0,0,0,8"/>
-    </Style>
-  </Window.Resources>
-  <Border Background="#161616" CornerRadius="10" BorderBrush="#525252" BorderThickness="1">
-    <StackPanel Margin="22">
-      <TextBlock Text="Chart Settings" Foreground="#F4F4F4" FontSize="19" FontWeight="SemiBold"/>
-
-      <TextBlock Text="Maximum Warning Count" Foreground="#F4F4F4" FontSize="13"
-                 FontWeight="SemiBold" Margin="0,20,0,6"/>
-      <TextBox x:Name="MaxBox" Height="30" Background="#393939" Foreground="#F4F4F4"
-               BorderBrush="#525252" BorderThickness="1" VerticalContentAlignment="Center"
-               Padding="8,0" FontSize="13"/>
-      <TextBlock Text="Warnings beyond this number are not read (keeps huge models responsive)."
-                 Foreground="#A8A8A8" FontSize="11" Margin="0,5,0,0" TextWrapping="Wrap"/>
-
-      <Border Height="1" Background="#525252" Margin="0,18,0,0"/>
-
-      <TextBlock Text="Pie Chart Color Scheme" Foreground="#F4F4F4" FontSize="13"
-                 FontWeight="SemiBold" Margin="0,18,0,2"/>
-      <TextBlock Text="Colors used for different warning types (click to change)"
-                 Foreground="#A8A8A8" FontSize="11" Margin="0,0,0,10"/>
-      <StackPanel Orientation="Horizontal">
-        <Button x:Name="Sw0" Width="52" Height="34" Style="{StaticResource Flat}" Margin="0,0,8,0"/>
-        <Button x:Name="Sw1" Width="52" Height="34" Style="{StaticResource Flat}" Margin="0,0,8,0"/>
-        <Button x:Name="Sw2" Width="52" Height="34" Style="{StaticResource Flat}" Margin="0,0,8,0"/>
-        <Button x:Name="Sw3" Width="52" Height="34" Style="{StaticResource Flat}" Margin="0,0,8,0"/>
-        <Button x:Name="Sw4" Width="52" Height="34" Style="{StaticResource Flat}" Margin="0,0,16,0"/>
-        <Button x:Name="ResetBtn" Content="Reset to Default" Style="{StaticResource Flat}"
-                Height="34"/>
-      </StackPanel>
-
-      <Border Height="1" Background="#525252" Margin="0,18,0,0"/>
-
-      <TextBlock Text="Slice Size Based On" Foreground="#F4F4F4" FontSize="13"
-                 FontWeight="SemiBold" Margin="0,18,0,8"/>
-      <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-        <ToggleButton x:Name="TglWarnings" Content="Warning count" Style="{StaticResource Tgl}"
-                      Margin="0,0,8,0"/>
-        <ToggleButton x:Name="TglElements" Content="Element count" Style="{StaticResource Tgl}"/>
-      </StackPanel>
-
-      <CheckBox x:Name="ChkAuto" Content="Auto-refresh the chart while I work"/>
-      <CheckBox x:Name="ChkZoom" Content="Zoom to elements after selecting a slice"/>
-
-      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
-        <Button x:Name="SaveBtn" Content="Save Changes" Style="{StaticResource Flat}"
-                Background="#F1C21B" Foreground="#161616" Margin="0,0,8,0"/>
-        <Button x:Name="CancelBtn" Content="Cancel" Style="{StaticResource Flat}"/>
-      </StackPanel>
-    </StackPanel>
-  </Border>
-</Window>
-"""
-
 
 def open_settings(owner):
     """Returns True when settings were saved."""
-    win = XamlReader.Parse(SETTINGS_XAML)
+    win = bd.load_window(__file__, "settings.xaml")
     state = {
         "palette": list(SETTINGS.get("palette") or DEFAULT_PALETTE),
         "saved": False,
@@ -674,165 +509,11 @@ class RefreshHandler(IExternalEventHandler):
 # Main window
 # ---------------------------------------------------------------------------
 
-MAIN_XAML = """
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="WarChart" Width="880" Height="500" MinWidth="620" MinHeight="380"
-        WindowStartupLocation="CenterScreen" ShowInTaskbar="False"
-        AllowsTransparency="True" WindowStyle="None" Background="Transparent"
-        ResizeMode="CanResizeWithGrip">
-  <Window.Resources>
-    <Style x:Key="PillTgl" TargetType="ToggleButton">
-      <Setter Property="Foreground" Value="#A8A8A8"/>
-      <Setter Property="Background" Value="#262626"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ToggleButton">
-            <Border x:Name="Bd" CornerRadius="13" Padding="11,6"
-                    Background="{TemplateBinding Background}"
-                    BorderBrush="#525252" BorderThickness="1">
-              <ContentPresenter VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="BorderBrush" Value="#F1C21B"/>
-              </Trigger>
-              <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#F1C21B"/>
-                <Setter TargetName="Bd" Property="BorderBrush" Value="#F1C21B"/>
-                <Setter Property="Foreground" Value="#161616"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style x:Key="IconBtn" TargetType="Button">
-      <Setter Property="Foreground" Value="#A8A8A8"/>
-      <Setter Property="Background" Value="Transparent"/>
-      <Setter Property="Width" Value="30"/>
-      <Setter Property="Height" Value="30"/>
-      <Setter Property="FontSize" Value="14"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="FontFamily" Value="Segoe MDL2 Assets, Segoe UI Symbol"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="Bd" CornerRadius="6" Background="{TemplateBinding Background}">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#525252"/>
-                <Setter Property="Foreground" Value="#F1C21B"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-  </Window.Resources>
-
-  <Border x:Name="SnapRoot" Background="#161616" CornerRadius="10" BorderBrush="#525252"
-          BorderThickness="1">
-    <Grid Margin="16,12,16,16">
-      <Grid.RowDefinitions>
-        <RowDefinition Height="Auto"/>
-        <RowDefinition Height="Auto"/>
-        <RowDefinition Height="*"/>
-      </Grid.RowDefinitions>
-
-      <!-- header -->
-      <Border x:Name="HeaderBar" Grid.Row="0" Background="Transparent" Padding="0,0,0,8">
-        <Grid>
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="Auto"/>
-          </Grid.ColumnDefinitions>
-          <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock x:Name="TotalText" Text="0" Foreground="#F1C21B" FontSize="26"
-                       FontWeight="Bold" VerticalAlignment="Center"/>
-            <StackPanel Margin="10,2,0,0" VerticalAlignment="Center">
-              <TextBlock x:Name="TotalCaption" Text="warnings" Foreground="#F4F4F4" FontSize="12"/>
-              <TextBlock x:Name="TypesText" Text="0 types" Foreground="#A8A8A8" FontSize="11"/>
-            </StackPanel>
-          </StackPanel>
-          <TextBlock Grid.Column="1" Text="WarChart" Foreground="#525252" FontSize="13"
-                     FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-          <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-            <Button x:Name="SettingsBtn" Content="&#xE713;" Style="{StaticResource IconBtn}"
-                    ToolTip="Chart settings"/>
-            <Button x:Name="SnapBtn" Content="&#xE722;" Style="{StaticResource IconBtn}"
-                    ToolTip="Save chart as PNG (also copied to clipboard)"/>
-            <Button x:Name="RefreshBtn" Content="&#xE72C;" Style="{StaticResource IconBtn}"
-                    ToolTip="Refresh now"/>
-            <Button x:Name="CloseBtn" Content="&#xE711;" Style="{StaticResource IconBtn}"
-                    ToolTip="Close"/>
-          </StackPanel>
-        </Grid>
-      </Border>
-
-      <!-- banner -->
-      <Border x:Name="Banner" Grid.Row="1" Background="#393939" CornerRadius="6"
-              Padding="10,6" Margin="0,0,0,8" Visibility="Collapsed">
-        <TextBlock x:Name="BannerText" Foreground="#F1C21B" FontSize="11" TextWrapping="Wrap"/>
-      </Border>
-
-      <!-- body -->
-      <Grid Grid.Row="2">
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="*"/>
-          <ColumnDefinition Width="330"/>
-        </Grid.ColumnDefinitions>
-
-        <Canvas x:Name="ChartCanvas" Grid.Column="0" Background="Transparent" ClipToBounds="False"/>
-
-        <TextBlock x:Name="EmptyText" Grid.Column="0" Text="No warnings in this model."
-                   Foreground="#A8A8A8" FontSize="14" HorizontalAlignment="Center"
-                   VerticalAlignment="Center" Visibility="Collapsed"/>
-
-        <ToggleButton x:Name="IsolateToggle" Grid.Column="0" Style="{StaticResource PillTgl}"
-                      HorizontalAlignment="Left" VerticalAlignment="Top"
-                      ToolTip="Temporarily isolate the clicked warning's elements in the active view">
-          <StackPanel Orientation="Horizontal">
-            <TextBlock Text="&#xE890;" FontFamily="Segoe MDL2 Assets, Segoe UI Symbol"
-                       FontSize="13" VerticalAlignment="Center"/>
-            <TextBlock Text="Isolate on click" FontSize="11" Margin="7,0,0,0"
-                       VerticalAlignment="Center"/>
-          </StackPanel>
-        </ToggleButton>
-
-        <Grid Grid.Column="1" Margin="12,0,0,0">
-          <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-          </Grid.RowDefinitions>
-          <Grid Grid.Row="0" Margin="0,0,0,8">
-            <TextBox x:Name="FilterBox" Height="28" Background="#262626" Foreground="#F4F4F4"
-                     BorderBrush="#525252" BorderThickness="1" Padding="8,0" FontSize="12"
-                     VerticalContentAlignment="Center"/>
-            <TextBlock x:Name="FilterHint" Text="Search warnings..." Foreground="#525252"
-                       FontSize="12" Margin="10,0,0,0" IsHitTestVisible="False"
-                       VerticalAlignment="Center"/>
-          </Grid>
-          <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
-                        HorizontalScrollBarVisibility="Disabled">
-            <StackPanel x:Name="LegendHost"/>
-          </ScrollViewer>
-        </Grid>
-      </Grid>
-    </Grid>
-  </Border>
-</Window>
-"""
-
 
 class WarChart(object):
 
     def __init__(self):
-        self.window = XamlReader.Parse(MAIN_XAML)
+        self.window = bd.load_window(__file__)
         self.canvas = self.window.FindName("ChartCanvas")
         self.legend_host = self.window.FindName("LegendHost")
         self.filter_box = self.window.FindName("FilterBox")

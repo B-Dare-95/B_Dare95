@@ -1,0 +1,159 @@
+<Window
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Found Elements"
+    Width="560" Height="640"
+    MinWidth="440" MinHeight="320"
+    WindowStartupLocation="CenterScreen"
+    ResizeMode="CanResize"
+    Background="{DynamicResource BgBrush}"
+    Foreground="{DynamicResource TextBrush}"
+    FontFamily="Segoe UI"
+    FontSize="13">
+
+    <Window.Resources>
+
+        <!-- ── Slim ScrollBar ── -->
+        <Style x:Key="ScrollThumbStyle" TargetType="Thumb">
+            <Setter Property="Background" Value="{StaticResource MutedBrush}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="3"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style TargetType="ScrollBar">
+            <Setter Property="Background" Value="{StaticResource CardBrush}"/>
+            <Setter Property="Width" Value="6"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid Background="{StaticResource CardBrush}">
+                            <Track Name="PART_Track" IsDirectionReversed="True">
+                                <Track.Thumb>
+                                    <Thumb Style="{StaticResource ScrollThumbStyle}"/>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ── Accent (Done) button ── -->
+        <Style x:Key="AccentButton" TargetType="Button">
+            <Setter Property="Background"      Value="{StaticResource AccentBrush}"/>
+            <Setter Property="Foreground"      Value="{StaticResource BgBrush}"/>
+            <Setter Property="FontWeight"      Value="SemiBold"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="Height"          Value="36"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.7"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+    </Window.Resources>
+
+    <Border Padding="16">
+        <DockPanel LastChildFill="True">
+
+            <!-- ── Header ── -->
+            <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+                <TextBlock x:Name="CountLabel"
+                           FontSize="15" FontWeight="SemiBold"
+                           Foreground="{StaticResource TextBrush}"/>
+                <TextBlock Text="Click a row to open and zoom to that element"
+                           Foreground="{StaticResource SubtextBrush}"
+                           FontSize="11" Margin="0,3,0,0"/>
+            </StackPanel>
+
+            <!-- ── Search / filter box ── -->
+            <Border DockPanel.Dock="Top"
+                    Background="{StaticResource SurfaceBrush}" CornerRadius="6"
+                    Margin="0,0,0,10"
+                    BorderBrush="{StaticResource MutedBrush}" BorderThickness="1">
+                <TextBox x:Name="SearchBox"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         Foreground="{StaticResource TextBrush}"
+                         CaretBrush="{StaticResource AccentBrush}"
+                         Padding="8,6"
+                         FontSize="12"
+                         ToolTip="Filter results by name or level..."/>
+            </Border>
+
+            <!-- ── Done button (bottom) ── -->
+            <Button x:Name="DoneBtn"
+                    DockPanel.Dock="Bottom"
+                    Content="Done"
+                    Style="{StaticResource AccentButton}"
+                    Margin="0,10,0,0"/>
+
+            <!-- ── Status label (above Done button) ── -->
+            <TextBlock x:Name="StatusLabel"
+                       DockPanel.Dock="Bottom"
+                       Foreground="{StaticResource SubtextBrush}"
+                       FontSize="11"
+                       TextAlignment="Center"
+                       Margin="0,8,0,0"
+                       Text=" "/>
+
+            <!-- ── Column headers ── -->
+            <Grid DockPanel.Dock="Top" Margin="2,0,8,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="86"/>
+                    <ColumnDefinition Width="110"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="NAME"
+                           Foreground="{StaticResource SubtextBrush}" FontSize="10" FontWeight="SemiBold"
+                           Margin="10,0,0,0"/>
+                <TextBlock Grid.Column="1" Text="ELEMENT ID"
+                           Foreground="{StaticResource SubtextBrush}" FontSize="10" FontWeight="SemiBold"
+                           Margin="4,0,0,0"/>
+                <TextBlock Grid.Column="2" Text="LEVEL"
+                           Foreground="{StaticResource SubtextBrush}" FontSize="10" FontWeight="SemiBold"
+                           Margin="4,0,0,0"/>
+            </Grid>
+            <Border DockPanel.Dock="Top"
+                    Height="1" Background="{StaticResource MutedBrush}" Opacity="0.4" Margin="0,0,0,4"/>
+
+            <!-- ── Scrollable rows area ── -->
+            <Border Background="{StaticResource CardBrush}" CornerRadius="8" Padding="2">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Padding="0,0,4,0">
+                    <StackPanel x:Name="RowsPanel" Margin="2,4,2,4"/>
+                </ScrollViewer>
+            </Border>
+
+        </DockPanel>
+    </Border>
+</Window>

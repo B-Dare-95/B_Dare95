@@ -29,7 +29,6 @@ from System.Windows.Controls import (StackPanel, TextBlock, CheckBox, Border,
                                      Orientation, TextChangedEventHandler)
 from System.Windows.Input import MouseButtonEventHandler
 from System.Windows.Interop import WindowInteropHelper
-from System.Windows.Markup import XamlReader
 from System.Windows.Media import BrushConverter
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 
@@ -605,206 +604,7 @@ def convert_one(row, vft_id, tpl_choice, ref_index, view_ref_ids):
 # ----------------------------------------------------------------------------
 # UI
 # ----------------------------------------------------------------------------
-XAML = u"""
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Detail to Floor Plan Callout" Width="1130" Height="720" MinWidth="900" MinHeight="460"
-        WindowStartupLocation="CenterScreen" Background="#161616"
-        FontFamily="Segoe UI" FontSize="12.5" Foreground="#F4F4F4">
-  <Window.Resources>
-    <Style TargetType="Button">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Height" Value="32"/>
-      <Setter Property="Padding" Value="16,0"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Opacity" Value="0.85"/></Trigger>
-              <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-      <Setter Property="Background" Value="#F1C21B"/>
-      <Setter Property="Foreground" Value="#161616"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-    </Style>
-    <Style x:Key="Toggle" TargetType="ToggleButton">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Height" Value="32"/>
-      <Setter Property="Padding" Value="14,0"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ToggleButton">
-            <Border x:Name="Bd" Background="#393939" CornerRadius="4" Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#F1C21B"/>
-                <Setter Property="Foreground" Value="#161616"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style TargetType="TextBox">
-      <Setter Property="Background" Value="#262626"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="CaretBrush" Value="#F4F4F4"/>
-      <Setter Property="BorderBrush" Value="#525252"/>
-      <Setter Property="BorderThickness" Value="0,0,0,1"/>
-      <Setter Property="Padding" Value="8,0"/>
-      <Setter Property="Height" Value="32"/>
-      <Setter Property="VerticalContentAlignment" Value="Center"/>
-    </Style>
-    <Style TargetType="CheckBox">
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="CheckBox">
-            <Border x:Name="Box" Width="16" Height="16" CornerRadius="3" BorderThickness="1"
-                    BorderBrush="#A8A8A8" Background="Transparent">
-              <Path x:Name="Tick" Data="M2.5,7.5 L6,11 L12.5,3.5" Stroke="#161616" StrokeThickness="2" Visibility="Collapsed"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="Box" Property="Background" Value="#F1C21B"/>
-                <Setter TargetName="Box" Property="BorderBrush" Value="#F1C21B"/>
-                <Setter TargetName="Tick" Property="Visibility" Value="Visible"/>
-              </Trigger>
-              <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.3"/></Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style TargetType="ComboBoxItem">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ComboBoxItem">
-            <Border x:Name="Bd" Background="Transparent" Padding="10,7">
-              <ContentPresenter/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Bd" Property="Background" Value="#393939"/></Trigger>
-              <Trigger Property="IsSelected" Value="True"><Setter Property="Foreground" Value="#F1C21B"/></Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style TargetType="ComboBox">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Height" Value="32"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ComboBox">
-            <Grid>
-              <ToggleButton Focusable="False" ClickMode="Press" Cursor="Hand"
-                  IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
-                <ToggleButton.Template>
-                  <ControlTemplate TargetType="ToggleButton">
-                    <Border x:Name="Bd" Background="#393939" BorderBrush="#525252" BorderThickness="1" CornerRadius="4">
-                      <Path HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,12,0"
-                            Data="M0,0 L4,4 L8,0" Stroke="#A8A8A8" StrokeThickness="1.5"/>
-                    </Border>
-                    <ControlTemplate.Triggers>
-                      <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="BorderBrush" Value="#F1C21B"/></Trigger>
-                    </ControlTemplate.Triggers>
-                  </ControlTemplate>
-                </ToggleButton.Template>
-              </ToggleButton>
-              <ContentPresenter IsHitTestVisible="False" Margin="10,0,30,0" VerticalAlignment="Center"
-                  Content="{TemplateBinding SelectionBoxItem}"
-                  ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"/>
-              <Popup IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" AllowsTransparency="True"
-                     Focusable="False" PopupAnimation="Fade">
-                <Border Background="#262626" BorderBrush="#525252" BorderThickness="1" CornerRadius="4" MaxHeight="320"
-                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
-                  <ScrollViewer VerticalScrollBarVisibility="Auto"><ItemsPresenter/></ScrollViewer>
-                </Border>
-              </Popup>
-            </Grid>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-  </Window.Resources>
-
-  <Grid Margin="18">
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="*"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-    </Grid.RowDefinitions>
-
-    <StackPanel Grid.Row="0" Margin="0,0,0,14">
-      <TextBlock Text="Detail Callouts &#x2192; Floor Plan Callouts" FontSize="18" FontWeight="SemiBold"/>
-      <TextBlock x:Name="SubTitle" Foreground="#A8A8A8" Margin="0,4,0,0" TextWrapping="Wrap"/>
-    </StackPanel>
-
-    <DockPanel Grid.Row="1" Margin="0,0,0,10">
-      <ToggleButton x:Name="ApplicableOnly" DockPanel.Dock="Right" Content="Applicable only"
-                    IsChecked="True" Margin="10,0,0,0" Style="{StaticResource Toggle}"/>
-      <Button x:Name="SelectNone" DockPanel.Dock="Right" Content="Select none" Margin="10,0,0,0"/>
-      <Button x:Name="SelectAll" DockPanel.Dock="Right" Content="Select all" Margin="10,0,0,0"/>
-      <Grid>
-        <TextBox x:Name="SearchBox"/>
-        <TextBlock x:Name="SearchHint" Text="Search by view, parent plan or sheet..." IsHitTestVisible="False"
-                   Foreground="#6F6F6F" Margin="11,0,0,0" VerticalAlignment="Center"/>
-      </Grid>
-    </DockPanel>
-
-    <Border Grid.Row="2" Padding="10,6" Margin="0,0,0,4">
-      <StackPanel x:Name="HeaderRow" Orientation="Horizontal"/>
-    </Border>
-
-    <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
-      <StackPanel x:Name="RowsPanel"/>
-    </ScrollViewer>
-
-    <Border Grid.Row="4" Background="#262626" CornerRadius="6" Padding="14" Margin="0,12,0,0">
-      <Grid>
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="*"/>
-          <ColumnDefinition Width="20"/>
-          <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
-        <StackPanel Grid.Column="0">
-          <TextBlock Text="Floor plan type for the new callouts" Foreground="#A8A8A8" Margin="0,0,0,6"/>
-          <ComboBox x:Name="TypeCombo"/>
-        </StackPanel>
-        <StackPanel Grid.Column="2">
-          <TextBlock Text="View template" Foreground="#A8A8A8" Margin="0,0,0,6"/>
-          <ComboBox x:Name="TemplateCombo"/>
-        </StackPanel>
-      </Grid>
-    </Border>
-
-    <DockPanel Grid.Row="5" Margin="0,14,0,0">
-      <Button x:Name="RunBtn" DockPanel.Dock="Right" Content="Convert selected" Margin="10,0,0,0"
-              Style="{StaticResource Primary}"/>
-      <Button x:Name="CancelBtn" DockPanel.Dock="Right" Content="Cancel"/>
-      <TextBlock x:Name="CountText" Foreground="#A8A8A8" VerticalAlignment="Center"/>
-    </DockPanel>
-  </Grid>
-</Window>
-"""
+# Window layout: ui.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 W_CHECK, W_NAME, W_PARENT, W_SCALE, W_SHEET, W_STATUS = 34, 250, 210, 64, 200, 270
 
@@ -838,7 +638,7 @@ def make_cell(text, width, fg, bold=False):
 
 
 def show_picker(rows, vft_items, tpl_items):
-    win = XamlReader.Parse(XAML)
+    win = bd.load_window(__file__)
     try:
         WindowInteropHelper(win).Owner = __revit__.MainWindowHandle
     except Exception:

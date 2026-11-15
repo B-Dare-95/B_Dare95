@@ -26,12 +26,9 @@ clr.AddReference('PresentationFramework')
 clr.AddReference('PresentationCore')
 clr.AddReference('WindowsBase')
 
-from System.IO       import MemoryStream
-from System.Text     import Encoding
 from System.Windows  import Thickness, Visibility
 from System.Windows.Controls import CheckBox, TextBox
 from System.Windows.Media    import SolidColorBrush, Color
-import System.Windows.Markup as Markup
 
 from Autodesk.Revit.DB import (
     FilteredElementCollector, ViewPlan, ViewType,
@@ -371,81 +368,10 @@ def process_view(view, shafts_to_use, text_type_id):
 # WPF FORM
 # ═════════════════════════════════════════════════════════════════════
 
-XAML = """
-<Window
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Shaft Function Tag"
-    Height="640" Width="460"
-    MinHeight="480"
-    WindowStartupLocation="CenterScreen"
-    Background="#161616" Foreground="#F4F4F4"
-    FontFamily="Segoe UI" FontSize="12">
-
-    <Window.Resources>
-        <Style TargetType="CheckBox">
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Margin" Value="4,3,4,3"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-        </Style>
-    </Window.Resources>
-
-    <Grid Margin="18">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
-
-        <StackPanel Grid.Row="0" Margin="0,0,0,10">
-            <TextBlock Text="SHAFT FUNCTION TAG" FontSize="16" FontWeight="Bold" Foreground="#F1C21B"/>
-        </StackPanel>
-
-        <CheckBox Grid.Row="1" x:Name="IncludeLinkedCheckBox"
-                  Content="Include shafts from linked models"
-                  IsChecked="True" Margin="0,0,0,10"/>
-
-        <TextBox Grid.Row="2" x:Name="SearchBox" Height="25" Margin="0,0,0,10"
-                 Background="#0D0D0D" Foreground="White" BorderBrush="#525252"
-                 VerticalContentAlignment="Center" Padding="5,0,0,0"/>
-
-        <Grid Grid.Row="3" Margin="0,0,0,6">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="10"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="Plan Views" Foreground="#C6C6C6" FontWeight="SemiBold"/>
-            <Button Grid.Column="1" x:Name="SelectAllBtn" Content="Select All" Background="Transparent" BorderBrush="Transparent" Foreground="#F1C21B"/>
-            <Button Grid.Column="3" x:Name="ClearAllBtn" Content="Clear All" Background="Transparent" BorderBrush="Transparent" Foreground="#8D8D8D"/>
-        </Grid>
-
-        <Border Grid.Row="4" Background="#0D0D0D" BorderBrush="#525252" BorderThickness="1" CornerRadius="3" Margin="0,0,0,14">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <StackPanel x:Name="ViewsPanel" Margin="6"/>
-            </ScrollViewer>
-        </Border>
-
-        <TextBlock Grid.Row="5" Text="Text Note Type" Foreground="#C6C6C6" FontWeight="SemiBold" Margin="0,0,0,5"/>
-        <ComboBox Grid.Row="6" x:Name="TextTypeCombo" Height="30" Margin="0,0,0,18" Background="White" Foreground="#161616"/>
-
-        <StackPanel Grid.Row="7" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="CancelBtn" Content="Cancel" Width="90" Height="32" Margin="0,0,10,0" Background="#393939" Foreground="#F4F4F4"/>
-            <Button x:Name="ApplyBtn" Content="Apply" Width="90" Height="32" Background="#F1C21B" Foreground="#161616" FontWeight="Bold"/>
-        </StackPanel>
-    </Grid>
-</Window>
-"""
+# Window layout: ui.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 def show_form(plan_views, text_note_types, link_count, linked_shaft_count):
-    stream = MemoryStream(Encoding.UTF8.GetBytes(XAML))
-    window = Markup.XamlReader.Load(stream)
+    window = bd.load_window(__file__)
 
     search_box       = window.FindName('SearchBox')
     views_panel      = window.FindName('ViewsPanel')

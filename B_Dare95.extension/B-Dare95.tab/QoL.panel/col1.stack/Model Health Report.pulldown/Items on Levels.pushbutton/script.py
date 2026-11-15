@@ -32,7 +32,6 @@ from System.Windows.Controls import (Border, Dock, DockPanel, StackPanel, TextBl
                                      TextChangedEventHandler)
 from System.Windows.Input import Cursors, Keyboard, ModifierKeys, MouseButtonEventHandler
 from System.Windows.Interop import WindowInteropHelper
-from System.Windows.Markup import XamlReader
 from System.Windows.Media import BrushConverter, FontFamily
 
 from Autodesk.Revit.UI import ExternalEvent, IExternalEventHandler
@@ -266,126 +265,7 @@ class LevelsEventHandler(IExternalEventHandler):
 
 
 # --------------------------------------------------------------------------- UI --
-XAML = u"""
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Items on Levels" Width="720" Height="760" MinWidth="560" MinHeight="460"
-        WindowStartupLocation="CenterScreen" ResizeMode="CanResizeWithGrip"
-        Background="#161616" Foreground="#F4F4F4" FontFamily="Segoe UI" FontSize="13">
-  <Window.Resources>
-    <Style TargetType="Button">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="BorderBrush" Value="#525252"/>
-      <Setter Property="Height" Value="30"/>
-      <Setter Property="Padding" Value="14,0"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                    BorderThickness="1" CornerRadius="6" Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Opacity" Value="0.85"/></Trigger>
-              <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Bd" Property="Opacity" Value="0.4"/></Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style x:Key="Accent" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-      <Setter Property="Background" Value="#F1C21B"/>
-      <Setter Property="BorderBrush" Value="#F1C21B"/>
-      <Setter Property="Foreground" Value="#161616"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-    </Style>
-    <Style TargetType="TextBox">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="CaretBrush" Value="#F4F4F4"/>
-      <Setter Property="Height" Value="30"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="TextBox">
-            <Border Background="#393939" BorderBrush="#525252" BorderThickness="1" CornerRadius="6">
-              <ScrollViewer x:Name="PART_ContentHost" Margin="6,0" VerticalAlignment="Center"/>
-            </Border>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style TargetType="CheckBox">
-      <Setter Property="Foreground" Value="#A8A8A8"/>
-      <Setter Property="FontSize" Value="12"/>
-      <Setter Property="VerticalAlignment" Value="Center"/>
-    </Style>
-    <Style x:Key="Row" TargetType="Border">
-      <Setter Property="Background" Value="Transparent"/>
-      <Setter Property="BorderBrush" Value="#262626"/>
-      <Setter Property="BorderThickness" Value="0,0,0,1"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Style.Triggers>
-        <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#262626"/></Trigger>
-      </Style.Triggers>
-    </Style>
-  </Window.Resources>
-
-  <Grid Margin="14">
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="*"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-    </Grid.RowDefinitions>
-
-    <DockPanel Grid.Row="0">
-      <Button x:Name="btnRefresh" DockPanel.Dock="Right" Content="Refresh"
-              ToolTip="Scan the active model again"/>
-      <StackPanel VerticalAlignment="Center">
-        <TextBlock Text="Elements per Level" FontSize="18" FontWeight="SemiBold"/>
-        <TextBlock x:Name="tbModel" Foreground="#A8A8A8" FontSize="12" Margin="0,2,0,0"
-                   TextTrimming="CharacterEllipsis"/>
-      </StackPanel>
-    </DockPanel>
-
-    <Border Grid.Row="1" x:Name="bdWarn" Visibility="Collapsed" Background="#3A2E06"
-            CornerRadius="6" Padding="10,8" Margin="0,10,0,0">
-      <TextBlock x:Name="tbWarn" Foreground="#FDDC69" FontSize="12" TextWrapping="Wrap"/>
-    </Border>
-
-    <DockPanel Grid.Row="2" Margin="0,12,0,0">
-      <Button x:Name="btnCollapse" DockPanel.Dock="Right" Content="Collapse all" Margin="6,0,0,0"/>
-      <Button x:Name="btnExpand" DockPanel.Dock="Right" Content="Expand all" Margin="6,0,0,0"/>
-      <CheckBox x:Name="chkZoom" DockPanel.Dock="Right" Content="Zoom to selection" Margin="10,0,4,0"
-                ToolTip="Also zoom the active view to the selected elements. If none of them are visible in the active view, Revit may ask to open another view."/>
-      <Grid>
-        <TextBox x:Name="txtSearch"/>
-        <TextBlock x:Name="tbPlaceholder" Text="Search levels and categories" Foreground="#8D8D8D"
-                   Margin="10,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
-      </Grid>
-    </DockPanel>
-
-    <Border Grid.Row="3" Margin="0,10,0,0" BorderBrush="#393939" BorderThickness="1" CornerRadius="6">
-      <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel x:Name="spList"/>
-      </ScrollViewer>
-    </Border>
-
-    <Border Grid.Row="4" x:Name="bdStatus" Background="#262626" CornerRadius="6" Padding="10,8" Margin="0,10,0,0">
-      <TextBlock x:Name="tbStatus" Foreground="#A8A8A8" FontSize="12" TextWrapping="Wrap"
-                 Text="Click a level or a category to select its elements in the model. Ctrl+click adds to the current selection."/>
-    </Border>
-
-    <DockPanel Grid.Row="5" Margin="0,12,0,0">
-      <Button x:Name="btnClose" DockPanel.Dock="Right" Style="{StaticResource Accent}" Content="Close"/>
-      <TextBlock x:Name="tbTotals" Foreground="#A8A8A8" FontSize="12" VerticalAlignment="Center"/>
-    </DockPanel>
-  </Grid>
-</Window>
-"""
+# Window layout: ui.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 STATUS_COLORS = {
     "info": ("#262626", "#A8A8A8"),
@@ -406,7 +286,7 @@ def run():
 
     doc = revit.doc
 
-    window = XamlReader.Parse(XAML)
+    window = bd.load_window(__file__)
     ui = {}
     for name in ["btnRefresh", "tbModel", "bdWarn", "tbWarn", "btnCollapse", "btnExpand",
                  "chkZoom", "txtSearch", "tbPlaceholder", "spList", "bdStatus", "tbStatus",

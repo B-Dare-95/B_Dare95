@@ -89,76 +89,8 @@ if not items:
 #  Window
 # ─────────────────────────────────────────────────────────────
 
-HEADER = u"""
-<TextBlock Text="Family Cleaner" Style="{StaticResource H1}" Margin="0,0,0,4"/>
-<TextBlock x:Name="Subtitle" Style="{StaticResource Hint}" Margin="0,0,0,14"/>
-"""
+# Window layout: ui.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
-LIST_XAML = u"""
-<Border Style="{StaticResource Card}" Margin="0">
-    <StackPanel>
-        <DockPanel Margin="0,0,0,8">
-            <Button x:Name="BtnPick" DockPanel.Dock="Right" Content="Pick from Model" Style="{StaticResource Secondary}"
-                    ToolTip="Pick placed instances in the model: their families become the ones to clean"/>
-            <TextBlock Text="Families to clean, by category" Style="{StaticResource Label}" VerticalAlignment="Center"/>
-        </DockPanel>
-        <TextBlock x:Name="PickNote" Style="{StaticResource Hint}" Foreground="#F1C21B" Margin="0,0,0,8"
-                   Visibility="Collapsed"/>
-        <DockPanel Margin="0,0,0,8">
-            <Button x:Name="BtnNone" DockPanel.Dock="Right" Content="None" Style="{StaticResource Secondary}" Margin="6,0,0,0"/>
-            <Button x:Name="BtnAll" DockPanel.Dock="Right" Content="All" Style="{StaticResource Secondary}"/>
-            <CheckBox x:Name="ChkInspect" DockPanel.Dock="Right" Content="Inspection Mode" Margin="10,0,10,0"
-                      VerticalAlignment="Center"
-                      ToolTip="Change nothing: run with every setting on and report what a full clean would remove"/>
-            <Grid>
-                <TextBox x:Name="SearchBox" Style="{StaticResource Input}" Height="30"/>
-                <TextBlock x:Name="SearchHint" Text="Search families or categories..." Foreground="#6F6F6F" FontSize="12"
-                           Margin="9,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
-            </Grid>
-        </DockPanel>
-        <ScrollViewer Height="560" VerticalScrollBarVisibility="Auto">
-            <StackPanel x:Name="ListPanel"/>
-        </ScrollViewer>
-        <TextBlock x:Name="CountText" Style="{StaticResource Hint}" Margin="0,8,0,0"/>
-    </StackPanel>
-</Border>
-"""
-
-PROJECT_XAML = u"""
-<Border Style="{StaticResource Card}">
-    <StackPanel>
-        <TextBlock Text="Project options" Style="{StaticResource Label}"/>
-        <CheckBox x:Name="ChkShared" Margin="0,8,0,0"
-                  Content="Also remove unused shared parameters (top-level families only)"/>
-        <TextBlock Style="{StaticResource Hint}" Margin="24,2,0,0"
-                   Text="Only when no schedule, view filter, project parameter or placed copy in this project uses them. Tags and other projects using the same family can't be checked."/>
-        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-            <CheckBox x:Name="ChkSaveEvery" Content="Save the model every" VerticalAlignment="Center"/>
-            <TextBox x:Name="TxtEvery" Text="10" Width="44" Height="26" Margin="8,0,8,0" Style="{StaticResource Input}"/>
-            <TextBlock Text="families" Foreground="#F4F4F4" FontSize="12" VerticalAlignment="Center"/>
-        </StackPanel>
-        <TextBlock Style="{StaticResource Hint}" Margin="24,2,0,0"
-                   Text="Protects a long run against a crash, but closing without saving no longer throws the run away."/>
-    </StackPanel>
-</Border>
-"""
-
-BODY_XAML = (HEADER + u"""
-<Grid>
-    <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="400"/>
-    </Grid.ColumnDefinitions>
-    <StackPanel Grid.Column="0" Margin="0,0,12,0">""" + LIST_XAML + u"""</StackPanel>
-    <StackPanel Grid.Column="1">
-        <DockPanel Margin="2,0,0,8">
-            <TextBlock Text="Settings" Style="{StaticResource Label}" VerticalAlignment="Center"/>
-            <TextBlock x:Name="InspectNote" Text="Inspection Mode: every setting is on" Foreground="#F1C21B"
-                       FontSize="11" Margin="10,0,0,0" VerticalAlignment="Center" Visibility="Collapsed"/>
-        </DockPanel>
-        <StackPanel x:Name="SettingsPanel">""" + fc.OPTIONS_XAML + PROJECT_XAML + u"""</StackPanel>
-    </StackPanel>
-</Grid>""" + fc.BUTTONS_XAML)
 
 # Controls kept when the window is rebuilt after Pick from Model
 SETTINGS = ["Depth1", "Depth2", "Depth3", "Depth4", "ChkPurge", "ChkParams", "ScopeAll", "ScopeJunk",
@@ -170,8 +102,7 @@ choice = {"options": None}
 
 def open_window():
     """Show the window; returns 'run', 'pick' or None (closed)."""
-    window = fc.build_window(u"Family Cleaner - Project Families", 1080, BODY_XAML,
-                             __revit__.MainWindowHandle)  # noqa: F821
+    window = fc.build_window(__file__, __revit__.MainWindowHandle)  # noqa: F821
     window.FindName("Subtitle").Text = u"{}  \u00b7  {} editable families".format(doc.Title, len(items))
     checklist = fc.GroupedCheckList(window)
     checklist.set_items(items)

@@ -1,0 +1,63 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Dependent Views - Scope Boxes" Height="560" Width="480"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource BgBrush}" ResizeMode="NoResize">
+
+<Window.Resources>
+    <Style x:Key="RoundedButton" TargetType="Button">
+        <Setter Property="Foreground" Value="{StaticResource BgBrush}"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}" CornerRadius="6" BorderThickness="0">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="8,0,8,0"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="RoundedButtonMuted" TargetType="Button" BasedOn="{StaticResource RoundedButton}">
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="Background" Value="{StaticResource MutedBrush}"/>
+    </Style>
+</Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Assign a Scope Box to each Dependent View"
+                   Foreground="{StaticResource TextBrush}" FontSize="16" FontWeight="Bold" Margin="0,0,0,10"/>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,0,0,10">
+            <StackPanel Name="RowsPanel">
+                __ROWS__
+            </StackPanel>
+        </ScrollViewer>
+
+        <Grid Grid.Row="2" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Margin="0,0,6,0">
+                <TextBlock Text="Prefix" Foreground="{StaticResource SubtextBrush}" Margin="0,0,0,4"/>
+                <TextBox Name="PrefixBox" Height="26" Background="{StaticResource SurfaceBrush}" Foreground="{StaticResource TextBrush}" BorderBrush="{StaticResource MutedBrush}"/>
+            </StackPanel>
+            <StackPanel Grid.Column="1" Margin="6,0,0,0">
+                <TextBlock Text="Suffix" Foreground="{StaticResource SubtextBrush}" Margin="0,0,0,4"/>
+                <TextBox Name="SuffixBox" Height="26" Background="{StaticResource SurfaceBrush}" Foreground="{StaticResource TextBrush}" BorderBrush="{StaticResource MutedBrush}"/>
+            </StackPanel>
+        </Grid>
+
+        <Button Grid.Row="3" Name="CreateButton" Content="Create Views" Height="34"
+                Background="{StaticResource AccentBrush}" Style="{StaticResource RoundedButton}"/>
+    </Grid>
+</Window>

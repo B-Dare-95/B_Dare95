@@ -39,7 +39,6 @@ from Autodesk.Revit.UI import (TaskDialog, TaskDialogCommandLinkId,
 from Autodesk.Revit.UI.Selection import ISelectionFilter, ObjectType
 
 from System import EventHandler
-from System.Windows.Markup import XamlReader
 from System.Windows import RoutedEventHandler
 from System.Windows.Controls import TextChangedEventHandler
 from System.Windows.Threading import Dispatcher, DispatcherFrame
@@ -71,7 +70,6 @@ PROGRESS_THRESHOLD = 10   # show a progress bar above this many columns
 MAX_REPORT_ITEMS = 10
 
 # ─── Revit messages answered silently (same behaviour as Split at Beams) ─────
-
 
 
 def make_silent(t, handled, fatal):
@@ -116,7 +114,6 @@ def progress_for(count, title):
     if count > PROGRESS_THRESHOLD:
         return forms.ProgressBar(title=title, cancellable=True)
     return _NoProgress()
-
 
 
 # ─── Compatibility helpers ────────────────────────────────────────────────────
@@ -603,139 +600,7 @@ def rotate_instance(instance_id, point, angle_deg):
 
 # ─── UI ───────────────────────────────────────────────────────────────────────
 
-XAML = u"""
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Corner Guard Placer"
-        Width="520" Height="560"
-        WindowStartupLocation="CenterScreen"
-        Background="#161616"
-        ResizeMode="CanResize">
-
-  <Window.Resources>
-
-    <Style x:Key="LabelText" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#A8A8A8"/>
-      <Setter Property="FontFamily" Value="Segoe UI"/>
-      <Setter Property="FontSize" Value="12"/>
-      <Setter Property="Margin" Value="0,10,0,4"/>
-    </Style>
-
-    <Style TargetType="TextBox">
-      <Setter Property="Background" Value="#262626"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="BorderBrush" Value="#525252"/>
-      <Setter Property="BorderThickness" Value="0,0,0,1"/>
-      <Setter Property="FontFamily" Value="Segoe UI"/>
-      <Setter Property="FontSize" Value="13"/>
-      <Setter Property="Padding" Value="8,6,8,6"/>
-      <Setter Property="CaretBrush" Value="#F1C21B"/>
-    </Style>
-
-    <Style TargetType="ListBox">
-      <Setter Property="Background" Value="#262626"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="BorderBrush" Value="#393939"/>
-      <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="FontFamily" Value="Segoe UI"/>
-      <Setter Property="FontSize" Value="12"/>
-    </Style>
-
-    <Style TargetType="CheckBox">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="FontFamily" Value="Segoe UI"/>
-      <Setter Property="FontSize" Value="12"/>
-      <Setter Property="Margin" Value="0,8,0,0"/>
-    </Style>
-
-    <Style x:Key="PrimaryButton" TargetType="Button">
-      <Setter Property="Foreground" Value="#161616"/>
-      <Setter Property="FontFamily" Value="Segoe UI"/>
-      <Setter Property="FontSize" Value="13"/>
-      <Setter Property="Height" Value="38"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="Bd" CornerRadius="4" Background="#F1C21B">
-              <ContentPresenter HorizontalAlignment="Center"
-                                VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#FFD949"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-    <Style x:Key="GhostButton" TargetType="Button">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="FontFamily" Value="Segoe UI"/>
-      <Setter Property="FontSize" Value="13"/>
-      <Setter Property="Height" Value="38"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="Bd" CornerRadius="4" Background="#262626"
-                    BorderBrush="#393939" BorderThickness="1">
-              <ContentPresenter HorizontalAlignment="Center"
-                                VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#393939"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-  </Window.Resources>
-
-  <Grid Margin="20,16,20,16">
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="*"/>
-      <RowDefinition Height="Auto"/>
-    </Grid.RowDefinitions>
-
-    <StackPanel Grid.Row="0">
-      <TextBlock Text="Corner Guard Placer" Foreground="#F4F4F4"
-                 FontFamily="Segoe UI" FontSize="20"/>
-      <TextBlock x:Name="TxtSource" Text="" Foreground="#F1C21B"
-                 FontFamily="Segoe UI" FontSize="11" Margin="0,4,0,0"/>
-      <TextBlock x:Name="TxtTarget" Text="" Foreground="#A8A8A8"
-                 FontFamily="Segoe UI" FontSize="11" Margin="0,2,0,0"
-                 TextWrapping="Wrap"/>
-    </StackPanel>
-
-    <StackPanel Grid.Row="1">
-
-      <TextBlock Text="GUARD FAMILY TYPE" Style="{StaticResource LabelText}"/>
-      <TextBox x:Name="TxtSearch" Margin="0,0,0,6"/>
-      <ListBox x:Name="LstTypes" Height="300"/>
-      <CheckBox x:Name="ChkAllCats" Content="Show all categories"/>
-
-    </StackPanel>
-
-    <Grid Grid.Row="2" Margin="0,16,0,0">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="10"/>
-        <ColumnDefinition Width="*"/>
-      </Grid.ColumnDefinitions>
-      <Button x:Name="BtnRun" Grid.Column="0" Content="Pick columns and place"
-              Style="{StaticResource PrimaryButton}"/>
-      <Button x:Name="BtnCancel" Grid.Column="2" Content="Cancel"
-              Style="{StaticResource GhostButton}"/>
-    </Grid>
-
-  </Grid>
-</Window>
-"""
+# Window layout: ui.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 
 def collect_symbols(all_categories):
@@ -785,7 +650,7 @@ def ask_source():
 
 def show_ui(from_link, view, level):
     """Carbon-themed modeless window. Returns a settings dict, or None."""
-    window = XamlReader.Parse(XAML)
+    window = bd.load_window(__file__)
 
     txt_source = window.FindName("TxtSource")
     txt_target = window.FindName("TxtTarget")

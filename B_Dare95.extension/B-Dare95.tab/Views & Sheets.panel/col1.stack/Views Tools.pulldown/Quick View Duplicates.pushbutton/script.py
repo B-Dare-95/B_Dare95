@@ -30,9 +30,9 @@ from Autodesk.Revit.DB import (
 )
 from Autodesk.Revit.UI import TaskDialog
 
-from System.Windows.Markup import XamlReader
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 from bd_combo_search import enable_combo_search
+import bd_core as bd
 
 doc = __revit__.ActiveUIDocument.Document
 uidoc = __revit__.ActiveUIDocument
@@ -58,28 +58,7 @@ def theme(xaml_text):
     return xaml_text
 
 
-ROUNDED_BUTTON_STYLE = u"""
-<Window.Resources>
-    <Style x:Key="RoundedButton" TargetType="Button">
-        <Setter Property="Foreground" Value="@BG@"/>
-        <Setter Property="FontWeight" Value="Bold"/>
-        <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="Button">
-                    <Border Background="{TemplateBinding Background}" CornerRadius="6" BorderThickness="0">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="8,0,8,0"/>
-                    </Border>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
-    <Style x:Key="RoundedButtonMuted" TargetType="Button" BasedOn="{StaticResource RoundedButton}">
-        <Setter Property="Foreground" Value="@TEXT@"/>
-        <Setter Property="Background" Value="@MUTED@"/>
-    </Style>
-</Window.Resources>
-"""
+# Window layout: ui.xaml, assign.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 
 def show_dialog(window):
@@ -144,69 +123,10 @@ def get_scope_boxes():
 # ---------------------------------------------------------------------------
 # Window 1 - view picker, count, duplicate mode
 # ---------------------------------------------------------------------------
-WINDOW1_XAML = u"""
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Duplicate Views" Height="580" Width="420"
-        WindowStartupLocation="CenterScreen"
-        Background="@BG@" ResizeMode="NoResize">
-    __ROUNDED_BUTTON_STYLE__
-    <Grid Margin="16">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
-
-        <TextBlock Grid.Row="0" Text="Select a View to Duplicate" Foreground="@TEXT@"
-                   FontSize="16" FontWeight="Bold" Margin="0,0,0,10"/>
-
-        <Grid Grid.Row="1" Margin="0,0,0,8">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="150"/>
-            </Grid.ColumnDefinitions>
-            <TextBox Grid.Column="0" Name="SearchBox" Height="28" Padding="6,4" Margin="0,0,6,0"
-                     Background="@SURFACE@" Foreground="@TEXT@" BorderBrush="@MUTED@"/>
-            <ComboBox Grid.Column="1" Name="TypeFilterBox" Height="28"
-                      Background="@SURFACE@" Foreground="@BG@"/>
-        </Grid>
-
-        <ListBox Grid.Row="2" Name="ViewListBox" Background="@CARD@" Foreground="@TEXT@"
-                 BorderBrush="@MUTED@" Margin="0,0,0,10"/>
-
-        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,10">
-            <TextBlock Text="Number of Duplicates:" Foreground="@TEXT@" VerticalAlignment="Center" Margin="0,0,8,0"/>
-            <TextBox Name="CountBox" Width="60" Height="26" Text="1"
-                     Background="@SURFACE@" Foreground="@TEXT@" BorderBrush="@MUTED@"/>
-        </StackPanel>
-
-        <StackPanel Grid.Row="4" Margin="0,0,0,10">
-            <TextBlock Text="Duplicate Option:" Foreground="@TEXT@" Margin="0,0,0,6"/>
-            <RadioButton Name="RbDuplicate" Content="Duplicate View" GroupName="opt"
-                         Foreground="@TEXT@" IsChecked="True" Margin="0,0,0,4"/>
-            <RadioButton Name="RbDetailing" Content="Duplicate with Detailing" GroupName="opt"
-                         Foreground="@TEXT@" Margin="0,0,0,4"/>
-            <RadioButton Name="RbDependent" Content="Duplicate as Dependent" GroupName="opt"
-                         Foreground="@TEXT@"/>
-        </StackPanel>
-
-        <TextBlock Grid.Row="5" Name="ErrorText" Foreground="@DANGER@" Margin="0,0,0,8" TextWrapping="Wrap"/>
-
-        <Button Grid.Row="6" Name="NextButton" Content="Continue" Height="34"
-                Background="@ACCENT@" Style="{StaticResource RoundedButton}"/>
-    </Grid>
-</Window>
-"""
 
 
 def build_window1(views):
-    xaml = WINDOW1_XAML.replace("__ROUNDED_BUTTON_STYLE__", ROUNDED_BUTTON_STYLE)
-    window = XamlReader.Parse(theme(xaml))
+    window = bd.load_window(__file__)
 
     search_box = window.FindName("SearchBox")
     type_filter_box = window.FindName("TypeFilterBox")
@@ -286,50 +206,6 @@ def build_window1(views):
 # ---------------------------------------------------------------------------
 # Window 2 - per-dependent Scope Box assignment + Prefix/Suffix
 # ---------------------------------------------------------------------------
-WINDOW2_XAML = u"""
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Dependent Views - Scope Boxes" Height="560" Width="480"
-        WindowStartupLocation="CenterScreen"
-        Background="@BG@" ResizeMode="NoResize">
-    __ROUNDED_BUTTON_STYLE__
-    <Grid Margin="16">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
-
-        <TextBlock Grid.Row="0" Text="Assign a Scope Box to each Dependent View"
-                   Foreground="@TEXT@" FontSize="16" FontWeight="Bold" Margin="0,0,0,10"/>
-
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,0,0,10">
-            <StackPanel Name="RowsPanel">
-                __ROWS__
-            </StackPanel>
-        </ScrollViewer>
-
-        <Grid Grid.Row="2" Margin="0,0,0,10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <StackPanel Grid.Column="0" Margin="0,0,6,0">
-                <TextBlock Text="Prefix" Foreground="@SUBTEXT@" Margin="0,0,0,4"/>
-                <TextBox Name="PrefixBox" Height="26" Background="@SURFACE@" Foreground="@TEXT@" BorderBrush="@MUTED@"/>
-            </StackPanel>
-            <StackPanel Grid.Column="1" Margin="6,0,0,0">
-                <TextBlock Text="Suffix" Foreground="@SUBTEXT@" Margin="0,0,0,4"/>
-                <TextBox Name="SuffixBox" Height="26" Background="@SURFACE@" Foreground="@TEXT@" BorderBrush="@MUTED@"/>
-            </StackPanel>
-        </Grid>
-
-        <Button Grid.Row="3" Name="CreateButton" Content="Create Views" Height="34"
-                Background="@ACCENT@" Style="{StaticResource RoundedButton}"/>
-    </Grid>
-</Window>
-"""
 
 ROW_XAML_TEMPLATE = u"""
 <Grid Margin="0,0,0,8">
@@ -354,9 +230,7 @@ def build_window2(parent_view, count, scope_boxes):
         rows_xaml_parts.append(row)
     rows_xaml = u"".join(rows_xaml_parts)
 
-    xaml = WINDOW2_XAML.replace("__ROUNDED_BUTTON_STYLE__", ROUNDED_BUTTON_STYLE)
-    xaml = xaml.replace("__ROWS__", rows_xaml)
-    window = XamlReader.Parse(theme(xaml))
+    window = bd.load_window(__file__, "assign.xaml", {"__ROWS__": theme(rows_xaml)})
 
     scope_box_names = [b.Name for b in scope_boxes]
     combos = []

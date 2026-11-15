@@ -28,7 +28,6 @@ clr.AddReference("WindowsBase")
 from System import EventHandler
 from System.Windows import RoutedEventHandler
 from System.Windows.Controls import TextChangedEventHandler
-from System.Windows.Markup import XamlReader
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 
 from Autodesk.Revit.DB import (
@@ -170,160 +169,12 @@ def resolve_value(sources, as_int=False):
 # ---------------------------------------------------------------------------
 # Shared WPF resources - IBM Carbon palette
 # ---------------------------------------------------------------------------
-RESOURCES = """
-  <Window.Resources>
-
-    <Style x:Key="AccentButton" TargetType="Button">
-      <Setter Property="Background" Value="#F1C21B"/>
-      <Setter Property="Foreground" Value="#161616"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="Height" Value="34"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="bd" Background="{TemplateBinding Background}"
-                    CornerRadius="4" Padding="14,0">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#FFD96A"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-    <Style x:Key="GhostButton" TargetType="Button">
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Height" Value="34"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="bd" Background="{TemplateBinding Background}"
-                    CornerRadius="4" Padding="14,0">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#525252"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-    <Style TargetType="TextBox">
-      <Setter Property="Background" Value="#262626"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="BorderBrush" Value="#525252"/>
-      <Setter Property="BorderThickness" Value="0,0,0,2"/>
-      <Setter Property="Padding" Value="8,6"/>
-      <Setter Property="CaretBrush" Value="#F1C21B"/>
-    </Style>
-
-    <Style TargetType="ListBoxItem">
-      <Setter Property="Padding" Value="8,5"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ListBoxItem">
-            <Border x:Name="bd" Background="Transparent" CornerRadius="3"
-                    Padding="{TemplateBinding Padding}">
-              <ContentPresenter/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#393939"/>
-              </Trigger>
-              <Trigger Property="IsSelected" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#F1C21B"/>
-                <Setter Property="Foreground" Value="#161616"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-    <Style TargetType="CheckBox">
-      <Setter Property="Foreground" Value="#A8A8A8"/>
-      <Setter Property="VerticalContentAlignment" Value="Center"/>
-    </Style>
-
-  </Window.Resources>
-"""
-
-WINDOW_HEAD = """
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="{title}"
-        Width="{width}" Height="{height}"
-        WindowStartupLocation="CenterScreen"
-        ResizeMode="{resize}"
-        Background="#161616"
-        Foreground="#F4F4F4"
-        FontFamily="Segoe UI" FontSize="12">
-"""
+# Window layout: ui.xaml, report.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 
 # ---------------------------------------------------------------------------
 # Settings window
 # ---------------------------------------------------------------------------
-SETTINGS_BODY = """
-  <Grid Margin="18">
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="*"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-    </Grid.RowDefinitions>
-
-    <TextBlock Grid.Row="0" Text="STAIR CLEAR HEIGHT LINE"
-               FontSize="16" FontWeight="SemiBold" Foreground="#F4F4F4"/>
-    <TextBlock Grid.Row="1" Margin="0,4,0,10" TextWrapping="Wrap" Foreground="#A8A8A8"
-               Text="Draws the stair pitch line through every nosing tip, offset upwards. Section / Elevation views only."/>
-
-    <Border Grid.Row="2" Background="#262626" CornerRadius="4" Padding="10,7" Margin="0,0,0,14">
-      <TextBlock x:Name="SourceLabel" Foreground="#F1C21B" FontWeight="SemiBold"/>
-    </Border>
-
-    <TextBlock Grid.Row="3" Text="LINE STYLE" FontSize="11" Foreground="#A8A8A8" Margin="0,0,0,6"/>
-    <TextBox Grid.Row="4" x:Name="SearchBox" Margin="0,0,0,8"/>
-    <Border Grid.Row="5" Background="#262626" CornerRadius="4" Padding="4">
-      <ListBox x:Name="StyleList" Background="Transparent" BorderThickness="0"
-               Foreground="#F4F4F4" ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
-    </Border>
-
-    <TextBlock Grid.Row="6" Text="VERTICAL OFFSET (MM)" FontSize="11"
-               Foreground="#A8A8A8" Margin="0,16,0,6"/>
-    <TextBox Grid.Row="7" x:Name="OffsetBox" Text="2100"/>
-
-    <CheckBox Grid.Row="8" x:Name="NosingCheck" Margin="0,14,0,0" IsChecked="True"
-              Content="Measure from the nosing tip (include nosing projection)"/>
-
-    <Grid Grid.Row="9" Margin="0,18,0,0">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="10"/>
-        <ColumnDefinition Width="*"/>
-      </Grid.ColumnDefinitions>
-      <Button Grid.Column="0" x:Name="CancelBtn" Content="Cancel" Style="{StaticResource GhostButton}"/>
-      <Button Grid.Column="2" x:Name="OkBtn" Content="Start Picking" Style="{StaticResource AccentButton}"/>
-    </Grid>
-
-  </Grid>
-</Window>
-"""
 
 
 class SettingsWindow(object):
@@ -334,10 +185,7 @@ class SettingsWindow(object):
         self._all_names = style_names
         self._frame = DispatcherFrame()
 
-        xaml = (WINDOW_HEAD.format(title="Stair Clear Height Line", width=430,
-                                   height=610, resize="NoResize")
-                + RESOURCES + SETTINGS_BODY)
-        self.window = XamlReader.Parse(xaml)
+        self.window = bd.load_window(__file__)
         self.source_label = self.window.FindName("SourceLabel")
         self.search_box = self.window.FindName("SearchBox")
         self.style_list = self.window.FindName("StyleList")
@@ -403,39 +251,6 @@ class SettingsWindow(object):
 # ---------------------------------------------------------------------------
 # Report window
 # ---------------------------------------------------------------------------
-REPORT_BODY = """
-  <Grid Margin="18">
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="*"/>
-      <RowDefinition Height="Auto"/>
-    </Grid.RowDefinitions>
-
-    <TextBlock Grid.Row="0" Text="STAIR CLEAR HEIGHT LINE - REPORT"
-               FontSize="16" FontWeight="SemiBold" Foreground="#F4F4F4"/>
-
-    <Border Grid.Row="1" Background="#262626" CornerRadius="4" Padding="10,8" Margin="0,10,0,14">
-      <TextBlock x:Name="SummaryLabel" Foreground="#F1C21B" FontWeight="SemiBold"
-                 TextWrapping="Wrap"/>
-    </Border>
-
-    <TextBox Grid.Row="2" x:Name="SearchBox" Margin="0,0,0,8"/>
-
-    <Border Grid.Row="3" Background="#262626" CornerRadius="4" Padding="4">
-      <ListBox x:Name="LogList" Background="Transparent" BorderThickness="0"
-               Foreground="#F4F4F4" FontFamily="Consolas" FontSize="11"
-               ScrollViewer.HorizontalScrollBarVisibility="Auto"/>
-    </Border>
-
-    <Button Grid.Row="4" x:Name="CloseBtn" Content="Close" Width="130"
-            HorizontalAlignment="Right" Margin="0,16,0,0"
-            Style="{StaticResource AccentButton}"/>
-
-  </Grid>
-</Window>
-"""
 
 
 class ReportWindow(object):
@@ -445,10 +260,7 @@ class ReportWindow(object):
         self._all_lines = lines
         self._frame = DispatcherFrame()
 
-        xaml = (WINDOW_HEAD.format(title="Stair Clear Height Line - Report",
-                                   width=620, height=540, resize="CanResize")
-                + RESOURCES + REPORT_BODY)
-        self.window = XamlReader.Parse(xaml)
+        self.window = bd.load_window(__file__, "report.xaml")
         self.summary_label = self.window.FindName("SummaryLabel")
         self.search_box = self.window.FindName("SearchBox")
         self.log_list = self.window.FindName("LogList")

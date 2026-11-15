@@ -25,7 +25,6 @@ clr.AddReference("PresentationFramework")
 clr.AddReference("PresentationCore")
 clr.AddReference("WindowsBase")
 
-from System import EventHandler
 from System.Collections.Generic import List
 
 from Autodesk.Revit.DB import (CategoryType, ElementId, FilteredElementCollector, Reference,
@@ -39,10 +38,6 @@ import System.Windows.Controls as Controls
 from System.Windows.Controls import ToolTipService
 from System.Windows import FontWeights, RoutedEventHandler, Thickness, Visibility
 from System.Windows.Input import Cursors, Mouse
-from System.Windows.Interop import WindowInteropHelper
-from System.Windows.Media import ColorConverter, SolidColorBrush
-from System.Windows.Markup import XamlReader
-from System.Windows.Threading import Dispatcher, DispatcherFrame
 import bd_core as bd
 
 TOOL_NAME = "Pre-Filter Selection"
@@ -54,248 +49,8 @@ rvt_year = int(__revit__.Application.VersionNumber)  # noqa: F821
 cfg = script.get_config()
 
 
-# --- THEME COLOURS -----------------------------------------------------------
-BG = "#161616"
-CARD = "#262626"
-SURFACE = "#393939"
-MUTED = "#525252"
-TEXT = "#F4F4F4"
-SUBTEXT = "#A8A8A8"
-ACCENT = "#F1C21B"
-
-XAML_TEMPLATE = """
-<Window
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Choose Categories"
-    Width="340" MinHeight="120" MaxHeight="680"
-    SizeToContent="Height"
-    WindowStartupLocation="CenterScreen"
-    ResizeMode="NoResize"
-    Background="{BG}"
-    Foreground="{TEXT}"
-    FontFamily="Segoe UI"
-    FontSize="13">
-
-    <Window.Resources>
-
-        <Style x:Key="ScrollThumbStyle" TargetType="Thumb">
-            <Setter Property="Background" Value="{MUTED}"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Thumb">
-                        <Border Background="{TemplateBinding Background}" CornerRadius="3"/>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{SUBTEXT}"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style TargetType="ScrollBar">
-            <Setter Property="Background" Value="{CARD}"/>
-            <Setter Property="Width" Value="6"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ScrollBar">
-                        <Grid Background="{CARD}">
-                            <Track Name="PART_Track" IsDirectionReversed="True">
-                                <Track.Thumb>
-                                    <Thumb Style="{StaticResource ScrollThumbStyle}"/>
-                                </Track.Thumb>
-                            </Track>
-                        </Grid>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style TargetType="CheckBox">
-            <Setter Property="Foreground" Value="{TEXT}"/>
-            <Setter Property="Background" Value="{SURFACE}"/>
-            <Setter Property="Margin" Value="0,2,0,2"/>
-            <Setter Property="Padding" Value="6,0,0,0"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="CheckBox">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="18"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Border x:Name="CheckBorder" Grid.Column="0" Width="14" Height="14"
-                                    CornerRadius="3" Background="{SURFACE}" BorderBrush="{MUTED}"
-                                    BorderThickness="1.5" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="CheckMark" Grid.Column="0" Text="&#x2714;" FontSize="10"
-                                       Foreground="{BG}" HorizontalAlignment="Center"
-                                       VerticalAlignment="Center" Visibility="Collapsed"/>
-                            <ContentPresenter Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                        </Grid>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="CheckBorder" Property="Background" Value="{ACCENT}"/>
-                                <Setter TargetName="CheckBorder" Property="BorderBrush" Value="{ACCENT}"/>
-                                <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
-                            </Trigger>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="CheckBorder" Property="BorderBrush" Value="{ACCENT}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- This model / Linked models switch -->
-        <Style x:Key="Seg" TargetType="ToggleButton">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="{SUBTEXT}"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Height" Value="30"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ToggleButton">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Foreground" Value="{TEXT}"/>
-                            </Trigger>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{ACCENT}"/>
-                                <Setter Property="Foreground" Value="{BG}"/>
-                                <Setter Property="FontWeight" Value="SemiBold"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Opacity" Value="0.4"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style x:Key="AccentButton" TargetType="Button">
-            <Setter Property="Background" Value="{ACCENT}"/>
-            <Setter Property="Foreground" Value="{BG}"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="Height" Value="36"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.7"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.4"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style x:Key="GhostButton" TargetType="Button">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="{SUBTEXT}"/>
-            <Setter Property="FontSize" Value="11"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Padding" Value="0"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <TextBlock x:Name="Tb" Text="{TemplateBinding Content}"
-                                   Foreground="{TemplateBinding Foreground}"
-                                   FontSize="{TemplateBinding FontSize}"/>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Tb" Property="Foreground" Value="{ACCENT}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-    </Window.Resources>
-
-    <Border Padding="16" Background="{BG}">
-        <StackPanel>
-
-            <TextBlock x:Name="HeaderText" Text="Choose Categories" FontSize="15" FontWeight="SemiBold"
-                       Foreground="{TEXT}" Margin="0,0,0,10"/>
-
-            <!-- Mode switch -->
-            <Border Background="{CARD}" CornerRadius="8" Padding="3" Margin="0,0,0,6">
-                <UniformGrid Columns="2">
-                    <ToggleButton x:Name="ModeActive" Content="This model" Style="{StaticResource Seg}"/>
-                    <ToggleButton x:Name="ModeLinked" Content="Linked models" Style="{StaticResource Seg}"/>
-                </UniformGrid>
-            </Border>
-            <TextBlock x:Name="SubHeader" FontSize="11" Foreground="{SUBTEXT}" TextWrapping="Wrap"
-                       Margin="2,0,0,10"/>
-
-            <Border Background="{SURFACE}" CornerRadius="6" Margin="0,0,0,10"
-                    BorderBrush="{MUTED}" BorderThickness="1">
-                <Grid>
-                    <TextBox x:Name="SearchBox" Background="Transparent" BorderThickness="0"
-                             Foreground="{TEXT}" CaretBrush="{ACCENT}" Padding="8,6" FontSize="12"/>
-                    <TextBlock x:Name="SearchHint" Text="Search categories..." Foreground="#6F6F6F"
-                               FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center"
-                               IsHitTestVisible="False"/>
-                </Grid>
-            </Border>
-
-            <CheckBox x:Name="ChkExcept" Content="Everything except the checked categories"
-                      FontSize="12" Margin="0,0,0,8"
-                      ToolTip="Select everything in the box (or everything you click) except the checked categories"/>
-
-            <DockPanel Margin="0,0,0,8" LastChildFill="False">
-                <Button x:Name="SelectAllBtn" Content="Select All" Style="{StaticResource GhostButton}"
-                        DockPanel.Dock="Left" Margin="0,0,12,0"/>
-                <Button x:Name="ClearBtn" Content="Clear" Style="{StaticResource GhostButton}"
-                        DockPanel.Dock="Left"/>
-                <TextBlock x:Name="CountLabel" Foreground="{SUBTEXT}" FontSize="11"
-                           VerticalAlignment="Center" DockPanel.Dock="Right"/>
-            </DockPanel>
-
-            <Border Background="{CARD}" CornerRadius="8" Padding="10,8" Margin="0,0,0,14">
-                <Grid>
-                    <ScrollViewer MaxHeight="380" VerticalScrollBarVisibility="Auto"
-                                  HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
-                        <StackPanel x:Name="CategoryPanel"/>
-                    </ScrollViewer>
-                    <TextBlock x:Name="EmptyText" Foreground="{SUBTEXT}" FontSize="12" TextWrapping="Wrap"
-                               Margin="2,6" Visibility="Collapsed"/>
-                </Grid>
-            </Border>
-
-            <Button x:Name="ConfirmBtn" Content="Make A Selection"
-                    Style="{StaticResource AccentButton}" IsEnabled="False"/>
-
-        </StackPanel>
-    </Border>
-</Window>
-""".replace("{BG}", BG).replace("{CARD}", CARD).replace("{SURFACE}", SURFACE) \
-   .replace("{MUTED}", MUTED).replace("{TEXT}", TEXT).replace("{SUBTEXT}", SUBTEXT) \
-   .replace("{ACCENT}", ACCENT)
+# --- WINDOW LAYOUT -----------------------------------------------------------
+# ui.xaml next to this script; colours and styles come from lib/bd_theme.xaml.
 
 
 # --- HELPERS -----------------------------------------------------------------
@@ -428,7 +183,7 @@ class LinkedCategoryFilter(ISelectionFilter):
 # --- WINDOW ------------------------------------------------------------------
 def show_category_picker(link_insts):
     """Returns {'names': [...], 'linked': bool} or None when closed."""
-    window = XamlReader.Parse(XAML_TEMPLATE)
+    window = bd.load_window(__file__)
     f = window.FindName
     header_text, sub_header = f("HeaderText"), f("SubHeader")
     mode_active, mode_linked = f("ModeActive"), f("ModeLinked")
@@ -523,7 +278,7 @@ def show_category_picker(link_insts):
                 header.Text = title
                 header.FontSize = 10
                 header.FontWeight = FontWeights.SemiBold
-                header.Foreground = SolidColorBrush(ColorConverter.ConvertFromString(ACCENT))
+                header.Foreground = window.FindResource("AccentBrush")
                 header.Margin = Thickness(0, 8 if groups else 0, 0, 4)
                 cat_panel.Children.Add(header)
                 groups.append((header, members))
@@ -584,18 +339,7 @@ def show_category_picker(link_insts):
     confirm_btn.Click += RoutedEventHandler(on_confirm)
     rebuild()
 
-    frame = DispatcherFrame()
-
-    def on_closed(sender, args):
-        frame.Continue = False
-
-    window.Closed += EventHandler(on_closed)
-    try:
-        WindowInteropHelper(window).Owner = __revit__.MainWindowHandle  # noqa: F821
-    except Exception:
-        pass
-    window.Show()
-    Dispatcher.PushFrame(frame)
+    bd.show_modal(window, __revit__)  # noqa: F821
     return result[0]
 
 

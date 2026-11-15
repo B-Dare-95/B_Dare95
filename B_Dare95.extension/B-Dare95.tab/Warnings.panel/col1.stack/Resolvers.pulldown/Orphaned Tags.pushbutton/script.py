@@ -29,7 +29,6 @@ from System.Data import DataTable
 from System.Windows import Clipboard, RoutedEventHandler, Visibility
 from System.Windows.Controls import TextChangedEventHandler
 from System.Windows.Interop import WindowInteropHelper
-from System.Windows.Markup import XamlReader
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 
 from Autodesk.Revit.DB import (
@@ -268,181 +267,7 @@ def collect_orphans():
 # ---------------------------------------------------------------------------
 # Summary window (IBM Carbon)
 # ---------------------------------------------------------------------------
-XAML = u'''
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Orphaned Tag Fixer" Width="780" Height="660"
-        WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
-        Background="#161616" FontFamily="IBM Plex Sans, Segoe UI" FontSize="13">
-  <Window.Resources>
-    <Style x:Key="Btn" TargetType="Button">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Padding" Value="18,8"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="bd" Property="Opacity" Value="0.85"/>
-              </Trigger>
-              <Trigger Property="IsEnabled" Value="False">
-                <Setter TargetName="bd" Property="Opacity" Value="0.4"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style x:Key="AccentBtn" TargetType="Button" BasedOn="{StaticResource Btn}">
-      <Setter Property="Background" Value="#F1C21B"/>
-      <Setter Property="Foreground" Value="#161616"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-    </Style>
-    <Style x:Key="Toggle" TargetType="ToggleButton">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Padding" Value="14,6"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ToggleButton">
-            <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#F1C21B"/>
-                <Setter Property="Foreground" Value="#161616"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style TargetType="GridViewColumnHeader">
-      <Setter Property="Foreground" Value="#A8A8A8"/>
-      <Setter Property="HorizontalContentAlignment" Value="Left"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="GridViewColumnHeader">
-            <Border Background="#262626" BorderBrush="#525252" BorderThickness="0,0,0,1" Padding="6,8">
-              <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/>
-            </Border>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style TargetType="ListViewItem">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ListViewItem">
-            <Border x:Name="bd" Background="Transparent" BorderBrush="#393939" BorderThickness="0,0,0,1" Padding="0,6">
-              <GridViewRowPresenter VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="#393939"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-  </Window.Resources>
-
-  <Grid Margin="20">
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="*"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-    </Grid.RowDefinitions>
-
-    <StackPanel Grid.Row="0" Margin="0,0,0,14">
-      <TextBlock Text="Orphaned Tag Fixer" FontSize="20" FontWeight="SemiBold" Foreground="#F4F4F4"/>
-      <TextBlock x:Name="SubTitle" Foreground="#A8A8A8" Margin="0,4,0,0"/>
-    </StackPanel>
-
-    <UniformGrid Grid.Row="1" Columns="3" Margin="0,0,0,14">
-      <Border Background="#262626" CornerRadius="4" Padding="14,10" Margin="0,0,6,0">
-        <StackPanel>
-          <TextBlock x:Name="StatReattach" FontSize="24" FontWeight="SemiBold" Foreground="#42BE65"/>
-          <TextBlock Text="Re-attach (element found)" Foreground="#A8A8A8"/>
-        </StackPanel>
-      </Border>
-      <Border Background="#262626" CornerRadius="4" Padding="14,10" Margin="3,0,3,0">
-        <StackPanel>
-          <TextBlock x:Name="StatDelete" FontSize="24" FontWeight="SemiBold" Foreground="#FA4D56"/>
-          <TextBlock Text="Delete (element gone)" Foreground="#A8A8A8"/>
-        </StackPanel>
-      </Border>
-      <Border Background="#262626" CornerRadius="4" Padding="14,10" Margin="6,0,0,0">
-        <StackPanel>
-          <TextBlock x:Name="StatSkip" FontSize="24" FontWeight="SemiBold" Foreground="#A8A8A8"/>
-          <TextBlock Text="Skipped (left untouched)" Foreground="#A8A8A8"/>
-        </StackPanel>
-      </Border>
-    </UniformGrid>
-
-    <Border Grid.Row="2" Background="#262626" CornerRadius="4" Padding="10,6" Margin="0,0,0,8">
-      <Grid>
-        <TextBlock x:Name="SearchHint" Text="Filter tag categories\u2026" Foreground="#6F6F6F"
-                   IsHitTestVisible="False" VerticalAlignment="Center" Margin="2,0,0,0"/>
-        <TextBox x:Name="SearchBox" Background="Transparent" BorderThickness="0"
-                 Foreground="#F4F4F4" CaretBrush="#F4F4F4" VerticalAlignment="Center"/>
-      </Grid>
-    </Border>
-
-    <ListView Grid.Row="3" x:Name="CatList" Background="#262626" BorderThickness="0" Foreground="#F4F4F4">
-      <ListView.View>
-        <GridView>
-          <GridViewColumn Header="Fix" Width="50">
-            <GridViewColumn.CellTemplate>
-              <DataTemplate>
-                <CheckBox IsChecked="{Binding Include, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="4,0,0,0"/>
-              </DataTemplate>
-            </GridViewColumn.CellTemplate>
-          </GridViewColumn>
-          <GridViewColumn Header="Tag Category" Width="300" DisplayMemberBinding="{Binding Category}"/>
-          <GridViewColumn Header="Re-attach" Width="100" DisplayMemberBinding="{Binding Reattach}"/>
-          <GridViewColumn Header="Delete" Width="90" DisplayMemberBinding="{Binding Delete}"/>
-          <GridViewColumn Header="Skipped" Width="90" DisplayMemberBinding="{Binding Skipped}"/>
-          <GridViewColumn Header="Views" Width="80" DisplayMemberBinding="{Binding Views}"/>
-        </GridView>
-      </ListView.View>
-    </ListView>
-
-    <TextBlock Grid.Row="4" x:Name="SkipInfo" Foreground="#A8A8A8" TextWrapping="Wrap" Margin="0,10,0,0"/>
-
-    <Border Grid.Row="5" Background="#262626" CornerRadius="4" Padding="14,10" Margin="0,12,0,0">
-      <StackPanel>
-        <StackPanel Orientation="Horizontal">
-          <TextBlock Text="Re-attached tags:" Foreground="#F4F4F4" VerticalAlignment="Center" Margin="0,0,12,0"/>
-          <ToggleButton x:Name="ModeMove" Style="{StaticResource Toggle}" Content="Move to element" Margin="0,0,6,0"/>
-          <ToggleButton x:Name="ModeKeep" Style="{StaticResource Toggle}" Content="Keep position + leader"/>
-        </StackPanel>
-        <TextBlock Text="Room, Space and Area tags are always moved back inside their room / space / area."
-                   Foreground="#A8A8A8" FontSize="12" Margin="0,8,0,0"/>
-      </StackPanel>
-    </Border>
-
-    <DockPanel Grid.Row="6" Margin="0,14,0,0" LastChildFill="False">
-      <Button x:Name="CopyBtn" DockPanel.Dock="Left" Style="{StaticResource Btn}" Content="Copy Report"/>
-      <Button x:Name="FixBtn" DockPanel.Dock="Right" Style="{StaticResource AccentBtn}" Content="Fix Selected"/>
-      <Button x:Name="CancelBtn" DockPanel.Dock="Right" Style="{StaticResource Btn}" Content="Cancel" Margin="0,0,8,0"/>
-    </DockPanel>
-  </Grid>
-</Window>
-'''
+# Window layout: ui.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 
 def escape_like(text):
@@ -471,7 +296,7 @@ def show_summary(records):
         c[r.action] += 1
         c["views"].add(r.view_int)
 
-    win = XamlReader.Parse(XAML)
+    win = bd.load_window(__file__)
     find = win.FindName
     try:
         WindowInteropHelper(win).Owner = __revit__.MainWindowHandle

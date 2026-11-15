@@ -29,7 +29,6 @@ from System.Windows.Controls import (
     TextChangedEventHandler, SelectionChangedEventHandler
 )
 from System.Windows.Interop import WindowInteropHelper
-from System.Windows.Markup import XamlReader
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 
 from Autodesk.Revit.DB import (Arc, BuiltInCategory, BuiltInParameter,
@@ -353,181 +352,7 @@ def place_numbers(items, radius, plane_z, style, opts):
 # --------------------------------------------------------------------------
 # UI
 # --------------------------------------------------------------------------
-XAML = """
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Stair Tread Numbering" Width="400" SizeToContent="Height"
-        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
-        Background="#161616" Foreground="#F4F4F4"
-        FontFamily="Segoe UI" FontSize="12">
-  <Window.Resources>
-    <Style x:Key="Label" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#A8A8A8"/>
-      <Setter Property="FontSize" Value="11"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="Margin" Value="0,14,0,5"/>
-    </Style>
-
-    <Style x:Key="Radio" TargetType="ToggleButton">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Height" Value="30"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ToggleButton">
-            <Border x:Name="Bd" Background="{TemplateBinding Background}"
-                    BorderBrush="#525252" BorderThickness="1" CornerRadius="4">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#F1C21B"/>
-                <Setter TargetName="Bd" Property="BorderBrush" Value="#F1C21B"/>
-                <Setter Property="Foreground" Value="#161616"/>
-              </Trigger>
-              <Trigger Property="IsEnabled" Value="False">
-                <Setter Property="Opacity" Value="0.4"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-    <Style x:Key="Btn" TargetType="Button">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Height" Value="32"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="4">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-    <Style TargetType="TextBox">
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="BorderBrush" Value="#525252"/>
-      <Setter Property="CaretBrush" Value="#F4F4F4"/>
-      <Setter Property="Padding" Value="6,5"/>
-    </Style>
-
-    <Style TargetType="ListBox">
-      <Setter Property="Background" Value="#262626"/>
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="BorderBrush" Value="#525252"/>
-      <Setter Property="Height" Value="140"/>
-      <Setter Property="Margin" Value="0,4,0,0"/>
-    </Style>
-
-    <Style TargetType="ListBoxItem">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ListBoxItem">
-            <Border x:Name="Bd" Background="Transparent" Padding="8,4">
-              <ContentPresenter/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#393939"/>
-              </Trigger>
-              <Trigger Property="IsSelected" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#F1C21B"/>
-                <Setter Property="Foreground" Value="#161616"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-  </Window.Resources>
-
-  <StackPanel Margin="16">
-    <TextBlock x:Name="txtInfo" Foreground="#A8A8A8" TextWrapping="Wrap"/>
-
-    <TextBlock Text="STAIR SOURCE" Style="{StaticResource Label}"/>
-    <Grid>
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="*"/>
-      </Grid.ColumnDefinitions>
-      <ToggleButton x:Name="tgHost" Grid.Column="0" Content="Active Model"
-                    Style="{StaticResource Radio}" Margin="0,0,4,0"/>
-      <ToggleButton x:Name="tgLink" Grid.Column="1" Content="Linked Model"
-                    Style="{StaticResource Radio}" Margin="4,0,0,0"/>
-    </Grid>
-
-    <TextBlock Text="TEXT NOTE TYPE" Style="{StaticResource Label}"/>
-    <Grid>
-      <TextBox x:Name="tbTextFilter"/>
-      <TextBlock x:Name="phText" Text="Search..." Foreground="#6F6F6F"
-                 IsHitTestVisible="False" Margin="9,0,0,0" VerticalAlignment="Center"/>
-    </Grid>
-    <ListBox x:Name="lbText"/>
-
-    <TextBlock Text="CIRCLE LINE STYLE" Style="{StaticResource Label}"/>
-    <Grid>
-      <TextBox x:Name="tbStyleFilter"/>
-      <TextBlock x:Name="phStyle" Text="Search..." Foreground="#6F6F6F"
-                 IsHitTestVisible="False" Margin="9,0,0,0" VerticalAlignment="Center"/>
-    </Grid>
-    <ListBox x:Name="lbStyle"/>
-
-    <TextBlock Text="CIRCLE DIAMETER (MM)" Style="{StaticResource Label}"/>
-    <TextBox x:Name="tbDia"/>
-    <TextBlock Text="0 = match the tread depth" Foreground="#A8A8A8"
-               FontSize="11" Margin="0,4,0,0"/>
-
-    <TextBlock Text="BUBBLE POSITION (WALKING UP THE RUN)" Style="{StaticResource Label}"/>
-    <Grid>
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="*"/>
-      </Grid.ColumnDefinitions>
-      <ToggleButton x:Name="tgLeft" Grid.Column="0" Content="Left"
-                    Style="{StaticResource Radio}" Margin="0,0,4,0"/>
-      <ToggleButton x:Name="tgCenter" Grid.Column="1" Content="Center"
-                    Style="{StaticResource Radio}" Margin="4,0,4,0"/>
-      <ToggleButton x:Name="tgRight" Grid.Column="2" Content="Right"
-                    Style="{StaticResource Radio}" Margin="4,0,0,0"/>
-    </Grid>
-
-    <TextBlock Text="OFFSET FROM STAIR EDGE (MM)" Style="{StaticResource Label}"/>
-    <TextBox x:Name="tbOffset"/>
-    <TextBlock Text="Gap between the run edge and the bubble edge. Negative = outside the run."
-               Foreground="#A8A8A8" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"/>
-
-    <TextBlock x:Name="txtError" Foreground="#FA4D56" TextWrapping="Wrap"
-               Visibility="Collapsed" Margin="0,12,0,0"/>
-
-    <Grid Margin="0,18,0,0">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="*"/>
-      </Grid.ColumnDefinitions>
-      <Button x:Name="btnCancel" Grid.Column="0" Content="Cancel"
-              Style="{StaticResource Btn}" Margin="0,0,4,0"/>
-      <Button x:Name="btnStart" Grid.Column="1" Content="Start Numbering"
-              Style="{StaticResource Btn}" Background="#F1C21B"
-              Foreground="#161616" FontWeight="SemiBold" Margin="4,0,0,0"/>
-    </Grid>
-  </StackPanel>
-</Window>
-"""
+# Window layout: ui.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 
 def bind_list(tb, placeholder, lb, names, preselect):
@@ -557,7 +382,7 @@ def bind_list(tb, placeholder, lb, names, preselect):
 
 
 def show_ui(text_names, style_names, has_links, info):
-    win = XamlReader.Parse(XAML)
+    win = bd.load_window(__file__)
     WindowInteropHelper(win).Owner = __revit__.MainWindowHandle
 
     tg_host = win.FindName("tgHost")

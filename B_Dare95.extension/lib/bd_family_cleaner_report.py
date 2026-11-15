@@ -29,7 +29,6 @@ from System.Windows.Controls import (Border, Dock, DockPanel, StackPanel, TextBl
                                      TextChangedEventHandler)
 from System.Windows.Input import Cursors, MouseButtonEventHandler
 from System.Windows.Interop import WindowInteropHelper
-from System.Windows.Markup import XamlReader
 from System.Windows.Media import BrushConverter, FontFamily
 
 from Autodesk.Revit.DB import ElementId
@@ -171,197 +170,7 @@ class ReportEventHandler(IExternalEventHandler):
 
 
 # --------------------------------------------------------------------------- UI --
-XAML = u"""
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Family Cleaner Report" Width="820" Height="800" MinWidth="620" MinHeight="480"
-        WindowStartupLocation="CenterScreen" ResizeMode="CanResizeWithGrip"
-        Background="#161616" Foreground="#F4F4F4" FontFamily="Segoe UI" FontSize="13">
-  <Window.Resources>
-    <Style TargetType="Button">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="BorderBrush" Value="#525252"/>
-      <Setter Property="Height" Value="30"/>
-      <Setter Property="Padding" Value="14,0"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                    BorderThickness="1" CornerRadius="6" Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Opacity" Value="0.85"/></Trigger>
-              <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Bd" Property="Opacity" Value="0.4"/></Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style x:Key="Accent" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-      <Setter Property="Background" Value="#F1C21B"/>
-      <Setter Property="BorderBrush" Value="#F1C21B"/>
-      <Setter Property="Foreground" Value="#161616"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-    </Style>
-    <Style TargetType="TextBox">
-      <Setter Property="Foreground" Value="#F4F4F4"/>
-      <Setter Property="CaretBrush" Value="#F4F4F4"/>
-      <Setter Property="Height" Value="30"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="TextBox">
-            <Border Background="#393939" BorderBrush="#525252" BorderThickness="1" CornerRadius="6">
-              <ScrollViewer x:Name="PART_ContentHost" Margin="6,0" VerticalAlignment="Center"/>
-            </Border>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style TargetType="CheckBox">
-      <Setter Property="Foreground" Value="#A8A8A8"/>
-      <Setter Property="FontSize" Value="12"/>
-      <Setter Property="VerticalAlignment" Value="Center"/>
-    </Style>
-    <Style x:Key="Row" TargetType="Border">
-      <Setter Property="Background" Value="Transparent"/>
-      <Setter Property="BorderBrush" Value="#262626"/>
-      <Setter Property="BorderThickness" Value="0,0,0,1"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Style.Triggers>
-        <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#262626"/></Trigger>
-      </Style.Triggers>
-    </Style>
-    <Style x:Key="PlainRow" TargetType="Border">
-      <Setter Property="Background" Value="Transparent"/>
-      <Setter Property="BorderBrush" Value="#262626"/>
-      <Setter Property="BorderThickness" Value="0,0,0,1"/>
-    </Style>
-    <Style x:Key="Chip" TargetType="Border">
-      <Setter Property="Background" Value="#393939"/>
-      <Setter Property="CornerRadius" Value="4"/>
-      <Setter Property="Padding" Value="9,1,9,2"/>
-      <Setter Property="Margin" Value="10,0,0,0"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="VerticalAlignment" Value="Center"/>
-      <Style.Triggers>
-        <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#525252"/></Trigger>
-      </Style.Triggers>
-    </Style>
-    <Style x:Key="Tile" TargetType="Border">
-      <Setter Property="Background" Value="#262626"/>
-      <Setter Property="CornerRadius" Value="6"/>
-      <Setter Property="Padding" Value="12,8"/>
-      <Setter Property="Margin" Value="0,0,8,0"/>
-    </Style>
-  </Window.Resources>
-
-  <Grid Margin="14">
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="*"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-    </Grid.RowDefinitions>
-
-    <DockPanel Grid.Row="0">
-      <Button x:Name="btnCopy" DockPanel.Dock="Right" Content="Copy as text"
-              ToolTip="Copy the whole report as plain text"/>
-      <StackPanel VerticalAlignment="Center">
-        <TextBlock x:Name="tbTitle" Text="Family Cleaner" FontSize="18" FontWeight="SemiBold"/>
-        <TextBlock x:Name="tbSub" Foreground="#A8A8A8" FontSize="12" Margin="0,2,0,0"
-                   TextTrimming="CharacterEllipsis"/>
-      </StackPanel>
-    </DockPanel>
-
-    <UniformGrid Grid.Row="1" Columns="5" Margin="0,12,-8,0">
-      <Border Style="{StaticResource Tile}">
-        <StackPanel>
-          <TextBlock x:Name="tvFamilies" FontSize="20" FontWeight="SemiBold"/>
-          <TextBlock x:Name="tcFamilies" FontSize="11" Foreground="#A8A8A8"/>
-        </StackPanel>
-      </Border>
-      <Border Style="{StaticResource Tile}">
-        <StackPanel>
-          <TextBlock x:Name="tvOpened" FontSize="20" FontWeight="SemiBold"/>
-          <TextBlock x:Name="tcOpened" FontSize="11" Foreground="#A8A8A8"/>
-        </StackPanel>
-      </Border>
-      <Border Style="{StaticResource Tile}">
-        <StackPanel>
-          <TextBlock x:Name="tvPurged" FontSize="20" FontWeight="SemiBold"/>
-          <TextBlock x:Name="tcPurged" FontSize="11" Foreground="#A8A8A8"/>
-        </StackPanel>
-      </Border>
-      <Border Style="{StaticResource Tile}">
-        <StackPanel>
-          <TextBlock x:Name="tvParams" FontSize="20" FontWeight="SemiBold"/>
-          <TextBlock x:Name="tcParams" FontSize="11" Foreground="#A8A8A8"/>
-        </StackPanel>
-      </Border>
-      <Border Style="{StaticResource Tile}">
-        <StackPanel>
-          <TextBlock x:Name="tvProblems" FontSize="20" FontWeight="SemiBold"/>
-          <TextBlock x:Name="tcProblems" FontSize="11" Foreground="#A8A8A8"/>
-        </StackPanel>
-      </Border>
-    </UniformGrid>
-
-    <StackPanel Grid.Row="2">
-      <Border x:Name="bdPreview" Visibility="Collapsed" Background="#0A2350" CornerRadius="6"
-              Padding="10,8" Margin="0,10,0,0">
-        <TextBlock Foreground="#A6C8FF" FontSize="12" TextWrapping="Wrap"
-                   Text="Inspection Mode: nothing was changed. Every setting was on, so this is everything a full clean would remove."/>
-      </Border>
-      <Border x:Name="bdNotes" Visibility="Collapsed" Background="#262626" CornerRadius="6"
-              Padding="10,8" Margin="0,10,0,0">
-        <TextBlock x:Name="tbNotes" Foreground="#A8A8A8" FontSize="12" TextWrapping="Wrap"/>
-      </Border>
-    </StackPanel>
-
-    <DockPanel Grid.Row="3" Margin="0,12,0,0">
-      <Button x:Name="btnCollapse" DockPanel.Dock="Right" Content="Collapse all" Margin="6,0,0,0"/>
-      <Button x:Name="btnExpand" DockPanel.Dock="Right" Content="Expand all" Margin="6,0,0,0"/>
-      <CheckBox x:Name="chkZoom" DockPanel.Dock="Right" Content="Zoom to selection" Margin="10,0,4,0"
-                ToolTip="Also zoom to the placed copies you select"/>
-      <CheckBox x:Name="chkProblems" DockPanel.Dock="Right" Content="Problems only" Margin="10,0,4,0"
-                ToolTip="Show only families with a failure, a roll-back or a Revit error"/>
-      <CheckBox x:Name="chkChanged" DockPanel.Dock="Right" Content="Changed only" Margin="10,0,4,0"
-                ToolTip="Hide families where nothing was removed"/>
-      <Grid>
-        <TextBox x:Name="txtSearch"/>
-        <TextBlock x:Name="tbPlaceholder" Text="Search families and parameters" Foreground="#8D8D8D"
-                   Margin="10,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
-      </Grid>
-    </DockPanel>
-
-    <Border Grid.Row="4" Margin="0,10,0,0" BorderBrush="#393939" BorderThickness="1" CornerRadius="6">
-      <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel>
-          <StackPanel x:Name="spList"/>
-          <TextBlock x:Name="tbEmpty" Visibility="Collapsed" Foreground="#8D8D8D" FontSize="12"
-                     Margin="14,16" Text="No families match."/>
-        </StackPanel>
-      </ScrollViewer>
-    </Border>
-
-    <Border Grid.Row="5" x:Name="bdStatus" Background="#262626" CornerRadius="6" Padding="10,8" Margin="0,10,0,0">
-      <TextBlock x:Name="tbStatus" Foreground="#A8A8A8" FontSize="12" TextWrapping="Wrap"/>
-    </Border>
-
-    <DockPanel Grid.Row="6" Margin="0,12,0,0">
-      <Button x:Name="btnClose" DockPanel.Dock="Right" Style="{StaticResource Accent}" Content="Close"/>
-      <TextBlock x:Name="tbTotals" Foreground="#A8A8A8" FontSize="12" VerticalAlignment="Center"
-                 TextTrimming="CharacterEllipsis"/>
-    </DockPanel>
-  </Grid>
-</Window>
-"""
+# Window layout: bd_family_cleaner_report.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 UI_NAMES = ["btnCopy", "tbTitle", "tbSub", "tvFamilies", "tcFamilies", "tvOpened", "tcOpened",
             "tvPurged", "tcPurged", "tvParams", "tcParams", "tvProblems", "tcProblems", "bdPreview",
@@ -382,7 +191,7 @@ def show_report(uiapp, title, subtitle, rows, preview, started, notes=None):
         except Exception:
             pass
 
-    window = XamlReader.Parse(XAML)
+    window = bd.load_window(__file__, "bd_family_cleaner_report.xaml")
     ui = {}
     for name in UI_NAMES:
         ui[name] = window.FindName(name)

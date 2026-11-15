@@ -36,7 +36,6 @@ import System.Windows
 import System.Windows.Controls as Controls
 from System.Windows import RoutedEventHandler
 from System.Windows.Input import MouseButtonEventHandler, KeyEventHandler, Key
-from System.Windows.Markup import XamlReader
 from System.Windows.Threading import Dispatcher, DispatcherFrame
 import bd_core as bd
 
@@ -50,229 +49,13 @@ DOT   = u"\u00b7"
 
 
 # ─── THEME COLOURS (IBM Carbon) ───────────────────────────────────────────────
-BG      = "#161616"
-CARD    = "#262626"
 SURFACE = "#393939"
 MUTED   = "#525252"
 TEXT    = "#F4F4F4"
 SUBTEXT = "#A8A8A8"
-ACCENT  = "#F1C21B"
 # ──────────────────────────────────────────────────────────────────────────────
 
-XAML_TEMPLATE = """
-<Window
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="What's This ID?"
-    Width="480" MaxHeight="640"
-    SizeToContent="Height"
-    WindowStartupLocation="CenterScreen"
-    ResizeMode="NoResize"
-    Background="{BG}"
-    Foreground="{TEXT}"
-    FontFamily="Segoe UI"
-    FontSize="13">
-
-    <Window.Resources>
-
-        <!-- ScrollBar thumb -->
-        <Style x:Key="ScrollThumbStyle" TargetType="Thumb">
-            <Setter Property="Background" Value="{MUTED}"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Thumb">
-                        <Border Background="{TemplateBinding Background}" CornerRadius="3"/>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{SUBTEXT}"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
-        <!-- Minimal ScrollBar -->
-        <Style TargetType="ScrollBar">
-            <Setter Property="Background" Value="{CARD}"/>
-            <Setter Property="Width" Value="6"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ScrollBar">
-                        <Grid Background="{CARD}">
-                            <Track Name="PART_Track" IsDirectionReversed="True">
-                                <Track.Thumb>
-                                    <Thumb Style="{StaticResource ScrollThumbStyle}"/>
-                                </Track.Thumb>
-                            </Track>
-                        </Grid>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- One row per hit: radio behaviour, accent fill when checked -->
-        <Style x:Key="HitRow" TargetType="RadioButton">
-            <Setter Property="Foreground" Value="{TEXT}"/>
-            <Setter Property="Background" Value="{SURFACE}"/>
-            <Setter Property="Margin" Value="0,0,0,6"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="Bd"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{MUTED}"
-                                BorderThickness="1"
-                                CornerRadius="6"
-                                Padding="10,8">
-                            <ContentPresenter/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="{ACCENT}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-            <Style.Triggers>
-                <Trigger Property="IsChecked" Value="True">
-                    <Setter Property="Background" Value="{ACCENT}"/>
-                    <Setter Property="Foreground" Value="{BG}"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
-        <!-- Confirm button -->
-        <Style x:Key="AccentButton" TargetType="Button">
-            <Setter Property="Background" Value="{ACCENT}"/>
-            <Setter Property="Foreground" Value="{BG}"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Height" Value="36"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd"
-                                Background="{TemplateBinding Background}"
-                                CornerRadius="6">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.7"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.4"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Cancel button -->
-        <Style x:Key="GhostButton" TargetType="Button">
-            <Setter Property="Background" Value="{SURFACE}"/>
-            <Setter Property="Foreground" Value="{TEXT}"/>
-            <Setter Property="Height" Value="36"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd"
-                                Background="{TemplateBinding Background}"
-                                CornerRadius="6">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{MUTED}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-    </Window.Resources>
-
-    <Border Padding="16" Background="{BG}">
-        <StackPanel>
-
-            <!-- Header -->
-            <TextBlock x:Name="HeaderText"
-                       FontSize="15" FontWeight="SemiBold"
-                       Foreground="{TEXT}"
-                       Margin="0,0,0,2"/>
-            <TextBlock x:Name="SubHeader"
-                       Text="IDs are only unique per document - pick the one you meant."
-                       FontSize="11"
-                       Foreground="{SUBTEXT}"
-                       TextWrapping="Wrap"
-                       Margin="0,0,0,10"/>
-
-            <!-- Search box with placeholder -->
-            <Border Background="{SURFACE}" CornerRadius="6" Margin="0,0,0,10"
-                    BorderBrush="{MUTED}" BorderThickness="1">
-                <Grid>
-                    <TextBlock x:Name="SearchHint"
-                               Text="Filter by link, category, family or type..."
-                               Foreground="{SUBTEXT}"
-                               FontSize="12"
-                               Margin="10,6"
-                               IsHitTestVisible="False"/>
-                    <TextBox x:Name="SearchBox"
-                             Background="Transparent"
-                             BorderThickness="0"
-                             Foreground="{TEXT}"
-                             CaretBrush="{ACCENT}"
-                             Padding="8,6"
-                             FontSize="12"/>
-                </Grid>
-            </Border>
-
-            <!-- Hit list -->
-            <Border Background="{CARD}" CornerRadius="8"
-                    Padding="10,10,10,4" Margin="0,0,0,14">
-                <ScrollViewer MaxHeight="360"
-                              VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled"
-                              Padding="0,0,4,0">
-                    <StackPanel x:Name="HitPanel"/>
-                </ScrollViewer>
-            </Border>
-
-            <!-- Buttons -->
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="10"/>
-                    <ColumnDefinition Width="2*"/>
-                </Grid.ColumnDefinitions>
-                <Button x:Name="CancelBtn" Grid.Column="0"
-                        Content="Cancel"
-                        Style="{StaticResource GhostButton}"/>
-                <Button x:Name="ConfirmBtn" Grid.Column="2"
-                        Content="Inspect &amp; Select"
-                        Style="{StaticResource AccentButton}"
-                        IsEnabled="False"/>
-            </Grid>
-
-        </StackPanel>
-    </Border>
-</Window>
-""".replace("{BG}", BG).replace("{CARD}", CARD).replace("{SURFACE}", SURFACE) \
-   .replace("{MUTED}", MUTED).replace("{TEXT}", TEXT).replace("{SUBTEXT}", SUBTEXT) \
-   .replace("{ACCENT}", ACCENT)
+# Window layout: ui.xaml next to this script (shared colours and styles: lib/bd_theme.xaml)
 
 
 # ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -382,7 +165,7 @@ def visible_link_ids():
 def pick_hit(hits, number):
     """Themed WPF picker. Returns the chosen Hit or None."""
 
-    window = XamlReader.Parse(XAML_TEMPLATE)
+    window = bd.load_window(__file__)
 
     header_text = window.FindName("HeaderText")
     search_box  = window.FindName("SearchBox")
