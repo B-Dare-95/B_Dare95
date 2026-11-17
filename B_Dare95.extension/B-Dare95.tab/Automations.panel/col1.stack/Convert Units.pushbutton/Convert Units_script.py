@@ -121,7 +121,7 @@ def get_current_system(document):
     return UnitSystem.Metric
 
 
-def build_units(target_system, skipped):
+def build_units(target_system, current_units, skipped):
     """Build a complete Units object for target_system, then apply overrides.
 
     Anything that cannot be applied is appended to 'skipped' and reported
@@ -129,6 +129,16 @@ def build_units(target_system, skipped):
     """
     units = Units(target_system)
     key = "metric" if target_system == UnitSystem.Metric else "imperial"
+
+    # Units(system) resets the number-formatting settings to Revit's defaults.
+    # Carry the project's own decimal / digit-grouping choices across so that,
+    # e.g., a comma-decimal project stays comma-decimal after converting.
+    for prop in ("DigitGroupingSymbol", "DigitGroupingAmount", "DecimalSymbol"):
+        try:
+            setattr(units, prop, getattr(current_units, prop))
+        except Exception as e:
+            skipped.append("{0}: could not keep project setting - {1}"
+                           .format(prop, e))
 
     for spec_name in sorted(OVERRIDES.keys()):
         unit_name, accuracy = OVERRIDES[spec_name][key]
@@ -199,7 +209,7 @@ else:
 
 # Built outside the transaction - nothing here touches the document.
 skipped = []
-new_units = build_units(target_system, skipped)
+new_units = build_units(target_system, doc.GetUnits(), skipped)
 
 t = Transaction(doc, "Convert Project Units to {0}".format(target_label))
 t.Start()

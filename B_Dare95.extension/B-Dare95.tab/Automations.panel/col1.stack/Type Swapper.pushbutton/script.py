@@ -26,7 +26,8 @@ clr.AddReference('PresentationCore')
 clr.AddReference('WindowsBase')
 
 from Autodesk.Revit.DB import (
-    FilteredElementCollector, CategoryType, ElementId, Transaction
+    FilteredElementCollector, CategoryType, ElementId, Transaction,
+    TransactionStatus
 )
 
 from pyrevit import DB
@@ -351,7 +352,13 @@ def _on_cat_selected(s, e):
     sel = cat_list.SelectedItem
     if sel is None:
         return
-    cat_id = sel.Tag
+    _load_category(sel.Tag)
+
+
+def _load_category(cat_id):
+    """(Re)read the category's types from the model and reset the swap rows.
+    Called on category selection and again after a swap, so the FROM list
+    only ever shows types that still have placed instances."""
     current_cat[0] = cat_id
 
     in_use_data[0]   = _in_use_types(cat_id)
@@ -443,13 +450,28 @@ def _on_confirm(s, e):
                 inst.ChangeTypeId(new_tid)
                 changed[0] += 1
             except Exception:
+                # Typical causes: element is inside a group, or is a nested
+                # shared component that can only change inside its host family.
                 failed[0] += 1
-        t.Commit()
+        commit_status = t.Commit()
     except Exception as ex:
-        t.RollBack()
+        if t.HasStarted() and not t.HasEnded():
+            t.RollBack()
         status_label.Foreground = _b('#FF8389')
         status_label.Text = u'\u274C  Transaction failed: {}'.format(str(ex))
         return
+
+    # Commit() does not raise when Revit's error dialog is cancelled - it
+    # returns RolledBack instead. Check it so we never report a false success.
+    if commit_status != TransactionStatus.Committed:
+        status_label.Foreground = _b('#FF8389')
+        status_label.Text = (u'\u274C  Revit rolled back the swap ({}). '
+                             u'No elements were changed.'.format(commit_status))
+        return
+
+    # Re-read the model so the FROM list drops types that no longer have
+    # instances. This resets the rows, so the result is written afterwards.
+    _load_category(cat_id)
 
     # Report result
     if failed[0] == 0:
@@ -458,8 +480,9 @@ def _on_confirm(s, e):
             changed[0], 's' if changed[0] != 1 else '')
     else:
         status_label.Foreground = _b('#F1C21B')
-        status_label.Text = u'\u26A0  {} swapped, {} could not be changed.'.format(
-            changed[0], failed[0])
+        status_label.Text = (u'\u26A0  {} swapped, {} could not be changed '
+                             u'(check groups / nested families).'.format(
+                                 changed[0], failed[0]))
 
 confirm_btn.Click += _on_confirm
 
