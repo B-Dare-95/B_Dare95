@@ -28,7 +28,8 @@ from Autodesk.Revit.DB import (FilteredElementCollector, BuiltInCategory,
                                LocationCurve, LocationPoint, FamilyInstance,
                                Opening, ElementId, ElementTransformUtils,
                                Transaction, TransactionGroup,
-                               TransactionStatus)
+                               TransactionStatus, Options, ViewDetailLevel,
+                               Solid, GeometryInstance)
 
 import math
 
@@ -47,8 +48,12 @@ STARTUP_NOTES = []
 # ---------------------------------------------------------------------------
 # Tunable tolerances (feet, since Revit's internal units are always feet)
 # ---------------------------------------------------------------------------
-Z_OVERLAP_TOL = 0.5
-PERP_TOL = 0.5
+MM = 1.0 / 304.8
+# A column must really overlap the wall - across its thickness AND vertically -
+# by at least this much to cut it (same rule as Split at Beams). The old 152 mm
+# allowances cut walls at columns standing clear of them, and at columns on
+# the floor below whose top only touched the wall's base.
+MIN_OVERLAP = 3.0 * MM
 MIN_SEGMENT_LENGTH = 0.1
 MIN_SPLIT_SPACING = 0.5
 HOSTED_U_TOL = 0.05
@@ -191,6 +196,66 @@ def get_wall_z_range(wall):
     return bbox.Min.Z, bbox.Max.Z
 
 
+GEOM_OPTS = Options()
+GEOM_OPTS.DetailLevel = ViewDetailLevel.Fine
+GEOM_OPTS.ComputeReferences = False
+GEOM_OPTS.IncludeNonVisibleObjects = False
+
+
+def _solid_points(geom, out):
+    """Tessellated edge points of every solid in a geometry tree."""
+    if geom is None:
+        return
+    for g in geom:
+        if isinstance(g, Solid):
+            try:
+                if g.Volume <= 0:
+                    continue
+                for edge in g.Edges:
+                    out.extend(edge.Tessellate())
+            except Exception:
+                pass
+        elif isinstance(g, GeometryInstance):
+            _solid_points(g.GetInstanceGeometry(), out)
+
+
+def wall_v_range(wall, p0, normal):
+    """(v_min, v_max): the wall's real faces measured across its location
+    line. The location line can sit on a finish face or the core, so the
+    wall is NOT assumed to be centred on it (same approach as Split at
+    Beams). Falls back to centred if the solid can't be read."""
+    pts = []
+    try:
+        _solid_points(wall.get_Geometry(GEOM_OPTS), pts)
+    except Exception:
+        pts = []
+    if pts:
+        vs = [(p - p0).DotProduct(normal) for p in pts]
+        return min(vs), max(vs)
+    half = wall.Width / 2.0
+    return -half, half
+
+
+def wall_skip_reason(wall):
+    """Walls this tool must not rebuild (same checks as Split at Beams,
+    minus 'attached', which doesn't matter for a split along the length)."""
+    if getattr(wall, 'IsStackedWallMember', False):
+        return 'part of a stacked wall'
+    try:
+        if wall.WallType.Kind != WallKind.Basic:
+            return 'not a Basic wall (stacked/curtain)'
+    except Exception:
+        return 'could not read wall type'
+    if bd.eid_int(wall.GroupId) != -1:
+        return 'inside a group'
+    if wall.Pinned:
+        return 'pinned'
+    sketch_id = getattr(wall, 'SketchId', None)
+    if sketch_id is not None and bd.eid_int(sketch_id) != -1:
+        return 'has an edited profile'
+    return None
+
+
 def find_wall_gaps(wall, column_index):
     loc = wall.Location
     if not isinstance(loc, LocationCurve):
@@ -200,8 +265,9 @@ def find_wall_gaps(wall, column_index):
     if not isinstance(curve, Line):
         return None, 'not a straight (Line) wall'
 
-    if wall.WallType.Kind != WallKind.Basic:
-        return None, 'not a Basic wall (stacked/curtain)'
+    reason = wall_skip_reason(wall)
+    if reason:
+        return None, reason
 
     p0 = curve.GetEndPoint(0)
     p1 = curve.GetEndPoint(1)
@@ -213,14 +279,16 @@ def find_wall_gaps(wall, column_index):
     if wall_z_min is None:
         return None, 'could not read wall bounding box'
 
-    half_thickness = wall.Width / 2.0
-    band = half_thickness + PERP_TOL
+    wall_v_min, wall_v_max = wall_v_range(wall, p0, normal)
+    band = max(abs(wall_v_min), abs(wall_v_max))
 
     raw_intervals = []
     for col in column_index.near_segment(p0, p1, band):
-        if col['z_max'] < wall_z_min - Z_OVERLAP_TOL:
-            continue
-        if col['z_min'] > wall_z_max + Z_OVERLAP_TOL:
+        # Real vertical overlap required - a column whose top only touches
+        # the wall's base (the floor below) must not cut it.
+        z_overlap = (min(col['z_max'], wall_z_max) -
+                     max(col['z_min'], wall_z_min))
+        if z_overlap < MIN_OVERLAP:
             continue
 
         us, vs = [], []
@@ -229,8 +297,10 @@ def find_wall_gaps(wall, column_index):
             us.append(vec.DotProduct(direction))
             vs.append(vec.DotProduct(normal))
 
+        # Real overlap into the wall's thickness required - a column standing
+        # clear of the wall face must not cut it.
         v_min, v_max = min(vs), max(vs)
-        if v_max < -band or v_min > band:
+        if min(v_max, wall_v_max) - max(v_min, wall_v_min) < MIN_OVERLAP:
             continue
 
         u_min, u_max = max(min(us), 0.0), min(max(us), length)
@@ -374,6 +444,22 @@ def owning_segment_index(u, width, segments):
 END_TOL = 1e-6
 
 
+def lost_inserts(wall, segments):
+    """Ids of the doors / windows / openings no segment can keep. Used both
+    to warn BEFORE splitting and to report afterwards."""
+    curve = wall.Location.Curve
+    p0 = curve.GetEndPoint(0)
+    direction = (curve.GetEndPoint(1) - p0).Normalize()
+    lost = []
+    for el in get_wall_inserts(doc, wall):
+        u = insert_u(el, p0, direction)
+        if u is None:
+            continue
+        if owning_segment_index(u, insert_width(el), segments) is None:
+            lost.append(el.Id)
+    return lost
+
+
 def split_wall(doc, wall, segments):
     curve = wall.Location.Curve
     p0 = curve.GetEndPoint(0)
@@ -393,13 +479,7 @@ def split_wall(doc, wall, segments):
     # Decide up front which segment owns each insert. Anything no segment can
     # keep (sits inside a column footprint, or straddles a column face) is
     # reported so it can be re-placed by hand.
-    unrecoverable = []
-    for el in get_wall_inserts(doc, wall):
-        u = insert_u(el, p0, direction)
-        if u is None:
-            continue
-        if owning_segment_index(u, insert_width(el), segments) is None:
-            unrecoverable.append(el.Id)
+    unrecoverable = lost_inserts(wall, segments)
 
     source_ids = List[ElementId]()
     source_ids.Add(wall.Id)
@@ -559,7 +639,7 @@ def process_selected_walls(column_index):
     if not plan:
         msg = 'None of the {} selected wall(s) need splitting.'.format(len(picked))
         if skipped:
-            msg += ' ({} skipped: curved/stacked/curtain or fully consumed.)'\
+            msg += ' ({} skipped: curved/stacked/curtain/grouped/pinned/edited profile or fully consumed.)'\
                 .format(len(skipped))
         msg += '\n\nSelect more walls?'
         return bd.confirm(msg, 'Split Walls at Columns')
@@ -568,14 +648,53 @@ def process_selected_walls(column_index):
     summary = (
         'Selected {} wall(s).\n'
         '{} of them need splitting, into {} wall segment(s) total.\n'
-        '{} skipped (curved/stacked/curtain/unreadable/no column).\n\n'
-        'Proceed with the split?'
+        '{} skipped (curved/stacked/curtain/grouped/pinned/edited profile/'
+        'unreadable).'
     ).format(len(picked), len(plan), total_new, len(skipped))
 
-    if not bd.confirm(summary, 'Split Walls at Columns'):
-        return bd.confirm(
-            'Split cancelled. Select more walls?',
-            'Split Walls at Columns')
+    # Warn BEFORE splitting about hosted elements no segment can keep (same
+    # three-way choice as Split at Beams), instead of only reporting after.
+    lost_by_wall = []
+    for wall, segments in plan:
+        try:
+            lost = lost_inserts(wall, segments)
+        except Exception:
+            lost = []
+        lost_by_wall.append(lost)
+    risky = [i for i, lost in enumerate(lost_by_wall) if lost]
+
+    if not risky:
+        if not bd.confirm(summary + '\n\nProceed with the split?',
+                          'Split Walls at Columns'):
+            return bd.confirm(
+                'Split cancelled. Select more walls?',
+                'Split Walls at Columns')
+    else:
+        lost_all = [eid for i in risky for eid in lost_by_wall[i]]
+        shown = ', '.join(eid_str(e) for e in lost_all[:MAX_REPORT_IDS])
+        if len(lost_all) > MAX_REPORT_IDS:
+            shown += ' ...'
+        message = (summary + '\n\n'
+                   '{} hosted element(s) sit inside a column or straddle a '
+                   'column face, so no piece can keep them. They would be '
+                   'REMOVED:\n  {}'.format(len(lost_all), shown))
+        opt_all = 'Split all {} walls (remove the {} hosted element(s))'\
+            .format(len(plan), len(lost_all))
+        opt_safe = 'Skip the {} wall(s) with those elements, split the other {}'\
+            .format(len(risky), len(plan) - len(risky))
+        opt_cancel = 'Cancel'
+        choice = bd.choose_option(message, 'Split Walls at Columns',
+                                  [opt_all, opt_safe, opt_cancel])
+        if choice == opt_safe:
+            plan = [p for i, p in enumerate(plan) if i not in risky]
+            if not plan:
+                return bd.confirm(
+                    'Every wall would lose a hosted element - nothing was '
+                    'changed. Select more walls?', 'Split Walls at Columns')
+        elif choice != opt_all:
+            return bd.confirm(
+                'Split cancelled. Select more walls?',
+                'Split Walls at Columns')
 
     tg = TransactionGroup(doc, 'Split Walls at Columns (Selection)')
     tg.Start()

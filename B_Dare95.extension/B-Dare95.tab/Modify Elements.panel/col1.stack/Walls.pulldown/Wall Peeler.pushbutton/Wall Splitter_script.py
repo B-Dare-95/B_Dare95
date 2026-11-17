@@ -69,6 +69,35 @@ DEBUG     = False   # True -> print per-group span report to the pyRevit console
 
 get_id_value = bd.eid_int
 
+# Characters ElementType.Duplicate refuses in a type name.
+FORBIDDEN_NAME_CHARS = u'{}[]|;<>?`~'
+
+
+def clean_type_name(text):
+    """Typed type name with Revit-forbidden characters removed and trimmed."""
+    return u''.join(c for c in (text or u'')
+                    if c not in FORBIDDEN_NAME_CHARS).strip()
+
+
+def full_group_layers(group_layers):
+    """The group's real layers plus the membranes that ride along with them
+    (see MEMBRANE_ANCHOR), in the wall's exterior-to-interior order."""
+    real_idx = set(ld.index for ld in group_layers)
+    return sorted(list(group_layers) +
+                  [m for m in membrane_layers
+                   if MEMBRANE_ANCHOR.get(m.index) in real_idx],
+                  key=lambda ld: ld.index)
+
+
+def layer_signature(layers):
+    """What makes two peeled walls 'identical': same material, thickness
+    (to 0.01 mm) and function for every layer, in the same order."""
+    return tuple((get_id_value(ld.layer.MaterialId),
+                  round(UnitUtils.ConvertFromInternalUnits(
+                      ld.width, UnitTypeId.Millimeters), 2),
+                  str(ld.func_enum))
+                 for ld in layers)
+
 
 # ╔═╗╦  ╔═╗╔═╗╔═╗╔═╗╔═╗
 # ║  ║  ╠═╣╚═╗╚═╗║╣ ╚═╗
@@ -609,7 +638,8 @@ class LayerPickerWindow(Window):
             b.VerticalAlignment = VerticalAlignment.Center; b.Opacity = 0.5
             return b
 
-        lbl = make_text("Core Boundary", 9, C_MUTED); lbl.Margin = Thickness(6, 0, 6, 0)
+        # Zero-width rows are membranes - kept with the layer above them.
+        lbl = make_text("Membrane (kept with layer above)", 9, C_MUTED); lbl.Margin = Thickness(6, 0, 6, 0)
         l1 = make_line(); l2 = make_line()
         Grid.SetColumn(l1, 0); Grid.SetColumn(lbl, 1); Grid.SetColumn(l2, 2)
         row.Children.Add(l1); row.Children.Add(lbl); row.Children.Add(l2)
@@ -1195,6 +1225,34 @@ class LayerPickerWindow(Window):
         self._refresh()
 
     def _on_confirm(self, s, e):
+        # Several resulting walls may share a name:
+        #   - identical layers  -> fine, they simply share one wall type
+        #   - different layers  -> ask first; if the user goes on, each extra
+        #     layer build gets a numbered name ("Name 2") so no wall ends up
+        #     with the wrong layers.
+        # Names matching an EXISTING project type are fine - that type is
+        # reused on purpose (see make_wall_type_for_group).
+        groups, _, name_map, _ = self.get_result()
+        by_name = {}
+        for group in groups:
+            key = self._group_key(group)
+            nm  = name_map.get(key, u'')
+            lds = [self._layer_by_index(i) for i in group['indices']]
+            sig = layer_signature(full_group_layers([ld for ld in lds if ld]))
+            by_name.setdefault(nm.lower(), (nm, set()))[1].add(sig)
+        clashes = sorted(nm for nm, sigs in by_name.values() if len(sigs) > 1)
+        if clashes:
+            choice = bd.choose_option(
+                u"These names are used for walls with DIFFERENT layers:\n\n"
+                + u"\n".join(u"  - " + nm for nm in clashes),
+                u"Wall Peeler",
+                [(u"Continue",
+                  u"Each different layer build gets a numbered name, "
+                  u"e.g. \"{} 2\"".format(clashes[0])),
+                 (u"Go back and rename", u"Return to the window")],
+                heading=u"Same name, different layers")
+            if choice != u"Continue":
+                return
         self.confirmed[0] = True
         self.Close()
 
@@ -1207,8 +1265,9 @@ class LayerPickerWindow(Window):
         for group in groups:
             key = self._group_key(group)
             tb = self._name_boxes.get(key)
-            if tb and tb.Text.strip():
-                name_map[key] = tb.Text.strip()
+            typed = clean_type_name(tb.Text) if tb else u''
+            if typed:
+                name_map[key] = typed
             else:
                 name_map[key] = self._auto_names.get(key, self._auto_name_for_group(group))
         return groups, self.host_key, name_map, self.apply_to_all[0]
@@ -1222,7 +1281,17 @@ class LayerPickerWindow(Window):
 def pick_wall():
     class WallFilter(ISelectionFilter):
         def AllowElement(self, elem):
-            return elem.Category is not None and elem.Category.Name == "Walls"
+            # Class check instead of the category name: works in every Revit
+            # language, and rules out in-place walls (FamilyInstance, no
+            # WallType). Only Basic walls have a layered compound structure -
+            # curtain and stacked walls return None and cannot be peeled.
+            if not isinstance(elem, Wall):
+                return False
+            try:
+                return (elem.WallType.Kind == WallKind.Basic and
+                        elem.WallType.GetCompoundStructure() is not None)
+            except Exception:
+                return False
         def AllowReference(self, ref, point):
             return False
     try:
@@ -1262,25 +1331,83 @@ def make_wall_type_for_group(base_wall_type, group_layers, type_name):
     land in the wrong place. In that case a disambiguated name is used instead.
     """
     expected = sum(ld.width for ld in group_layers)
+    full     = full_group_layers(group_layers)
+    sig      = layer_signature(full)
 
+    # Same name already used earlier in THIS run (another group, or the same
+    # group on another wall when applying to all): reuse that type only when
+    # the layers are identical. Otherwise the user was warned in the window -
+    # give this layer build the next free numbered name.
+    made = types_this_run.setdefault(type_name.lower(), [])
+    for made_sig, made_type in made:
+        if made_sig == sig:
+            return made_type
+    if made:
+        requested = type_name
+        counter = len(made) + 1
+        while True:
+            type_name = u'{} {}'.format(requested, counter)
+            if get_wall_type_by_name(type_name) is None:
+                break
+            counter += 1
+        renamed_types.append(u'{} -> {}'.format(requested, type_name))
+        new_type = _create_wall_type(base_wall_type, group_layers, full,
+                                     type_name)
+        made.append((sig, new_type))
+        return new_type
+
+    result = _get_or_create_by_name(base_wall_type, group_layers, full,
+                                    type_name, expected)
+    made.append((sig, result))
+    return result
+
+
+def _get_or_create_by_name(base_wall_type, group_layers, full, type_name,
+                           expected):
+    """Existing project type with this name and thickness is reused (on
+    purpose); a name taken with another thickness gets '(NNNmm)' added."""
     existing = get_wall_type_by_name(type_name)
     if existing:
         cs = existing.GetCompoundStructure()
         if cs is not None and abs(cs.GetWidth() - expected) < TOL:
             return existing
         # Name collision with a different thickness - disambiguate.
+        # Parentheses, not [ ]: ElementType.Duplicate rejects { } [ ] | ; < > ? ` ~
         mm = UnitUtils.ConvertFromInternalUnits(expected, UnitTypeId.Millimeters)
-        type_name = '{} [{:.0f}mm]'.format(type_name, mm)
-        again = get_wall_type_by_name(type_name)
-        if again:
+        base_name = u'{} ({:.0f}mm)'.format(type_name, mm)
+        type_name = base_name
+        counter = 2
+        while True:
+            again = get_wall_type_by_name(type_name)
+            if again is None:
+                break                      # free name - create below
             cs2 = again.GetCompoundStructure()
             if cs2 is not None and abs(cs2.GetWidth() - expected) < TOL:
-                return again
+                return again               # same name + thickness - reuse
+            type_name = u'{} {}'.format(base_name, counter)
+            counter += 1
 
+    return _create_wall_type(base_wall_type, group_layers, full, type_name)
+
+
+def _create_wall_type(base_wall_type, group_layers, full, type_name):
     new_type = base_wall_type.Duplicate(type_name)
-    compound = CompoundStructure.CreateSimpleCompoundStructure(
-        [ld.layer for ld in group_layers])
-    new_type.SetCompoundStructure(compound)
+
+    # Membranes have zero width, so they never appear in group_layers (those
+    # drive the geometry). 'full' puts back the ones assigned to this group so
+    # the new type keeps its vapour barriers etc. If Revit refuses the
+    # structure with them, fall back to the plain layers and report it.
+    try:
+        new_type.SetCompoundStructure(
+            CompoundStructure.CreateSimpleCompoundStructure(
+                [ld.layer for ld in full]))
+    except Exception:
+        new_type.SetCompoundStructure(
+            CompoundStructure.CreateSimpleCompoundStructure(
+                [ld.layer for ld in group_layers]))
+        for m in full:
+            if m.layer.Width == 0:
+                dropped_membranes.append(u'{} -> {}'.format(m.mat_name, type_name))
     return new_type
 
 
@@ -1930,6 +2057,29 @@ def default_name_for_key(key, group_lds):
     return name[:100]
 
 
+def isolate_wall(wall, failed):
+    """Cut the wall loose from everything before it is peeled:
+       - wall joins disallowed at BOTH ends (this also disconnects any wall
+         already joined there, and stops new joins when the copies move)
+       - every geometry join (floors, columns, roofs, other walls...) removed
+    Anything Revit refuses is added to 'failed' as a readable line."""
+    for end in (0, 1):
+        try:
+            WallUtils.DisallowWallJoinAtEnd(wall, end)
+        except Exception as ex:
+            failed.append(u'Wall {} end {}: {}'.format(
+                get_id_value(wall.Id), end, ex))
+    for jid in list(JoinGeometryUtils.GetJoinedElements(doc, wall)):
+        other = doc.GetElement(jid)
+        if other is None:
+            continue
+        try:
+            JoinGeometryUtils.UnjoinGeometry(doc, wall, other)
+        except Exception as ex:
+            failed.append(u'Wall {} / {} {}: {}'.format(
+                get_id_value(wall.Id), other.Name, get_id_value(jid), ex))
+
+
 def join_walls(wall_list):
     for w1 in wall_list:
         for w2 in wall_list:
@@ -1954,6 +2104,21 @@ real_layers = [ld for ld in layer_data if not ld.is_cb]
 
 if not real_layers:
     bd.alert("Wall has no real layers to split.", u"Wall Peeler", exit=True)
+
+# Zero-width layers are membranes (vapour barriers etc.). GetLayers() never
+# returns core boundaries. They can't be split on their own, so each membrane
+# rides along with the nearest real layer on its exterior side (or the next
+# one inward when it is the outermost layer) and is written into that
+# layer's new wall type in make_wall_type_for_group().
+membrane_layers   = [ld for ld in layer_data if ld.is_cb]
+MEMBRANE_ANCHOR   = {}
+dropped_membranes = []
+types_this_run    = {}   # lower-case name -> [(layer signature, WallType)]
+renamed_types     = []   # "requested -> actual" for same-name, different layers
+for _m in membrane_layers:
+    _before = [ld.index for ld in real_layers if ld.index < _m.index]
+    _after  = [ld.index for ld in real_layers if ld.index > _m.index]
+    MEMBRANE_ANCHOR[_m.index] = _before[-1] if _before else _after[0]
 
 # 3. Show WPF picker (modeless + PushFrame so Revit stays responsive)
 win   = LayerPickerWindow(sel_wall, layer_data)
@@ -2064,12 +2229,18 @@ flipped_fixes    = 0
 inserts_kept     = 0
 inserts_rebuilt  = 0
 inserts_failed   = []
+unjoin_failed    = []
 
 try:
     for w in target_walls:
         geom = wall_geom_cache.get(get_id_value(w.Id))
         if not geom:
             continue                          # unreadable or curved — already reported
+
+        # Unjoin the wall from everything and disallow joins at both ends
+        # BEFORE copying, so the peeled copies start out unjoined too.
+        isolate_wall(w, unjoin_failed)
+        doc.Regenerate()
 
         i_dir   = geom['interior_dir']
         total_w = sum(ld.width for ld in real_layers)
@@ -2087,7 +2258,10 @@ try:
             group_lds = [next(ld for ld in real_layers if ld.index == i)
                          for i in group['indices']]
             is_host   = (host_key == key)
-            type_name = name_map.get(key, '') or default_name_for_key(key, group_lds)
+            # Auto names come from material names, which may contain
+            # characters Revit refuses in a type name - clean those too.
+            type_name = clean_type_name(
+                name_map.get(key, '') or default_name_for_key(key, group_lds))
 
             new_type = make_wall_type_for_group(base_type, group_lds, type_name)
             new_crv  = compute_group_curve_absolute(
@@ -2098,6 +2272,9 @@ try:
             new_wall = duplicate_wall(w)
             if new_wall is None:
                 continue
+            # Make sure the copy is just as loose, before it moves - a moving
+            # wall with allowed ends would grab any wall it lands next to.
+            isolate_wall(new_wall, unjoin_failed)
 
             if is_host:
                 host_wall = new_wall
@@ -2143,12 +2320,18 @@ try:
         join_walls(new_walls)
         created_total += len(new_walls)
 
-    t.Commit()
+    commit_status = t.Commit()
 
 except Exception:
     if t.HasStarted() and not t.HasEnded():
         t.RollBack()
     raise
+
+# Commit() does not raise when Revit's failure handling rolls the
+# transaction back - it returns RolledBack. Never report a false success.
+if commit_status != TransactionStatus.Committed:
+    bd.alert("Revit rolled back the changes ({}). No walls were created."
+             .format(commit_status), u"Wall Peeler", exit=True)
 
 msg = "Created {} wall(s) from {} original wall(s).".format(
     created_total, len(wall_geom_cache))
@@ -2165,6 +2348,23 @@ if total_inserts:
             msg += "\n      - {}".format(nm)
         if len(inserts_failed) > 10:
             msg += "\n      ..."
+
+if unjoin_failed:
+    msg += "\n\nCould not unjoin (check these by hand):"
+    for nm in unjoin_failed[:10]:
+        msg += u"\n  - {}".format(nm)
+    if len(unjoin_failed) > 10:
+        msg += "\n  ..."
+
+if renamed_types:
+    msg += "\n\nSame name, different layers - numbered names were used:"
+    for nm in renamed_types[:10]:
+        msg += u"\n  - {}".format(nm)
+
+if dropped_membranes:
+    msg += "\n\nRevit refused these membranes in the new types (re-add by hand):"
+    for nm in dropped_membranes[:10]:
+        msg += u"\n  - {}".format(nm)
 
 if DEBUG and flipped_fixes:
     msg += "\nRe-aligned orientation on {} wall(s).".format(flipped_fixes)

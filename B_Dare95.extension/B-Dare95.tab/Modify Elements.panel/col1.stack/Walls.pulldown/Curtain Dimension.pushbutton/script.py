@@ -29,6 +29,7 @@ from System.Windows.Interop import WindowInteropHelper
 from System.Windows.Controls import TextChangedEventHandler, SelectionChangedEventHandler
 from System.Windows.Input import MouseButtonEventHandler
 
+from Autodesk.Revit.DB import TransactionStatus
 from Autodesk.Revit.DB import (BuiltInParameter, DimensionStyleType,
                                DimensionType, ElementTypeGroup,
                                FamilyInstanceReferenceType,
@@ -512,10 +513,17 @@ def dimension_wall(wall, source, view, kind, settings):
         doc.Create.NewDimension(
             view, dim_line(origin, axis, offset_dir, start[0], end[0],
                            edge + d_overall), ra_overall, dim_type)
-        t.Commit()
+        commit_status = t.Commit()
     except Exception as err:
-        t.RollBack()
+        if t.HasStarted() and not t.HasEnded():
+            t.RollBack()
         return False, "dimension creation failed ({})".format(err)
+
+    # Commit() returns RolledBack instead of raising when Revit's failure
+    # handling undoes it (e.g. a view owned by someone else in a workshared
+    # model) - don't count the wall as dimensioned.
+    if commit_status != TransactionStatus.Committed:
+        return False, "Revit rolled back the dimensions ({})".format(commit_status)
 
     if not inner:
         return True, ("no curtain grids between the wall ends ({} grid lines on the "

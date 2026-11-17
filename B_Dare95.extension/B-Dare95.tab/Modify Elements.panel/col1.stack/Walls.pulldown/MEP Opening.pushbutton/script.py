@@ -35,7 +35,7 @@ clr.AddReference("System.Xml")
 from Autodesk.Revit.DB import (
     BuiltInFailures, BuiltInParameter, Element, FailureProcessingResult,
     FailureSeverity, FilteredElementCollector, IFailuresPreprocessor, Line,
-    LocationCurve, RevitLinkInstance, Transaction, TransactionGroup,
+    LocationCurve, Opening, RevitLinkInstance, Transaction, TransactionGroup,
     TransactionStatus, Transform, Wall, WallKind, WallType, XYZ,
 )
 from Autodesk.Revit.DB.Electrical import CableTray
@@ -726,6 +726,40 @@ def local_to_world(info, along, elevation):
             .Add(XYZ.BasisZ.Multiply(elevation - info["p0"].Z)))
 
 
+def existing_opening_rects(wall, info):
+    """Wall-local (along0, along1, z0, z1) of the rectangular openings the
+    wall already hosts, so a second run doesn't cut duplicates on top."""
+    rects = []
+    try:
+        ids = wall.FindInserts(True, False, False, False)
+    except Exception:
+        return rects
+    for eid in ids:
+        op = doc.GetElement(eid)
+        if not isinstance(op, Opening):
+            continue
+        try:
+            if not op.IsRectBoundary:
+                continue
+            a, b = op.BoundaryRect[0], op.BoundaryRect[1]
+        except Exception:
+            continue
+        ua = (a - info["p0"]).DotProduct(info["u"])
+        ub = (b - info["p0"]).DotProduct(info["u"])
+        rects.append((min(ua, ub), max(ua, ub), min(a.Z, b.Z), max(a.Z, b.Z)))
+    return rects
+
+
+def already_opened(rect, existing):
+    """True when an existing opening already covers the centre of rect."""
+    cu = (rect[0] + rect[1]) / 2.0
+    cz = (rect[2] + rect[3]) / 2.0
+    for e in existing:
+        if e[0] <= cu <= e[1] and e[2] <= cz <= e[3]:
+            return True
+    return False
+
+
 def rect_overlaps_wall(info, rect):
     """True when the opening rectangle actually lands on the wall."""
     if rect[1] <= 0.0 or rect[0] >= info["len"]:
@@ -771,9 +805,13 @@ def edit_wall(wall_id, info, rects, allow_group_warning):
 
     created = 0
     rejected = []
+    existing = existing_opening_rects(wall, info)
 
     try:
         for rect in rects:
+            if already_opened(rect, existing):
+                rejected.append("already has an opening here")
+                continue
             if (rect[1] - rect[0]) < MIN_EDGE or (rect[3] - rect[2]) < MIN_EDGE:
                 rejected.append("opening smaller than Revit's curve tolerance")
                 continue
