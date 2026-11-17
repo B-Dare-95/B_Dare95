@@ -42,6 +42,7 @@ from Autodesk.Revit.DB import (
     Solid,
     Transaction,
     TransactionGroup,
+    TransactionStatus,
     Transform,
     ViewDetailLevel,
     ViewSection,
@@ -514,13 +515,11 @@ def sample_path(curves, length_along):
 
 
 def parent_stairs(run, owner_doc):
+    # StairsRun has no StairsId property - GetStairs() returns the parent Stairs
     try:
-        stairs_id = run.StairsId
+        return run.GetStairs()
     except Exception:
         return None
-    if stairs_id is None or stairs_id == ElementId.InvalidElementId:
-        return None
-    return owner_doc.GetElement(stairs_id)
 
 
 class RunGeometry(object):
@@ -551,7 +550,8 @@ class RunGeometry(object):
         # -- riser count ---------------------------------------------------
         self.risers, _ = resolve_value(
             [(run, ["ActualRisersNumber", "ActualNumRisers"],
-              ["STAIRS_RUN_ACTUAL_NUM_RISERS", "STAIRS_ACTUAL_NUM_RISERS"],
+              # real BIP name (was STAIRS_RUN_ACTUAL_NUM_RISERS, which does not exist)
+              ["STAIRS_RUN_ACTUAL_NUMBER_OF_RISERS", "STAIRS_ACTUAL_NUM_RISERS"],
               ["Actual Number of Risers", "Actual Riser Number"]),
              (stairs, ["ActualRisersNumber", "ActualNumRisers"],
               ["STAIRS_ACTUAL_NUM_RISERS"],
@@ -626,7 +626,8 @@ class RunGeometry(object):
         if include_nosing:
             nosing, _ = resolve_value(
                 [(run_type, ["NosingLength"],
-                  ["STAIRS_TRISERTYPE_NOSING_LENGTH", "STAIRSTYPE_NOSING_LENGTH"],
+                  # STAIRSTYPE_NOSING_LENGTH does not exist; STAIRS_ATTR_NOSING_LENGTH is the real legacy one
+                  ["STAIRS_TRISERTYPE_NOSING_LENGTH", "STAIRS_ATTR_NOSING_LENGTH"],
                   ["Nosing Length"])])
             self.nosing = nosing or 0.0
 
@@ -646,11 +647,16 @@ class RunGeometry(object):
             slack = self.path_length - riser_span
             if slack > -SLACK_TOL:
                 step_length = self.tread_depth
-                begins_with_riser, _ = resolve_value(
-                    [(run_type, ["BeginsWithRiser"],
-                      ["STAIRSTYPE_BEGIN_WITH_RISER", "STAIRS_RUNTYPE_BEGIN_WITH_RISER"],
-                      ["Begin with Riser"])],
-                    as_int=True)
+                # BeginsWithRiser is an instance property of the run (bool), not
+                # of the run type; fall back to the real run BIP if it fails
+                try:
+                    begins_with_riser = 1 if run.BeginsWithRiser else 0
+                except Exception:
+                    begins_with_riser, _ = resolve_value(
+                        [(run, [],
+                          ["STAIRS_RUN_BEGIN_WITH_RISER"],
+                          ["Begin with Riser"])],
+                        as_int=True)
                 if begins_with_riser is not None and begins_with_riser == 0 \
                         and slack >= self.tread_depth - SLACK_TOL:
                     start_offset = self.tread_depth
@@ -830,26 +836,40 @@ def main():
         if not batch:
             continue
 
+        # per-pick results stay local and are merged into the totals only once
+        # Revit confirms the commit, so a rolled-back pick is not counted
         transaction = Transaction(doc, "Stair Clear Height Line")
-        transaction.Start()
         try:
+            transaction.Start()
+            pick_created = 0
+            pick_runs = []
+            pick_log = []
             for run_id, geom, segments in batch:
                 for segment in segments:
                     detail_curve = doc.Create.NewDetailCurve(view, segment)
                     detail_curve.LineStyle = graphics_style
-                    created_total += 1
-                seen_runs.add(run_id)
-                run_count += 1
-                log.append("Run {0}  |  {1} risers @ {2} mm  |  {3} nosing points  |  "
-                           "nosing {4} mm  |  {5} line(s)"
-                           .format(run_id, geom.risers, fmt_mm(geom.riser_height),
-                                   len(geom.points), fmt_mm(geom.nosing), len(segments)))
+                    pick_created += 1
+                pick_runs.append(run_id)
+                pick_log.append("Run {0}  |  {1} risers @ {2} mm  |  {3} nosing points  |  "
+                                "nosing {4} mm  |  {5} line(s)"
+                                .format(run_id, geom.risers, fmt_mm(geom.riser_height),
+                                        len(geom.points), fmt_mm(geom.nosing), len(segments)))
                 for note in geom.notes:
-                    log.append("         - {0}".format(note))
-            transaction.Commit()
-            uidoc.RefreshActiveView()
+                    pick_log.append("         - {0}".format(note))
+            status = transaction.Commit()
+            if status == TransactionStatus.Committed:
+                created_total += pick_created
+                run_count += len(pick_runs)
+                seen_runs.update(pick_runs)
+                log.extend(pick_log)
+                uidoc.RefreshActiveView()
+            else:
+                log.append("Run {0}  |  Revit rolled back this pick ({1})"
+                           .format(batch[0][0], status))
         except Exception as ex:
-            transaction.RollBack()
+            # only roll back a transaction that is actually still open
+            if transaction.HasStarted() and not transaction.HasEnded():
+                transaction.RollBack()
             log.append("Run {0}  |  creation failed, that pick was rolled back: {1}"
                        .format(batch[0][0], ex))
 

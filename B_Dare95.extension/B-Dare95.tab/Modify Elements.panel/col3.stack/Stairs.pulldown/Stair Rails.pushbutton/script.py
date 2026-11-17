@@ -35,7 +35,8 @@ from Autodesk.Revit.DB import (Arc, BuiltInParameter, CurveLoop, ElementId,
                                GeometryInstance, Options, Plane, SketchPlane,
                                Solid, ViewDetailLevel,
                                FilteredElementCollector, Level, Line,
-                               Transaction, Transform, XYZ)
+                               SubTransaction, Transaction, TransactionStatus,
+                               Transform, XYZ)
 from Autodesk.Revit.DB.Architecture import (
     MultistoryStairs,
     Railing,
@@ -74,7 +75,7 @@ DRAW_REJECTED_PATHS = False
 # True = when a railing fails, copy that stair's raw geometry (run and landing
 # footprints, the edge chain, the cleaned path and the offset path) to the
 # clipboard as JSON, and save it to %TEMP%\stair_railing_failure.json.
-DUMP_FAILED_GEOMETRY = True
+DUMP_FAILED_GEOMETRY = False   # debug aid, off for normal use
 
 FAILED_DUMPS = []   # one entry per failed railing, filled by record_failure()
 LAST_ATTEMPT = {}   # what make_railing() built on its latest call
@@ -1428,7 +1429,13 @@ def create_railing(attempt, type_id, level_id, host_id, notes, label, placement_
             draw_debug_path(final, attempt.get("z") or 0.0, notes, label)
         return None
 
-    railing = Railing.Create(doc, path, type_id, level_id)
+    # Railing.Create can throw (e.g. ArgumentException on the type/level); report
+    # it like a null result. The callers record_failure() when this returns None.
+    try:
+        railing = Railing.Create(doc, path, type_id, level_id)
+    except Exception as err:
+        notes.append("{0}: Railing.Create failed: {1}".format(label, err))
+        return None
     if railing is None:
         notes.append("{0}: Railing.Create returned nothing.".format(label))
         return None
@@ -1459,11 +1466,107 @@ def create_railing(attempt, type_id, level_id, host_id, notes, label, placement_
     return railing
 
 
+def path_accepted(attempt):
+    """True when Revit would build a railing on the attempt's path."""
+    curves = attempt.get("curves")
+    if not curves:
+        return False
+    try:
+        return Railing.IsValidPathForRailing(build_curve_loop(curves))
+    except Exception:
+        return False
+
+
+def prepare_path(curves, offset_ft, towards_point, notes, label):
+    """The railing path is drawn ON the stair edge; the offset goes into the
+    railing's 'Offset from Path' parameter afterwards (apply_offset_parameter).
+
+    One exception: where two runs share an inner edge the edge path folds back
+    on itself and Revit refuses it unless it is moved sideways. Only then is the
+    offset built into the path itself, and a note says so.
+    Returns (attempt, offset_is_in_path)."""
+    attempt = build_path(curves, 0.0, towards_point, notes, label)
+    if abs(offset_ft) < 1e-9 or path_accepted(attempt):
+        return attempt, False
+    retry = build_path(curves, offset_ft, towards_point, notes, label)
+    if path_accepted(retry):
+        notes.append("{0}: the edge path folds back on itself, so Revit only takes it moved "
+                     "sideways - the {1:g} mm offset was built into the path instead of "
+                     "'Offset from Path'.".format(label, round(offset_ft * 304.8, 1)))
+        return retry, True
+    return attempt, False
+
+
+def _top_rail_side(railing, ref_curve):
+    """Signed sideways distance (plan) of the railing's top rail from the middle
+    of ref_curve: positive = left of ref_curve looking along it. None when the
+    railing has no readable top rail."""
+    try:
+        rail = doc.GetElement(railing.TopRail)
+        rail_path = list(rail.GetPath()) if rail is not None else []
+    except Exception:
+        return None
+    mid = curve_midpoint(ref_curve)
+    best = None
+    for crv in rail_path:
+        try:
+            q = crv.Project(mid).XYZPoint
+        except Exception:
+            continue
+        d2 = (q.X - mid.X) ** 2 + (q.Y - mid.Y) ** 2
+        if best is None or d2 < best[0]:
+            best = (d2, q)
+    if best is None:
+        return None
+    return plan_cross(curve_tangent(ref_curve), best[1] - mid)
+
+
+def apply_offset_parameter(railing, offset_ft, towards_point, notes, label):
+    """Set the offset through 'Offset from Path' (the path itself stays on the
+    stair edge). Positive = onto the treads, i.e. towards towards_point.
+
+    Which way a positive 'Offset from Path' moves depends on the path direction
+    and on Flip, so the result is measured on the top rail and the sign is
+    reversed when it went the wrong way."""
+    if abs(offset_ft) < 1e-9:
+        return
+    try:
+        ref_curve = list(railing.GetPath())[0]
+    except Exception:
+        ref_curve = None
+    before = _top_rail_side(railing, ref_curve) if ref_curve is not None else None
+
+    set_offset_from_path(railing, offset_ft, notes, label)
+
+    after = _top_rail_side(railing, ref_curve) if ref_curve is not None else None
+    if before is None or after is None or abs(after - before) < 0.25 * abs(offset_ft):
+        notes.append("{0}: 'Offset from Path' set to {1:g} mm, but its direction could not be "
+                     "checked (no readable top rail) - check railing {2}.".format(
+                         label, round(offset_ft * 304.8, 1), eid_value(railing.Id)))
+        return
+    # wanted movement: towards the treads, i.e. to towards_point's side
+    wanted = side_of(ref_curve, towards_point) * (1 if offset_ft > 0 else -1)
+    moved = 1 if after > before else -1
+    if moved != wanted:
+        set_offset_from_path(railing, -offset_ft, notes, label)
+
+
 def make_railing(curves, type_id, level_id, host_id, offset_ft, towards_point, notes,
-                 label, placement_levels=None):
-    """Build one railing from an ordered chain of curves. Returns the Railing or None."""
-    attempt = build_path(curves, offset_ft, towards_point, notes, label)
-    return create_railing(attempt, type_id, level_id, host_id, notes, label, placement_levels)
+                 label, placement_levels=None, flip=False):
+    """Build one railing from an ordered chain of curves. Returns the Railing or None.
+
+    The path follows the stair edge; the offset is applied through the
+    railing's 'Offset from Path' parameter after creating (and flipping) it."""
+    attempt, offset_in_path = prepare_path(curves, offset_ft, towards_point, notes, label)
+    railing = create_railing(attempt, type_id, level_id, host_id, notes, label,
+                             placement_levels)
+    if railing is None:
+        return None
+    if flip:
+        flip_railing(railing, notes)
+    if not offset_in_path:
+        apply_offset_parameter(railing, offset_ft, towards_point, notes, label)
+    return railing
 
 
 def flip_railing(railing, notes):
@@ -1608,7 +1711,7 @@ LAP_STAGGER = 10.0 / 304.8   # 10 mm, see stagger_turns()
 
 # True = when no host gives a whole single railing, keep the last broken one in
 # the model (for Geo Eyes) instead of falling back to one railing per run
-KEEP_BROKEN_SINGLE_RAILING = True
+KEEP_BROKEN_SINGLE_RAILING = False   # off: a broken railing is removed, per-run fallback runs
 
 
 def path_corners(curves):
@@ -1869,20 +1972,22 @@ def stacked_single_railing(stairs, pieces, type_id, level_id, offset_ft, multist
                 label, how, repeated_corners(curves)))
             continue
 
-        railing = Railing.Create(doc, path, type_id, level_id)
+        # Railing.Create can throw; report it like a null result
+        try:
+            railing = Railing.Create(doc, path, type_id, level_id)
+        except Exception as err:
+            notes.append("{0}: Railing.Create failed: {1}".format(label, err))
+            return None
         if railing is None:
             notes.append("{0}: Railing.Create returned nothing.".format(label))
             return None
         doc.Regenerate()
-        if abs(offset_ft) > 1e-9:
-            set_offset_from_path(railing, offset_ft, notes, label)
-        if placement_levels is not None:
-            try:
-                railing.SetMultistoryStairsPlacementLevels(placement_levels)
-                doc.Regenerate()
-            except Exception as err:
-                notes.append("{0}: could not spread railing {1} over the storeys: {2}".format(
-                    label, eid_value(railing.Id), err))
+        # the path is reversed (top run first), so its first curve belongs to the
+        # top run - measure "onto the treads" against that run's centroid
+        apply_offset_parameter(railing, offset_ft, pieces[-1][0]["centroid"], notes, label)
+        # placement levels are set further down, once the railing has a host:
+        # SetMultistoryStairsPlacementLevels throws on a railing not yet hosted
+        # by the multistory stair (same order as create_railing)
 
         # host it, then check Revit really built it - top rail, balusters and every
         # turn across the well. Tried in turn: the top run (how the railings that
@@ -1907,6 +2012,15 @@ def stacked_single_railing(stairs, pieces, type_id, level_id, offset_ft, multist
                 notes.append("{0}: hosting railing {1} on element {2} failed: {3}".format(
                     label, eid_value(railing.Id), eid_value(candidate), err))
                 continue
+            # now hosted: spread it over the storeys before checking its parts,
+            # so missing_parts() sees the spread railing
+            if placement_levels is not None:
+                try:
+                    railing.SetMultistoryStairsPlacementLevels(placement_levels)
+                    doc.Regenerate()
+                except Exception as err:
+                    notes.append("{0}: could not spread railing {1} over the storeys: {2}".format(
+                        label, eid_value(railing.Id), err))
             missing = missing_parts(railing, turns, margin)
             if candidate == stairs.Id:
                 where = "the stair"
@@ -1946,13 +2060,14 @@ def stacked_inner_railings(stairs, analysed, pieces, type_id, level_id, offset_f
     built = []
     for item, curves in pieces:
         piece_label = "{0} - inner run {1}".format(label, eid_value(item["run"].Id))
-        attempt = build_path(curves, offset_ft, item["centroid"], notes, piece_label)
+        attempt, in_path = prepare_path(curves, offset_ft, item["centroid"], notes, piece_label)
         if not attempt.get("curves"):
             record_failure(stairs, analysed, piece_label, offset_ft, attempt)
-        built.append((item, piece_label, attempt))
+        built.append((item, piece_label, attempt, in_path))
 
-    # each run was offset on its own: carry each railing's end and the next
-    # one's start out to the corner they share, so the turn closes up
+    # carry each railing's end and the next one's start out to the corner they
+    # share, so the turn closes up (paths sit on the edges unless an offset had
+    # to be built into one, see prepare_path)
     reach = 4.0 * abs(offset_ft) + LANDING_SNAP
     for index in range(len(built) - 1):
         first = built[index][2].get("curves")
@@ -1964,7 +2079,7 @@ def stacked_inner_railings(stairs, analysed, pieces, type_id, level_id, offset_f
             first[-1] = met[0]
             second[0] = met[1]
 
-    for item, piece_label, attempt in built:
+    for item, piece_label, attempt, in_path in built:
         if not attempt.get("curves"):
             continue
         # on a multistory stair the placement levels only apply to railings
@@ -1973,6 +2088,9 @@ def stacked_inner_railings(stairs, analysed, pieces, type_id, level_id, offset_f
         railing = create_railing(attempt, type_id, level_id, host_id, notes, piece_label,
                                  placement_levels)
         if railing is not None:
+            if not in_path:
+                apply_offset_parameter(railing, offset_ft, item["centroid"], notes,
+                                       piece_label)
             created.append((piece_label, railing))
         else:
             record_failure(stairs, analysed, piece_label, offset_ft, attempt)
@@ -2076,10 +2194,9 @@ def build_for_stairs(stairs, multistory, choice, offsets, notes, created):
                 notes,
                 "{0} - outer run {1}".format(label, eid_value(item["run"].Id)),
                 placement_levels,
+                flip=choice["flip_outer"],   # flipped before the offset is measured
             )
             if railing is not None:
-                if choice["flip_outer"]:
-                    flip_railing(railing, notes)
                 created.append((
                     "{0} - outer run {1}".format(label, eid_value(item["run"].Id)),
                     railing,
@@ -2131,17 +2248,40 @@ def main():
     transaction.Start()
     try:
         for stairs, multistory in targets:
+            # each stair in its own SubTransaction: if nothing is built for it (or
+            # it throws) roll back, so its deleted existing railings come back
+            before = len(created)
+            sub = SubTransaction(doc)
+            sub.Start()
             try:
                 build_for_stairs(stairs, multistory, choice, offsets, notes, created)
+                if len(created) > before:
+                    sub.Commit()
+                else:
+                    sub.RollBack()
+                    notes.append("{0} (id {1}): no railing could be built - left unchanged "
+                                 "(existing railings kept).".format(
+                                     element_name(stairs), eid_value(stairs.Id)))
             except Exception as err:
                 # one bad stair should not throw away the work done on the others
-                notes.append("{0} (id {1}) failed: {2}".format(
+                if sub.HasStarted() and not sub.HasEnded():
+                    sub.RollBack()
+                del created[before:]
+                notes.append("{0} (id {1}) failed: {2} - left unchanged.".format(
                     element_name(stairs), eid_value(stairs.Id), err))
         doc.Regenerate()
-        transaction.Commit()
+        status = transaction.Commit()
     except Exception:
-        transaction.RollBack()
+        if transaction.HasStarted() and not transaction.HasEnded():
+            transaction.RollBack()
         raise
+
+    # Commit can come back RolledBack (e.g. failures resolved by rolling back);
+    # the railings in 'created' no longer exist then, so stop before reading their ids
+    if status != TransactionStatus.Committed:
+        TaskDialog.Show("Stair Railing Manager",
+                        "Revit rolled back the railings ({0}). Nothing was created.".format(status))
+        return
 
     dump_note = save_failure_dump()
     if dump_note:

@@ -36,7 +36,8 @@ from Autodesk.Revit.DB import (Arc, BuiltInCategory, BuiltInParameter,
                                GraphicsStyleType, HorizontalTextAlignment,
                                Level, PlanViewPlane, RevitLinkInstance,
                                TextNote, TextNoteOptions, TextNoteType,
-                               Transaction, Transform, VerticalTextAlignment,
+                               Transaction, TransactionStatus, Transform,
+                               VerticalTextAlignment,
                                ViewPlan, XYZ)
 from Autodesk.Revit.DB.Architecture import StairsLanding, StairsRun
 from Autodesk.Revit.Exceptions import OperationCanceledException
@@ -54,7 +55,9 @@ cfg = script.get_config()
 
 TITLE = "Stair Tread Numbering"
 TOL = 1e-6
-START_NUMBER_PARAM = "Tread/Riser Start Number"
+START_NUMBER_PARAM = "Tread/Riser Start Number"  # English name, fallback only
+# Language-independent id of the start number; getattr so a missing member can't crash
+START_NUMBER_BIP = getattr(BuiltInParameter, "STAIRS_TRISER_NUMBER_BASE_INDEX", None)
 SIDE_LEFT, SIDE_CENTER, SIDE_RIGHT = 1, 0, -1
 
 # System line styles that a detail line cannot use
@@ -213,7 +216,10 @@ def frame_along(curves, dist):
 
 def stairs_start_number(stairs):
     """Value of 'Tread/Riser Start Number', or None if not found."""
-    p = stairs.LookupParameter(START_NUMBER_PARAM)
+    # Built-in parameter first (works in any Revit language), English name as fallback
+    p = stairs.get_Parameter(START_NUMBER_BIP) if START_NUMBER_BIP is not None else None
+    if p is None:
+        p = stairs.LookupParameter(START_NUMBER_PARAM)
     if p is None or not p.HasValue:
         return None
     return p.AsInteger()
@@ -535,6 +541,10 @@ def main():
             run, transform, sdoc = pick_run(settings["link"])
         except OperationCanceledException:
             break
+        except Exception as ex:
+            # Any other pick failure: tell the user and stop picking
+            bd.alert("Picking a stair run failed.", TITLE, details=str(ex))
+            break
 
         try:
             items, radius, start_found = treads_to_number(
@@ -553,9 +563,15 @@ def main():
         t.Start()
         try:
             place_numbers(items, radius, plane_z, style, opts)
-            t.Commit()
+            # Commit can be rolled back by Revit (e.g. failure handling)
+            status = t.Commit()
+            if status != TransactionStatus.Committed:
+                TaskDialog.Show(TITLE, "Run {0}: Revit rolled back the numbering "
+                                       "for this run ({1}).".format(eid_int(run.Id), status))
         except Exception as ex:
-            t.RollBack()
+            # Only roll back a transaction that is still open
+            if t.HasStarted() and not t.HasEnded():
+                t.RollBack()
             TaskDialog.Show(TITLE, "Run {0}: numbering failed and was rolled "
                                    "back.\n\n{1}".format(eid_int(run.Id), ex))
 

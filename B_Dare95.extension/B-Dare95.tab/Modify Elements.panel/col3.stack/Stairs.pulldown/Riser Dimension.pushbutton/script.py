@@ -45,6 +45,7 @@ from Autodesk.Revit.DB import (
     RevitLinkInstance,
     Solid,
     Transaction,
+    TransactionStatus,
     ViewDetailLevel,
     ViewSection,
     ViewType,
@@ -1090,7 +1091,8 @@ def resolve_pick(picked, mode):
     parent_stairs = element if isinstance(element, Stairs) else None
     if parent_stairs is None:
         try:
-            parent_stairs = source_doc.GetElement(runs[0].StairsId)
+            # StairsRun has no StairsId - GetStairs() returns the parent
+            parent_stairs = runs[0].GetStairs()
         except Exception:
             parent_stairs = None
 
@@ -1196,10 +1198,17 @@ def create_chain_dimension(run_datas, stairs, settings, link_instance):
 
         written = write_segment_text(dim, segments, settings, suffix, messages)
 
-        t.Commit()
+        # Commit can be rolled back by failure handling - check the status
+        status = t.Commit()
     except Exception as ex:
-        t.RollBack()
+        if t.HasStarted() and not t.HasEnded():
+            t.RollBack()
         messages.append("Dimension creation failed - {0}".format(ex))
+        return 0, messages
+
+    if status != TransactionStatus.Committed:
+        messages.append("Dimension creation failed - Revit rolled back the "
+                        "dimension ({0}).".format(status))
         return 0, messages
 
     for index, (_ref, _z, label) in enumerate(planes):

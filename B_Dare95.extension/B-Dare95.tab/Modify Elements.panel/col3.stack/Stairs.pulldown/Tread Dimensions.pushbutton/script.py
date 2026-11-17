@@ -41,12 +41,13 @@ from Autodesk.Revit.DB import (
     RevitLinkInstance,
     Solid,
     Transaction,
+    TransactionStatus,
     ViewDetailLevel,
     ViewPlan,
     ViewType,
     XYZ,
 )
-from Autodesk.Revit.DB.Architecture import Stairs, StairsRun
+from Autodesk.Revit.DB.Architecture import Stairs, StairsRun, StairsRunStyle
 from Autodesk.Revit.UI import (
     TaskDialog,
     TaskDialogCommandLinkId,
@@ -358,7 +359,8 @@ class RunInfo(object):
         # parent Stairs - several values live there, not on the run
         self.stairs = None
         try:
-            self.stairs = run.Document.GetElement(run.StairsId)
+            # StairsRun has no StairsId - GetStairs() returns the parent
+            self.stairs = run.GetStairs()
         except Exception:
             self.stairs = None
 
@@ -405,6 +407,40 @@ class RunInfo(object):
                 self.error = "This run is curved / spiral - a single linear dimension does not apply."
                 return
 
+        # winder / L-shaped runs: several Line segments that turn a corner.
+        # Every segment must run in the same flattened direction as the first.
+        winder_msg = "This run has winders or turns - a single linear dimension does not apply."
+        # Winder / spiral runs are rejected by style. Sketched runs are left to
+        # the geometry test below, so a sketched run that is straight still works.
+        try:
+            if run.StairsRunStyle in (StairsRunStyle.Winder, StairsRunStyle.Spiral):
+                self.error = winder_msg
+                return
+        except Exception:
+            pass
+
+        first_dir = None
+        for crv in curves:
+            seg_dir = flatten(crv.GetEndPoint(1) - crv.GetEndPoint(0))
+            if seg_dir is None:
+                continue  # zero-length / vertical segment - nothing to compare
+            if first_dir is None:
+                first_dir = seg_dir
+                continue
+            # dot > 0.9999 = parallel AND pointing the same way (no turn-back)
+            if seg_dir.DotProduct(first_dir) < 0.9999:
+                self.error = winder_msg
+                return
+        if first_dir is not None:
+            for i in range(1, len(curves)):
+                # consecutive segments must continue on the same line: the
+                # sideways (perpendicular) part of any joint gap must be ~0 ft
+                gap = curves[i].GetEndPoint(0) - curves[i - 1].GetEndPoint(1)
+                gap = XYZ(gap.X, gap.Y, 0.0)
+                if abs(gap.CrossProduct(first_dir).Z) > 1.0e-4:
+                    self.error = winder_msg
+                    return
+
         self.p_start_local = curves[0].GetEndPoint(0)
         self.p_end_local = curves[-1].GetEndPoint(1)
 
@@ -418,7 +454,20 @@ class RunInfo(object):
 
         # last resort - derive the tread depth from the geometry itself
         if self.tread_depth_ft is None or self.tread_depth_ft < TOL:
-            if self.num_risers > 1:
+            # ActualTreadsNumber respects BeginsWithRiser / EndsWithRiser;
+            # risers - 1 is only the fallback when it cannot be read
+            num_treads = 0
+            try:
+                num_treads = int(run.ActualTreadsNumber)
+            except Exception:
+                num_treads = 0
+            if num_treads > 0:
+                self.tread_depth_ft = self.going_ft / float(num_treads)
+                self.depth_source = "derived from going / actual treads"
+                self.notes.append(
+                    "Tread depth was not published by the API - derived from the run "
+                    "geometry, so the printed depth may be a rounding of the real value.")
+            elif self.num_risers > 1:
                 self.tread_depth_ft = self.going_ft / float(self.num_risers - 1)
                 self.depth_source = "derived from going / (risers - 1)"
                 self.notes.append(
@@ -934,10 +983,17 @@ def create_dimension(run_info, settings, link_instance):
         except Exception:
             measured_mm[0] = None
 
-        t.Commit()
+        status = t.Commit()
     except Exception as ex:
-        t.RollBack()
+        # only roll back a transaction that is still open
+        if t.HasStarted() and not t.HasEnded():
+            t.RollBack()
         return False, "Run {0}: creation failed - {1}".format(run_info.index, ex)
+
+    # Commit can return RolledBack (e.g. failure handling) without raising
+    if status != TransactionStatus.Committed:
+        return False, "Run {0}: Revit rolled back the dimension ({1}).".format(
+            run_info.index, status)
 
     # -- warnings worth carrying to the summary ----------------------------
     if measured_mm[0] is not None:
