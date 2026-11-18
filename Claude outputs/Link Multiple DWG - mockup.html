@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Link Multiple DWG - mockup</title>
+<style>
+  :root {
+    --bg:#161616; --card:#262626; --surface:#393939; --muted:#525252;
+    --text:#F4F4F4; --sub:#A8A8A8; --ph:#6F6F6F; --accent:#F1C21B;
+    --accent-h:#FDDC69; --bad:#FA4D56; --ok:#42BE65; --dim:#8D8D8D;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#0b0b0b; font-family:"Segoe UI",system-ui,sans-serif; color:var(--text); font-size:12px; }
+  .note { max-width:1220px; margin:14px auto 0; padding:0 16px; color:var(--dim); font-size:12px; }
+  .win { max-width:1220px; margin:10px auto 24px; background:var(--bg); border:1px solid #333; border-radius:8px;
+         box-shadow:0 10px 40px rgba(0,0,0,.6); overflow:hidden; }
+  .titlebar { height:32px; background:#1f1f1f; display:flex; align-items:center; padding:0 12px; color:var(--sub); font-size:12px; }
+  .titlebar .x { margin-left:auto; color:var(--sub); cursor:pointer; padding:0 6px; }
+  .body { padding:16px; display:grid; grid-template-columns:1fr 300px; grid-template-rows:auto minmax(420px,1fr) auto; gap:0 14px; }
+  .head { grid-column:1 / span 2; margin-bottom:12px; }
+  .head h1 { margin:0; font-size:16px; color:var(--accent); letter-spacing:.3px; }
+  .head p { margin:3px 0 0; color:var(--sub); font-size:12px; }
+
+  .toolbar { background:var(--card); border-radius:6px; padding:10px; display:flex; gap:8px; align-items:center; margin-bottom:10px; }
+  .search { flex:1; height:26px; background:var(--surface); border:1px solid var(--muted); border-radius:4px; color:var(--text);
+            padding:0 8px; font:inherit; outline:none; }
+  .search:focus { border-color:var(--accent); }
+  .search::placeholder { color:var(--ph); }
+  button { font:inherit; cursor:pointer; border:0; border-radius:5px; height:26px; padding:0 14px; }
+  .btn { background:var(--accent); color:var(--bg); font-weight:600; }
+  .btn:hover { opacity:.85; }
+  .btn:disabled { opacity:.4; cursor:default; }
+  .ghost { background:var(--surface); color:var(--text); }
+  .ghost:hover { background:var(--muted); }
+  .link { background:none; color:var(--sub); padding:0; height:auto; }
+  .link:hover { color:var(--accent); }
+
+  .colhead { display:flex; color:var(--sub); font-size:10px; font-weight:700; letter-spacing:.6px; padding:0 12px 6px 40px; }
+  .colhead span:first-child { flex:1; }
+  .rows { overflow:auto; max-height:560px; padding-right:4px; }
+  .rows::-webkit-scrollbar { width:6px; } .rows::-webkit-scrollbar-thumb { background:var(--muted); border-radius:3px; }
+  .empty { color:var(--dim); font-size:13px; text-align:center; padding:60px 40px; }
+
+  .row { background:var(--card); border-radius:6px; padding:8px 12px 10px; margin-bottom:6px; border:1px solid transparent; }
+  .row.off { opacity:.55; }
+  .row.sel { border-color:#3d3d3d; }
+  .top { display:flex; align-items:center; gap:12px; cursor:pointer; }
+  .info { flex:1; min-width:0; }
+  .name { font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .folder { color:var(--sub); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .result { font-size:11px; font-weight:600; margin-top:1px; }
+  .meta { width:112px; color:var(--sub); text-align:left; white-space:nowrap; }
+  .state { width:120px; }
+
+  .opts { display:grid; grid-template-columns:1.45fr 1fr 1fr 1fr 1fr; gap:8px; margin:8px 0 0 30px; }
+  .opt label { display:block; color:var(--sub); font-size:10px; font-weight:700; letter-spacing:.5px; margin-bottom:3px; }
+  .opt.changed label::after { content:" \2022"; color:var(--accent); }
+  select, .num { width:100%; height:26px; background:var(--surface); color:var(--text); border:1px solid var(--muted);
+                 border-radius:4px; padding:0 6px; font:inherit; outline:none; }
+  select:hover, .num:hover { border-color:var(--sub); } select:focus, .num:focus { border-color:var(--accent); }
+  select:disabled { opacity:.4; }
+  .factor { display:flex; gap:4px; margin-top:4px; align-items:center; color:var(--sub); font-size:11px; }
+  .factor .num { width:80px; height:22px; }
+  .sub2 { display:flex; gap:16px; margin:6px 0 0 30px; align-items:center; color:var(--sub); font-size:11px; }
+  .chip { display:inline-block; background:#3a3214; color:var(--accent); border-radius:9px; padding:1px 8px; font-size:10px; font-weight:600; }
+  .chip.blue { background:#1d2b3d; color:#78A9FF; }
+
+  /* custom check box like the theme */
+  .cb { appearance:none; width:14px; height:14px; border:1.5px solid var(--muted); border-radius:3px; background:var(--surface);
+        margin:0; cursor:pointer; flex:none; display:inline-grid; place-content:center; }
+  .cb:hover { border-color:var(--accent); }
+  .cb:checked { background:var(--accent); border-color:var(--accent); }
+  .cb:checked::after { content:"\2714"; color:var(--bg); font-size:10px; line-height:1; }
+  .cb:disabled { opacity:.4; cursor:default; }
+  .chk { display:flex; align-items:center; gap:8px; cursor:pointer; margin:0 0 8px; }
+
+  .side { background:var(--card); border-radius:6px; padding:14px; overflow:auto; }
+  .side h3 { margin:0 0 6px; color:var(--sub); font-size:10px; font-weight:700; letter-spacing:.6px; }
+  .side .hint { color:var(--dim); font-size:11px; margin:6px 0 16px; line-height:1.4; }
+  .side .field { margin-bottom:8px; }
+  .side .field label { display:block; color:var(--sub); font-size:11px; margin-bottom:3px; }
+  .apply { width:100%; margin:4px 0 4px; }
+
+  .foot { grid-column:1 / span 2; display:flex; align-items:center; gap:10px; margin-top:12px; }
+  .foot .count { flex:1; color:var(--sub); }
+
+  .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; z-index:10; }
+  .modal { width:380px; background:var(--bg); border:1px solid #333; border-radius:8px; padding:16px; box-shadow:0 10px 40px rgba(0,0,0,.7); }
+  .modal h2 { margin:0 0 2px; font-size:15px; } .modal p { margin:0 0 10px; color:var(--sub); font-size:11px; }
+  .layers { background:var(--card); border-radius:6px; padding:8px 10px; max-height:280px; overflow:auto; margin:8px 0 12px; }
+  .layers .chk { margin:3px 0; }
+  .toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#1f1f1f; border:1px solid var(--accent);
+           color:var(--text); padding:10px 16px; border-radius:6px; display:none; z-index:20; max-width:560px; }
+  .toast b { color:var(--accent); }
+</style>
+</head>
+<body>
+<div class="note">Mockup only: nothing is linked. Click around, change options per file, try <b>Specify...</b>, <b>Custom factor</b>, the defaults panel and <b>Link checked files</b>.</div>
+
+<div class="win">
+  <div class="titlebar">Link DWG Files<span class="x">&#x2715;</span></div>
+  <div class="body">
+    <div class="head">
+      <h1>LINK DWG FILES</h1>
+      <p>Active view: <b>Level 01 - Floor Plan</b> &middot; each DWG is linked and placed with its own options. One Undo removes them all.</p>
+    </div>
+
+    <div>
+      <div class="toolbar">
+        <input class="search" id="search" placeholder="Search files...">
+        <button class="btn" id="addBtn">Add files...</button>
+        <button class="ghost" id="folderBtn">Add folder...</button>
+        <button class="ghost" id="removeBtn">Remove checked</button>
+        <button class="ghost" id="clearBtn">Clear list</button>
+      </div>
+      <div class="colhead"><span>FILE</span><span class="meta">MODIFIED</span><span class="meta">SIZE</span><span class="state">STATUS</span></div>
+      <div class="rows" id="rows"></div>
+    </div>
+
+    <div class="side">
+      <h3>DEFAULTS FOR NEW FILES</h3>
+      <div class="field"><label>Positioning</label><select id="dPos"></select></div>
+      <div class="field"><label>Place at</label><select id="dLevel"></select></div>
+      <div class="field"><label>Colors</label><select id="dColor"></select></div>
+      <div class="field"><label>Layers/Levels</label><select id="dLayers"></select></div>
+      <div class="field"><label>Import units</label><select id="dUnits"></select>
+        <div class="factor" id="dFactorBox" style="display:none">Factor <input class="num" id="dFactor" value="1.0"></div></div>
+      <label class="chk"><input type="checkbox" class="cb" id="dView"> Current view only</label>
+      <button class="ghost apply" id="applyBtn">Apply to checked files</button>
+      <div class="hint">Files you add next start with these. "Apply to checked files" copies them onto the rows you checked.</div>
+
+      <h3>WORKSET</h3>
+      <select id="workset"><option>Shared Levels and Grids</option><option selected>Z-Linked CAD</option><option>Workset1</option></select>
+      <div class="hint">Every DWG link goes on this workset.</div>
+
+      <h3>OPTIONS</h3>
+      <label class="chk"><input type="checkbox" class="cb" id="pin" checked> Pin the links after placing them</label>
+      <label class="chk"><input type="checkbox" class="cb" id="rel" checked> Save the path as relative</label>
+      <label class="chk"><input type="checkbox" class="cb" id="axis" checked> Correct lines that are slightly off axis</label>
+    </div>
+
+    <div class="foot">
+      <div class="count" id="count"></div>
+      <button class="ghost" id="closeBtn">Close</button>
+      <button class="btn" id="linkBtn">Link checked files</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h2>Specify layers</h2>
+    <p id="modalFile"></p>
+    <input class="search" id="layerSearch" placeholder="Search layers..." style="width:100%">
+    <div style="display:flex;gap:12px;margin-top:8px"><button class="link" id="lAll">Select All</button><button class="link" id="lNone">Clear</button><span id="lCount" style="margin-left:auto;color:var(--sub)"></span></div>
+    <div class="layers" id="layerList"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button class="ghost" id="lCancel">Cancel</button><button class="btn" id="lOk">OK</button></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const POS = ["Auto - Center to Center","Auto - Origin to Internal Origin","Manual - Origin","Manual - Center"];
+const LEVELS = ["Level 00 - Basement","Level 01","Level 02","Level 03","Roof"];
+const COLORS = ["Invert","Preserve","Black and White"];
+const LAYERS = ["All","Visible","Specify..."];
+const UNITS = ["Auto-Detect","feet","inch","meter","decimeter","centimeter","millimeter","US survey feet","Custom factor:"];
+const SAMPLE_LAYERS = ["0","A-WALL","A-WALL-PATT","A-DOOR","A-GLAZ","A-FURN","A-ANNO-TEXT","A-ANNO-DIMS","A-GRID","S-COLS","M-DUCT","E-LITE","DEFPOINTS","X-REF-SITE","VIEWPORT"];
+
+const defaults = { pos:1, level:1, color:1, layers:0, units:0, factor:"1.0", view:false };
+let files = [];
+let nextId = 1;
+let editing = null, editPick = null;
+
+const $ = id => document.getElementById(id);
+function fill(sel, list, val){ sel.innerHTML = list.map((t,i)=>`<option value="${i}">${t}</option>`).join(""); sel.value = val; }
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+function addFile(name, folder, size, date, state){
+  files.push({ id:nextId++, name, folder, size, date, state: state||"ready", checked:(state||"ready")==="ready",
+    opt: Object.assign({}, defaults), picked: null, result:null });
+}
+function seed(){
+  addFile("GF-Architectural Plan.dwg","P:\\2026-114 Tower\\CAD\\Arch","4.2 MB","2026-11-10 09:14");
+  addFile("1F-Architectural Plan.dwg","P:\\2026-114 Tower\\CAD\\Arch","3.9 MB","2026-11-10 09:15");
+  addFile("Site Survey.dwg","P:\\2026-114 Tower\\CAD\\Survey","12.6 MB","2026-10-28 16:40");
+  addFile("Structural Grid.dwg","P:\\2026-114 Tower\\CAD\\Struct","0.8 MB","2026-11-02 11:02");
+  addFile("Landscape Concept.dwg","P:\\2026-114 Tower\\CAD\\Landscape","6.1 MB","2026-09-19 13:27","linked");
+  addFile("MEP Coordination OLD.dwg","P:\\2026-114 Tower\\CAD\\MEP","","","missing");
+  files[2].opt.pos = 0; files[2].opt.units = 5; files[2].opt.color = 2;
+  files[3].opt.pos = 3;
+}
+
+const STATE = { ready:["Ready","var(--sub)"], linked:["Already linked","var(--muted)"], missing:["File not found","var(--bad)"] };
+
+function optCell(f, key, label, list, extra){
+  const changed = f.opt[key] !== defaults[key] ? " changed" : "";
+  const dis = f.state!=="ready" || (key==="level" && f.opt.view) ? " disabled" : "";
+  return `<div class="opt${changed}"><label>${label}</label>
+    <select data-id="${f.id}" data-key="${key}"${dis}>${list.map((t,i)=>`<option value="${i}"${i===f.opt[key]?" selected":""}>${t}</option>`).join("")}</select>${extra||""}</div>`;
+}
+
+function render(){
+  const q = $("search").value.trim().toLowerCase();
+  const list = files.filter(f => !q || (f.name+f.folder).toLowerCase().includes(q));
+  if (!files.length){ $("rows").innerHTML = `<div class="empty">No files yet. Click Add files or Add folder to pick the DWG files to link.</div>`; updateCount(); return; }
+  $("rows").innerHTML = list.map(f => {
+    const usable = f.state==="ready";
+    let [st, col] = STATE[f.state];
+    if (f.result && f.result[0]==="ok"){ st="Linked now"; col="var(--ok)"; }
+    const factor = f.opt.units===8 ? `<div class="factor">Factor <input class="num" data-id="${f.id}" data-key="factor" value="${esc(f.opt.factor)}"${usable?"":" disabled"}></div>` : "";
+    const manual = f.opt.pos>=2 ? `<span class="chip">You'll click the ${f.opt.pos===2?"origin":"center"} point in the view</span>` : "";
+    const layersChip = f.opt.layers===2 ? `<span class="chip blue">${f.picked ? f.picked.length+" of "+SAMPLE_LAYERS.length+" layers" : "No layers picked yet"}</span> <button class="link" data-edit="${f.id}">Edit layers</button>` : "";
+    const res = f.result ? `<div class="result" style="color:${f.result[0]==="ok"?"var(--ok)":"var(--bad)"}">${esc(f.result[1])}</div>` : "";
+    return `<div class="row${usable?"":" off"}${f.checked?" sel":""}">
+      <div class="top" data-row="${f.id}">
+        <input type="checkbox" class="cb" data-check="${f.id}"${f.checked?" checked":""}${usable?"":" disabled"}>
+        <div class="info"><div class="name">${esc(f.name)}</div><div class="folder" title="${esc(f.folder+"\\"+f.name)}">${esc(f.folder)}</div>${res}</div>
+        <div class="meta">${f.date}</div><div class="meta">${f.size}</div><div class="state" style="color:${col}">${st}</div>
+      </div>
+      <div class="opts">
+        ${optCell(f,"pos","POSITIONING",POS)}
+        ${optCell(f,"level","PLACE AT",LEVELS)}
+        ${optCell(f,"color","COLORS",COLORS)}
+        ${optCell(f,"layers","LAYERS/LEVELS",LAYERS)}
+        ${optCell(f,"units","IMPORT UNITS",UNITS,factor)}
+      </div>
+      <div class="sub2">
+        <label class="chk" style="margin:0"><input type="checkbox" class="cb" data-view="${f.id}"${f.opt.view?" checked":""}${usable?"":" disabled"}> Current view only</label>
+        ${layersChip} ${manual}
+      </div>
+    </div>`;
+  }).join("") || `<div class="empty">No file matches the search.</div>`;
+  updateCount();
+}
+
+function updateCount(){
+  const ready = files.filter(f=>f.state==="ready");
+  const ticked = ready.filter(f=>f.checked);
+  const manual = ticked.filter(f=>f.opt.pos>=2).length;
+  const noLayers = ticked.filter(f=>f.opt.layers===2 && !f.picked).length;
+  let t = `${ticked.length} of ${ready.length} files checked`;
+  if (manual) t += ` \u00b7 ${manual} placed by clicking in the view`;
+  if (noLayers) t += ` \u00b7 ${noLayers} still need layers picked`;
+  $("count").textContent = t;
+  $("linkBtn").disabled = !ticked.length;
+}
+
+const byId = id => files.find(f=>f.id==id);
+
+$("rows").addEventListener("change", e => {
+  const t = e.target;
+  if (t.dataset.check){ byId(t.dataset.check).checked = t.checked; render(); return; }
+  if (t.dataset.view){ byId(t.dataset.view).opt.view = t.checked; render(); return; }
+  if (t.dataset.key){
+    const f = byId(t.dataset.id);
+    if (t.dataset.key==="factor"){ f.opt.factor = t.value; return; }
+    f.opt[t.dataset.key] = +t.value;
+    if (t.dataset.key==="layers" && +t.value===2){ render(); openLayers(f); return; }
+    render();
+  }
+});
+$("rows").addEventListener("click", e => {
+  if (e.target.dataset.edit){ openLayers(byId(e.target.dataset.edit)); return; }
+  const top = e.target.closest(".top");
+  if (top && !e.target.classList.contains("cb")){
+    const f = byId(top.dataset.row); if (f.state!=="ready") return;
+    f.checked = !f.checked; render();
+  }
+});
+
+function openLayers(f){
+  editing = f; editPick = new Set(f.picked || SAMPLE_LAYERS.filter(l=>!/^X-|DEFPOINTS|VIEWPORT/.test(l)));
+  $("modalFile").textContent = f.name + " \u00b7 only the checked layers are linked";
+  $("layerSearch").value = ""; drawLayers(); $("modalBg").style.display = "flex";
+}
+function drawLayers(){
+  const q = $("layerSearch").value.toLowerCase();
+  $("layerList").innerHTML = SAMPLE_LAYERS.filter(l=>l.toLowerCase().includes(q)).map(l =>
+    `<label class="chk"><input type="checkbox" class="cb" data-layer="${l}"${editPick.has(l)?" checked":""}> ${l}</label>`).join("");
+  $("lCount").textContent = editPick.size + " of " + SAMPLE_LAYERS.length;
+}
+$("layerList").addEventListener("change", e => { const l=e.target.dataset.layer; e.target.checked?editPick.add(l):editPick.delete(l); drawLayers(); });
+$("layerSearch").oninput = drawLayers;
+$("lAll").onclick = () => { SAMPLE_LAYERS.forEach(l=>editPick.add(l)); drawLayers(); };
+$("lNone").onclick = () => { editPick.clear(); drawLayers(); };
+$("lCancel").onclick = () => { if (!editing.picked) editing.opt.layers = 0; $("modalBg").style.display="none"; render(); };
+$("lOk").onclick = () => { editing.picked = [...editPick]; $("modalBg").style.display="none"; render(); };
+
+// defaults panel
+fill($("dPos"),POS,defaults.pos); fill($("dLevel"),LEVELS,defaults.level); fill($("dColor"),COLORS,defaults.color);
+fill($("dLayers"),LAYERS,defaults.layers); fill($("dUnits"),UNITS,defaults.units);
+[["dPos","pos"],["dLevel","level"],["dColor","color"],["dLayers","layers"],["dUnits","units"]].forEach(([id,k]) =>
+  $(id).onchange = () => { defaults[k] = +$(id).value; $("dFactorBox").style.display = defaults.units===8?"flex":"none"; render(); });
+$("dFactor").oninput = () => defaults.factor = $("dFactor").value;
+$("dView").onchange = () => { defaults.view = $("dView").checked; $("dLevel").disabled = defaults.view; render(); };
+$("applyBtn").onclick = () => {
+  const n = files.filter(f=>f.checked && f.state==="ready");
+  n.forEach(f => { f.opt = Object.assign({}, defaults); if (defaults.layers!==2) f.picked=null; });
+  render(); toast(`Defaults copied to <b>${n.length}</b> checked file${n.length===1?"":"s"}.`);
+};
+
+$("search").oninput = render;
+let addN = 1;
+$("addBtn").onclick = () => { addFile(`Added Drawing ${addN++}.dwg`,"C:\\Users\\mohamed\\Desktop\\CAD","1.4 MB","2026-11-16 10:05"); render(); };
+$("folderBtn").onclick = () => { ["Sections A-A.dwg","Sections B-B.dwg","Elevations.dwg"].forEach(n=>addFile(n,"P:\\2026-114 Tower\\CAD\\Sections","2.2 MB","2026-11-12 15:30")); render(); toast("Added <b>3</b> DWG files from the folder (sub-folders skipped)."); };
+$("removeBtn").onclick = () => { files = files.filter(f=>!(f.checked && f.state==="ready")); render(); };
+$("clearBtn").onclick = () => { files = []; render(); };
+$("closeBtn").onclick = () => toast("Close: the window closes; the list and defaults are remembered for next time.");
+
+$("linkBtn").onclick = async () => {
+  const todo = files.filter(f=>f.checked && f.state==="ready");
+  const blocked = todo.filter(f=>f.opt.layers===2 && !f.picked);
+  if (blocked.length){ toast(`Pick layers first for <b>${esc(blocked[0].name)}</b> (Layers/Levels is set to Specify...).`); return; }
+  for (const f of todo){
+    if (f.opt.pos>=2){
+      toast(`Window hides \u2192 click the <b>${f.opt.pos===2?"origin":"center"}</b> point for <b>${esc(f.name)}</b> (Esc skips this file)`);
+      await new Promise(r=>setTimeout(r,1600));
+    }
+    const o = f.opt;
+    const u = o.units===8 ? "factor "+o.factor : UNITS[o.units];
+    const where = o.view ? "current view only" : LEVELS[o.level];
+    f.result = /OLD/.test(f.name) ? ["bad","Could not link: file is open in AutoCAD"]
+      : ["ok", `${POS[o.pos]} \u00b7 ${where} \u00b7 ${COLORS[o.color]} \u00b7 ${o.layers===2?f.picked.length+" layers":LAYERS[o.layers]} \u00b7 ${u}`];
+    f.state = "linked"; f.checked = false;
+  }
+  render();
+  toast(`Linked <b>${todo.length}</b> file${todo.length===1?"":"s"} as one Undo step.`);
+};
+
+let toastTimer;
+function toast(html){ const t=$("toast"); t.innerHTML=html; t.style.display="block"; clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.style.display="none",2600); }
+
+seed(); render();
+</script>
+</body>
+</html>
