@@ -2,16 +2,18 @@
 __doc__ = """__________________________________________________
 Description:
 
-Opens a table of every view in the project where you can filter, search and edit view names, view templates, Title on Sheet, detail numbers and sheet number/name.
+Two panes: every sheet in the project on the left (searchable), the views placed on the selected sheet on the right.
+Edit view names, view templates, Title on Sheet, detail numbers and sheet number/name in the table.
 Nothing changes until you click Apply, and the window stays open while you work.
 __________________________________________________
 How-to:
 
 -> Click on the button
--> Filter by view type, on sheet / not on sheet, or search by name
--> Edit the cells you want to change
+-> Search for a sheet on the left and click it
+   ("Not on a sheet" at the top lists views that aren't placed anywhere)
+-> Edit the cells you want to change - edits are kept when you switch sheets
 -> Click Apply to save all edits at once
--> Use Open View or Open Sheet to jump to the selected row
+-> Select a view row and use Open View, or Open Sheet for the selected sheet
 __________________________________________________
 Author: Mohamed Bedair"""
 
@@ -30,20 +32,24 @@ clr.AddReference("WindowsBase")
 from System import String, Object, EventHandler, Int32, Int64
 from System.Collections.Generic import List
 from System.Data import DataTable, DataRowChangeEventHandler
-from System.Windows import Window, RoutedEventHandler, Visibility
+from System.Windows import (Window, RoutedEventHandler, Visibility,
+                            LogicalTreeHelper)
 from System.Windows.Markup import XamlReader
 from System.Windows.Controls import (DataGridTextColumn,
                                      DataGridTemplateColumn,
                                      DataGridEditingUnit,
+                                     DataGridRow,
                                      SelectionChangedEventHandler,
                                      TextChangedEventHandler)
 from System.Windows.Data import Binding, BindingMode
+from System.Windows.Input import Keyboard, ModifierKeys, MouseButtonEventHandler
+from System.Windows.Media import VisualTreeHelper, Visual
 
 from Autodesk.Revit.DB import (FilteredElementCollector,
                                View, ViewSheet, ViewType, Viewport,
                                ScheduleSheetInstance,
                                BuiltInParameter, StorageType, SpecTypeId,
-                               Transaction, ElementId)
+                               Transaction, TransactionStatus, ElementId)
 from Autodesk.Revit.UI import IExternalEventHandler, ExternalEvent
 
 from pyrevit import forms, script
@@ -61,7 +67,9 @@ ENV_WINDOW = "BDARE_VIEWMGR_WINDOW"
 ENV_HANDLER = "BDARE_VIEWMGR_HANDLER"
 ENV_EVENT = "BDARE_VIEWMGR_EVENT"
 
-ALL_TYPES = "All view types"
+# Left-pane entry that lists the views not placed on any sheet.
+NOT_ON_SHEET_ID = u"-1"
+NOT_ON_SHEET_LABEL = u"Not on a sheet"
 
 SKIP_VIEW_TYPES = (ViewType.Internal,
                    ViewType.ProjectBrowser,
@@ -380,13 +388,13 @@ class ViewManagerHandler(IExternalEventHandler):
                 action(uiapp)
             except Exception as ex:
                 try:
-                    bd.alert(u"View Manager action failed:\n{0}".format(ex),
-                             "View Manager")
+                    bd.alert(u"Sheets & Views Manager action failed:\n{0}".format(ex),
+                             "Sheets & Views Manager")
                 except Exception:
                     pass
 
     def GetName(self):
-        return "B_Dare95 View Manager Handler"
+        return "B_Dare95 Sheets & Views Manager Handler"
 
 
 # ---------------------------------------------------------------------------
@@ -433,14 +441,11 @@ def queue_action(action):
 window = bd.load_window(__file__)
 
 status_text = window.FindName("StatusText")
-type_combo = window.FindName("TypeCombo")
-tgl_all = window.FindName("TglAll")
-tgl_on = window.FindName("TglOn")
-tgl_off = window.FindName("TglOff")
-search_box = window.FindName("SearchBox")
-search_hint = window.FindName("SearchHint")
 sheet_search_box = window.FindName("SheetSearchBox")
 sheet_search_hint = window.FindName("SheetSearchHint")
+sheet_list = window.FindName("SheetList")
+sheet_header = window.FindName("SheetHeader")
+empty_hint = window.FindName("EmptyHint")
 grid = window.FindName("Grid")
 btn_open_view = window.FindName("BtnOpenView")
 btn_open_sheet = window.FindName("BtnOpenSheet")
@@ -464,7 +469,9 @@ state = {
     "on_sheet": {},      # {element id: True/False}
     "sheet_ids": {},     # {element id: [(sheet id, number, name), ...]}
     "templates": {},     # {view type name: {template name: template id}}
-    "sheet_mode": "all",
+    "sheets": None,      # DataTable of sheets for the left pane
+    "sheets_view": None, # DataView bound to the sheet list
+    "sheet_id": None,    # selected left-pane entry (sheet id string), kept over reloads
     "loading": [False],  # mutable container, no nonlocal in IronPython 2.7
     "doc_title": None,
 }
@@ -549,12 +556,17 @@ def build_table(doc):
     dc = table.Columns.Add("OnSheet", STR_TYPE)
     dc.AllowDBNull = False
     dc.DefaultValue = u"No"
+    # hidden: ";<sheet id>;<sheet id>;" so one RowFilter shows a sheet's views
+    dc = table.Columns.Add("SheetKeys", STR_TYPE)
+    dc.AllowDBNull = False
+    dc.DefaultValue = u";"
     table.Columns.Add("TemplateChoices", OBJ_TYPE)
 
     originals = {}
     on_sheet = {}
     sheet_ids = {}
-    types = set()
+    view_count = {}    # sheet id -> number of views listed for it
+    not_placed = [0]
 
     for v in views:
         vid = id_val(v.Id)
@@ -568,13 +580,18 @@ def build_table(doc):
         placements = sheet_map.get(vid) or []
         placed = bool(placements)
         row["OnSheet"] = u"Yes" if placed else u"No"
+        row["SheetKeys"] = u";" + u"".join(
+            u"{0};".format(sid) for sid, _n, _m in placements)
         row["TemplateChoices"] = template_choices.get(type_name,
                                                       template_choices[None])
         table.Rows.Add(row)
         originals[vid] = row_orig
         on_sheet[vid] = placed
         sheet_ids[vid] = placements
-        types.add(type_name)
+        for sid in set(p[0] for p in placements):
+            view_count[sid] = view_count.get(sid, 0) + 1
+        if not placed:
+            not_placed[0] += 1
 
     state["table"] = table
     state["view"] = table.DefaultView
@@ -583,31 +600,59 @@ def build_table(doc):
     state["sheet_ids"] = sheet_ids
     state["templates"] = templates_by_type
     state["doc_title"] = doc.Title
+    state["sheets"] = build_sheet_table(doc, view_count, not_placed[0])
 
     table.RowChanged += DataRowChangeEventHandler(on_row_changed)
-    return sorted(types)
 
 
-def load_types(type_names):
-    previous = type_combo.SelectedItem
-    type_combo.Items.Clear()
-    type_combo.Items.Add(ALL_TYPES)
-    for name in type_names:
-        type_combo.Items.Add(name)
-    if previous is not None and type_combo.Items.Contains(previous):
-        type_combo.SelectedItem = previous
-    else:
-        type_combo.SelectedIndex = 0
+def build_sheet_table(doc, view_count, not_placed):
+    """Left-pane list: 'Not on a sheet' first, then every real sheet by number."""
+    sheets = DataTable("Sheets")
+    for name in ("Id", "Number", "Name", "Count", "Search", "Order"):
+        dc = sheets.Columns.Add(name, STR_TYPE)
+        dc.AllowDBNull = False
+        dc.DefaultValue = u""
+
+    row = sheets.NewRow()
+    row["Id"] = NOT_ON_SHEET_ID
+    row["Number"] = NOT_ON_SHEET_LABEL
+    row["Name"] = u"Views not placed on any sheet"
+    row["Count"] = u"{0}".format(not_placed)
+    row["Search"] = NOT_ON_SHEET_LABEL
+    row["Order"] = u"0"
+    sheets.Rows.Add(row)
+
+    for sheet in FilteredElementCollector(doc).OfClass(ViewSheet):
+        try:
+            if sheet.IsPlaceholder or sheet.IsTemplate:
+                continue
+            sid = id_val(sheet.Id)
+            row = sheets.NewRow()
+            row["Id"] = u"{0}".format(sid)
+            row["Number"] = sheet.SheetNumber
+            row["Name"] = sheet.Name
+            row["Count"] = u"{0}".format(view_count.get(sid, 0))
+            row["Search"] = u"{0} - {1}".format(sheet.SheetNumber, sheet.Name)
+            row["Order"] = u"1"
+            sheets.Rows.Add(row)
+        except Exception:
+            continue
+
+    sheets.DefaultView.Sort = "Order ASC, Number ASC"
+    return sheets
 
 
 def reload_data(uiapp):
     doc = uiapp.ActiveUIDocument.Document
     state["loading"][0] = True
     try:
-        type_names = build_table(doc)
-        load_types(type_names)
+        build_table(doc)
         rebuild_grid_columns()
         grid.ItemsSource = state["view"]
+        state["sheets_view"] = state["sheets"].DefaultView
+        sheet_list.ItemsSource = state["sheets_view"]
+        filter_sheets()
+        reselect_sheet()
     finally:
         state["loading"][0] = False
     apply_filters()
@@ -617,40 +662,69 @@ def reload_data(uiapp):
 # filtering
 # ---------------------------------------------------------------------------
 
+def filter_sheets():
+    """Left pane: keep the sheets whose number or name contains the search text."""
+    if state["sheets_view"] is None:
+        return
+    text = (sheet_search_box.Text or u"").strip()
+    if text:
+        state["sheets_view"].RowFilter = u"Search LIKE '%{0}%'".format(esc_sql(text))
+    else:
+        state["sheets_view"].RowFilter = u""
+
+
+def selected_sheet_row():
+    """DataRowView of the left-pane entry the user picked, or None."""
+    return sheet_list.SelectedItem
+
+
+def reselect_sheet():
+    """After a reload, select the same sheet again (if it is still listed)."""
+    wanted = state["sheet_id"]
+    if wanted is None:
+        return
+    for item in state["sheets_view"]:
+        if item["Id"] == wanted:
+            sheet_list.SelectedItem = item
+            sheet_list.ScrollIntoView(item)
+            return
+
+
 def apply_filters():
+    """Right pane: show only the views on the selected sheet."""
     if state["view"] is None:
         return
-    parts = []
-
-    text = (search_box.Text or u"").strip()
-    if text:
-        parts.append(u"ViewName LIKE '%{0}%'".format(esc_sql(text)))
-
-    sheet_text = (sheet_search_box.Text or u"").strip()
-    if sheet_text:
-        parts.append(u"SheetName LIKE '%{0}%'".format(esc_sql(sheet_text)))
-
-    selected_type = type_combo.SelectedItem
-    if selected_type is not None and selected_type != ALL_TYPES:
-        parts.append(u"ViewType = '{0}'".format(esc_sql(selected_type)))
-
-    if state["sheet_mode"] == "on":
-        parts.append(u"OnSheet = 'Yes'")
-    elif state["sheet_mode"] == "off":
-        parts.append(u"OnSheet = 'No'")
-
-    state["view"].RowFilter = u" AND ".join(parts)
+    sid = state["sheet_id"]
+    if sid is None:
+        state["view"].RowFilter = u"Id = '-1'"          # nothing picked yet
+        sheet_header.Text = u""
+        empty_hint.Text = u"Pick a sheet on the left to see its views"
+        empty_hint.Visibility = Visibility.Visible
+    else:
+        if sid == NOT_ON_SHEET_ID:
+            state["view"].RowFilter = u"OnSheet = 'No'"
+        else:
+            state["view"].RowFilter = u"SheetKeys LIKE '%;{0};%'".format(esc_sql(sid))
+        item = selected_sheet_row()
+        if item is not None and item["Id"] == sid:
+            if sid == NOT_ON_SHEET_ID:
+                sheet_header.Text = NOT_ON_SHEET_LABEL
+            else:
+                sheet_header.Text = u"{0} - {1}".format(item["Number"], item["Name"])
+        empty_hint.Visibility = \
+            Visibility.Collapsed if state["view"].Count else Visibility.Visible
+        empty_hint.Text = u"No views on this sheet"
     update_status()
 
 
 def update_status():
     if state["table"] is None:
         return
-    shown = state["view"].Count
-    total = state["table"].Rows.Count
+    sheets = (state["sheets"].Rows.Count - 1) if state["sheets"] is not None else 0
+    shown = state["view"].Count if state["sheet_id"] is not None else 0
     pending = len(collect_edits())
-    status_text.Text = u"{0} of {1} views shown   |   {2} pending edit(s)   |   {3}".format(
-        shown, total, pending, state["doc_title"] or u"")
+    status_text.Text = u"{0} sheets   |   {1} views shown   |   {2} pending edit(s)   |   {3}".format(
+        sheets, shown, pending, state["doc_title"] or u"")
 
 
 # ---------------------------------------------------------------------------
@@ -728,7 +802,7 @@ def action_apply(uiapp):
 
     ctx = {"doc": doc, "templates": state["templates"]}
 
-    t = Transaction(doc, "View Manager - apply edits")
+    t = Transaction(doc, "Sheets & Views Manager - apply edits")
     t.Start()
     try:
         for vid, col, value in edits:
@@ -766,17 +840,25 @@ def action_apply(uiapp):
             except Exception as ex:
                 failures.append(u"{0} -> {1}: {2}".format(
                     read_row_name(view), col["header"], ex))
-        t.Commit()
+        status = t.Commit()
     except Exception as ex:
-        t.RollBack()
+        if t.HasStarted() and not t.HasEnded():
+            t.RollBack()
         set_result(u"Transaction failed, nothing was changed: {0}".format(ex), "error")
+        return
+
+    # Commit() returns RolledBack (no exception) when Revit's failure handling
+    # undoes the change - never report a false success.
+    if status != TransactionStatus.Committed:
+        set_result(u"Revit rolled back the edits ({0}) - nothing was changed.".format(status),
+                   "error")
         return
 
     reload_data(uiapp)
 
     if failures:
         out = script.get_output()
-        out.print_md("## View Manager - {0} edit(s) applied, {1} skipped".format(
+        out.print_md("## Sheets & Views Manager - {0} edit(s) applied, {1} skipped".format(
             applied[0], len(failures)))
         for line in failures:
             out.print_md(u"- {0}".format(line))
@@ -790,7 +872,7 @@ def selected_view_id():
     """Element id of the row the user has selected, or None."""
     row_view = grid.SelectedItem
     if row_view is None:
-        set_result(u"Select a row first.", "info")
+        set_result(u"Select a view row first.", "info")
         return None
     try:
         return int(row_view.Row["Id"])
@@ -815,6 +897,22 @@ def action_open_view(uiapp):
 
 def action_open_sheet(uiapp):
     uidoc = uiapp.ActiveUIDocument
+
+    # A real sheet picked on the left: open that one.
+    sid = state["sheet_id"]
+    if sid is not None and sid != NOT_ON_SHEET_ID:
+        sheet = uidoc.Document.GetElement(to_eid(int(sid)))
+        if sheet is None:
+            set_result(u"That sheet no longer exists - press Reload.", "error")
+            return
+        try:
+            uidoc.RequestViewChange(sheet)
+            set_result(u"", "info")
+        except Exception as ex:
+            set_result(u"Could not open that sheet: {0}".format(ex), "error")
+        return
+
+    # Otherwise fall back to the sheet(s) of the selected view row.
     vid = selected_view_id()
     if vid is None:
         return
@@ -852,43 +950,58 @@ def action_open_sheet(uiapp):
 # UI event handlers
 # ---------------------------------------------------------------------------
 
-def on_search_changed(sender, args):
-    search_hint.Visibility = Visibility.Collapsed if search_box.Text else Visibility.Visible
+def on_sheet_search_changed(sender, args):
     sheet_search_hint.Visibility = \
         Visibility.Collapsed if sheet_search_box.Text else Visibility.Visible
-    if not state["loading"][0]:
-        apply_filters()
-
-
-def on_type_changed(sender, args):
-    if not state["loading"][0]:
-        apply_filters()
-
-
-def set_sheet_mode(mode):
     if state["loading"][0]:
         return
+    # Filtering the list can drop the selected sheet; keep the right pane on it.
     state["loading"][0] = True
     try:
-        tgl_all.IsChecked = (mode == "all")
-        tgl_on.IsChecked = (mode == "on")
-        tgl_off.IsChecked = (mode == "off")
+        filter_sheets()
+        reselect_sheet()
     finally:
         state["loading"][0] = False
-    state["sheet_mode"] = mode
+
+
+def on_sheet_selected(sender, args):
+    if state["loading"][0]:
+        return
+    item = selected_sheet_row()
+    if item is None:
+        return              # list filtered away the selection - keep showing it
+    commit_grid_edit()      # finish a half-typed cell before the rows change
+    state["sheet_id"] = item["Id"]
+    grid.UnselectAll()
+    set_result(u"", "info")
     apply_filters()
 
 
-def on_tgl_all(sender, args):
-    set_sheet_mode("all")
+def _row_under(source):
+    """The DataGridRow that contains the clicked element, or None."""
+    node = source
+    while node is not None:
+        if isinstance(node, DataGridRow):
+            return node
+        if isinstance(node, Visual):
+            node = VisualTreeHelper.GetParent(node)
+        else:
+            # text runs etc. are not Visuals - climb the logical tree instead
+            node = LogicalTreeHelper.GetParent(node)
+    return None
 
 
-def on_tgl_on(sender, args):
-    set_sheet_mode("on")
-
-
-def on_tgl_off(sender, args):
-    set_sheet_mode("off")
+def on_grid_mouse_down(sender, args):
+    """Clicking inside a cell (e.g. the View Template dropdown) does not always
+    select its row, so Open View would see no selection. Select it here.
+    Ctrl / Shift clicks are left to the grid's own multi-select."""
+    mods = Keyboard.Modifiers
+    if (mods & ModifierKeys.Control) == ModifierKeys.Control or \
+            (mods & ModifierKeys.Shift) == ModifierKeys.Shift:
+        return
+    row = _row_under(args.OriginalSource)
+    if row is not None and not row.IsSelected:
+        grid.SelectedItem = row.Item
 
 
 def on_apply_click(sender, args):
@@ -900,7 +1013,7 @@ def on_refresh_click(sender, args):
     commit_grid_edit()
     if collect_edits():
         if not bd.confirm("You have unsaved edits. Reload and discard them?",
-                          "View Manager"):
+                          "Sheets & Views Manager"):
             return
     queue_action(action_reload)
 
@@ -923,12 +1036,9 @@ def on_window_closed(sender, args):
     envvars.set_pyrevit_env_var(ENV_EVENT, None)
 
 
-search_box.TextChanged += TextChangedEventHandler(on_search_changed)
-sheet_search_box.TextChanged += TextChangedEventHandler(on_search_changed)
-type_combo.SelectionChanged += SelectionChangedEventHandler(on_type_changed)
-tgl_all.Checked += RoutedEventHandler(on_tgl_all)
-tgl_on.Checked += RoutedEventHandler(on_tgl_on)
-tgl_off.Checked += RoutedEventHandler(on_tgl_off)
+sheet_search_box.TextChanged += TextChangedEventHandler(on_sheet_search_changed)
+sheet_list.SelectionChanged += SelectionChangedEventHandler(on_sheet_selected)
+grid.PreviewMouseLeftButtonDown += MouseButtonEventHandler(on_grid_mouse_down)
 btn_apply.Click += RoutedEventHandler(on_apply_click)
 btn_refresh.Click += RoutedEventHandler(on_refresh_click)
 btn_open_view.Click += RoutedEventHandler(on_open_view_click)
