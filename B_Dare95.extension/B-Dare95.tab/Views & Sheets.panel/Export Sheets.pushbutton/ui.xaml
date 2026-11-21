@@ -375,25 +375,84 @@
                   </Style>
                 </DataGridTextColumn.ElementStyle>
               </DataGridTextColumn>
-              <DataGridTextColumn Header="Status" Binding="{Binding Status}" IsReadOnly="True" Width="150">
-                <DataGridTextColumn.ElementStyle>
-                  <Style TargetType="TextBlock">
-                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-                    <Setter Property="ToolTip" Value="{Binding Status}"/>
-                    <Style.Triggers>
-                      <DataTrigger Binding="{Binding State}" Value="ok">
-                        <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
+              <!-- PDF / DWG progress: a small bar + time per file.
+                   State: "" not exported | wait | busy | ok | fail (reason in the tooltip) -->
+              <DataGridTemplateColumn Header="PDF" Width="120" IsReadOnly="True" SortMemberPath="PdfState">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <Grid Background="Transparent" ToolTip="{Binding PdfTip}">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="48"/>
+                      </Grid.ColumnDefinitions>
+                      <Border x:Name="Track" Height="6" CornerRadius="3" Background="{StaticResource SurfaceBrush}" VerticalAlignment="Center"/>
+                      <Border x:Name="Fill" Height="6" CornerRadius="3" VerticalAlignment="Center" Visibility="Collapsed"/>
+                      <TextBlock x:Name="Lbl" Grid.Column="1" Text="{Binding PdfText}" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{StaticResource SubtextBrush}"/>
+                    </Grid>
+                    <DataTemplate.Triggers>
+                      <DataTrigger Binding="{Binding PdfState}" Value="">
+                        <Setter TargetName="Track" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="Lbl" Property="Foreground" Value="{StaticResource MutedBrush}"/>
                       </DataTrigger>
-                      <DataTrigger Binding="{Binding State}" Value="fail">
-                        <Setter Property="Foreground" Value="{StaticResource DangerBrush}"/>
+                      <DataTrigger Binding="{Binding PdfState}" Value="busy">
+                        <Setter TargetName="Fill" Property="Visibility" Value="Visible"/>
+                        <Setter TargetName="Fill" Property="Background" Value="{StaticResource AccentBrush}"/>
+                        <Setter TargetName="Fill" Property="HorizontalAlignment" Value="Left"/>
+                        <Setter TargetName="Fill" Property="Width" Value="26"/>
+                        <Setter TargetName="Lbl" Property="Foreground" Value="{StaticResource AccentBrush}"/>
                       </DataTrigger>
-                      <DataTrigger Binding="{Binding State}" Value="busy">
-                        <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                      <DataTrigger Binding="{Binding PdfState}" Value="ok">
+                        <Setter TargetName="Fill" Property="Visibility" Value="Visible"/>
+                        <Setter TargetName="Fill" Property="Background" Value="{StaticResource SuccessBrush}"/>
+                        <Setter TargetName="Lbl" Property="Foreground" Value="{StaticResource SuccessBrush}"/>
                       </DataTrigger>
-                    </Style.Triggers>
-                  </Style>
-                </DataGridTextColumn.ElementStyle>
-              </DataGridTextColumn>
+                      <DataTrigger Binding="{Binding PdfState}" Value="fail">
+                        <Setter TargetName="Fill" Property="Visibility" Value="Visible"/>
+                        <Setter TargetName="Fill" Property="Background" Value="{StaticResource DangerBrush}"/>
+                        <Setter TargetName="Lbl" Property="Foreground" Value="{StaticResource DangerBrush}"/>
+                      </DataTrigger>
+                    </DataTemplate.Triggers>
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTemplateColumn Header="DWG" Width="120" IsReadOnly="True" SortMemberPath="DwgState">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <Grid Background="Transparent" ToolTip="{Binding DwgTip}">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="48"/>
+                      </Grid.ColumnDefinitions>
+                      <Border x:Name="Track" Height="6" CornerRadius="3" Background="{StaticResource SurfaceBrush}" VerticalAlignment="Center"/>
+                      <Border x:Name="Fill" Height="6" CornerRadius="3" VerticalAlignment="Center" Visibility="Collapsed"/>
+                      <TextBlock x:Name="Lbl" Grid.Column="1" Text="{Binding DwgText}" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{StaticResource SubtextBrush}"/>
+                    </Grid>
+                    <DataTemplate.Triggers>
+                      <DataTrigger Binding="{Binding DwgState}" Value="">
+                        <Setter TargetName="Track" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="Lbl" Property="Foreground" Value="{StaticResource MutedBrush}"/>
+                      </DataTrigger>
+                      <DataTrigger Binding="{Binding DwgState}" Value="busy">
+                        <Setter TargetName="Fill" Property="Visibility" Value="Visible"/>
+                        <Setter TargetName="Fill" Property="Background" Value="{StaticResource AccentBrush}"/>
+                        <Setter TargetName="Fill" Property="HorizontalAlignment" Value="Left"/>
+                        <Setter TargetName="Fill" Property="Width" Value="26"/>
+                        <Setter TargetName="Lbl" Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                      </DataTrigger>
+                      <DataTrigger Binding="{Binding DwgState}" Value="ok">
+                        <Setter TargetName="Fill" Property="Visibility" Value="Visible"/>
+                        <Setter TargetName="Fill" Property="Background" Value="{StaticResource SuccessBrush}"/>
+                        <Setter TargetName="Lbl" Property="Foreground" Value="{StaticResource SuccessBrush}"/>
+                      </DataTrigger>
+                      <DataTrigger Binding="{Binding DwgState}" Value="fail">
+                        <Setter TargetName="Fill" Property="Visibility" Value="Visible"/>
+                        <Setter TargetName="Fill" Property="Background" Value="{StaticResource DangerBrush}"/>
+                        <Setter TargetName="Lbl" Property="Foreground" Value="{StaticResource DangerBrush}"/>
+                      </DataTrigger>
+                    </DataTemplate.Triggers>
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
             </DataGrid.Columns>
           </DataGrid>
         </Grid>

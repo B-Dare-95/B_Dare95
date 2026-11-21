@@ -74,8 +74,6 @@ TITLE = u"Export Sheets"
 STR_T = clr.GetClrType(System.String)
 BOOL_T = clr.GetClrType(System.Boolean)
 
-OK_MARK = u"✓"
-FAIL_MARK = u"✗"
 NO_SET = u"All sheets / views (no set filter)"
 NO_PROFILE = u"(no profile)"
 NO_SETUP = u"(Revit default settings)"
@@ -94,6 +92,9 @@ SKIP_VIEW_TYPES = (DB.ViewType.Internal, DB.ViewType.ProjectBrowser,
 VERSION_LABELS = [("Default", u"(as in the setup)"), ("R2018", u"AutoCAD 2018"),
                   ("R2013", u"AutoCAD 2013"), ("R2010", u"AutoCAD 2010"),
                   ("R2007", u"AutoCAD 2007")]
+PROGRESS_COLS = ("PdfState", "PdfText", "PdfTip", "DwgState", "DwgText", "DwgTip")
+FMT_PREFIX = {"pdf": "Pdf", "dwg": "Dwg"}     # table column prefix per format
+GRID_COL = {"pdf": 4, "dwg": 5}             # index of each progress column in the grid
 BG_STALL_SECONDS = 15 * 60      # background: give up when no new PDF for this long
 BG_GRACE_SECONDS = 20           # background: wait this long after Revit says it's done
 COLOR_LABELS = [("Color", u"Color"), ("GrayScale", u"Grayscale"),
@@ -516,12 +517,13 @@ class BackgroundCollector(object):
     has it open; it is matched to its sheet, renamed and moved, and the window
     is told (on_file). on_done is called once at the end."""
 
-    def __init__(self, app, stage, targets, on_file, on_done):
+    def __init__(self, app, stage, targets, on_file, on_done, on_tick=None):
         self.app = app
         self.stage = stage
         self.pending = dict((t["key"], t) for t in targets)
         self.on_file = on_file
         self.on_done = on_done
+        self.on_tick = on_tick              # (pending keys, seconds since last arrival)
         self.sizes = {}
         self.last = time.time()             # last arrival (or the start)
         self.exported_at = None             # when Revit said the export ended
@@ -582,6 +584,8 @@ class BackgroundCollector(object):
         if not self.pending:
             return self.finish()
         quiet = time.time() - self.last
+        if self.on_tick is not None:
+            self.on_tick(self.pending, quiet)
         if self.exported_at is not None and time.time() - self.exported_at > BG_GRACE_SECONDS \
                 and quiet > BG_GRACE_SECONDS:
             return self.finish(u"Revit's background export ended without this sheet")
@@ -742,7 +746,9 @@ class ExportWindow(object):
 
     def _make_table(self, mode, s):
         t = DataTable(mode)
-        for col in ("Id", "Uid", "Number", "Name", "SortKey", "FileName", "Status", "State"):
+        # PdfState / DwgState: "" | wait | busy | ok | fail  (drive the progress bars)
+        # PdfText / DwgText: the label next to the bar; PdfTip / DwgTip: hover text
+        for col in ("Id", "Uid", "Number", "Name", "SortKey", "FileName") + PROGRESS_COLS:
             t.Columns.Add(col, STR_T)
         t.Columns.Add("Pick", BOOL_T)
         t.Columns.Add("Custom", BOOL_T)
@@ -758,8 +764,8 @@ class ExportWindow(object):
             custom = names.get(item.uid)
             row["Custom"] = bool(custom)
             row["FileName"] = custom or self.item_name(item, mode)
-            row["Status"] = u""
-            row["State"] = u""
+            for col in PROGRESS_COLS:
+                row[col] = u""
             row["Pick"] = item.uid in picked
             t.Rows.Add(row)
         t.ColumnChanged += DataColumnChangeEventHandler(self.on_cell_changed)
@@ -807,6 +813,8 @@ class ExportWindow(object):
         click("BtnFieldDown", lambda s, e: self.move_field(1))
         click("BtnFieldRemove", lambda s, e: self.remove_field())
         click("ChkSkipEmpty", lambda s, e: self.on_naming_option())
+        click("ChkPdf", lambda s, e: self.update_format_columns())
+        click("ChkDwg", lambda s, e: self.update_format_columns())
         typed("TxtParamSearch", lambda s, e: self.fill_params())
         typed("TxtCustom", lambda s, e: self._hint("TxtCustom", "CustomHint"))
         typed("TxtSep", lambda s, e: self.on_sep())
@@ -1231,6 +1239,7 @@ class ExportWindow(object):
         finally:
             self.suppress[0] = False
         self.update_pdf_enabled()
+        self.update_format_columns()
         if with_items:
             self.refresh_names("sheets")
             self.refresh_names("views")
@@ -1314,36 +1323,41 @@ class ExportWindow(object):
         self.f("BtnClose").IsEnabled = not busy
         self.f("BtnStop").IsEnabled = busy
 
-    def _mark(self, rows, fmt, ok, detail=u"", seconds=None):
-        """Add one format's result (and how long it took) to the Status cell."""
-        piece = u"{0} {1}".format(core.FORMAT_LABELS[fmt], OK_MARK if ok else FAIL_MARK)
-        if seconds is not None:
-            piece += u" " + core.fmt_seconds(seconds)
-        if detail:
-            piece += u" ({0})".format(detail)
+    def _set_progress(self, rows, fmt, state, text, tip=u""):
+        """One format's progress bar on these rows (see PROGRESS_COLS)."""
+        p = FMT_PREFIX[fmt]
         self.suppress[0] = True
         try:
             for row in rows:
-                old = core.to_text(row["Status"])
-                old = u"" if old in (u"waiting", u"exporting...") else old
-                row["Status"] = (old + u"   " + piece).strip()
-                if not ok:
-                    row["State"] = u"fail"
-                elif row["State"] != u"fail":
-                    row["State"] = u"ok"
+                row[p + "State"] = state
+                row[p + "Text"] = text
+                row[p + "Tip"] = tip
         finally:
             self.suppress[0] = False
 
-    def _busy(self, rows):
-        self.suppress[0] = True
-        try:
-            for row in rows:
-                if row["State"] in (u"", u"busy"):
-                    row["State"] = u"busy"
-                    if not row["Status"] or row["Status"] == u"waiting":
-                        row["Status"] = u"exporting..."
-        finally:
-            self.suppress[0] = False
+    def _mark(self, rows, fmt, ok, detail=u"", seconds=None):
+        """A finished file: full green bar with its time, or red with the reason."""
+        if ok:
+            text = core.fmt_seconds(seconds) if seconds is not None else u"done"
+            tip = u"{0} written{1}{2}".format(
+                core.FORMAT_LABELS[fmt],
+                u" in " + text if seconds is not None else u"",
+                u" ({0})".format(detail) if detail else u"")
+            self._set_progress(rows, fmt, u"ok", text, tip)
+        else:
+            self._set_progress(rows, fmt, u"fail", u"failed",
+                               u"{0} failed: {1}".format(core.FORMAT_LABELS[fmt], detail))
+
+    def _busy(self, rows, fmt, text=u"now"):
+        """The file Revit is working on (amber bar)."""
+        self._set_progress(rows, fmt, u"busy", text,
+                           u"{0} exporting".format(core.FORMAT_LABELS[fmt]))
+
+    def update_format_columns(self):
+        """Show the PDF / DWG progress column only for a ticked format."""
+        for fmt, chk in (("pdf", "ChkPdf"), ("dwg", "ChkDwg")):
+            self.f("Grid").Columns[GRID_COL[fmt]].Visibility = (
+                Visibility.Visible if self.f(chk).IsChecked else Visibility.Collapsed)
 
     def _validate(self, s, rows):
         if not rows:
@@ -1473,13 +1487,18 @@ class ExportWindow(object):
                 say(u"The local temp folder could not be created", friendly_error(ex))
                 return
 
+        # every ticked row waits for each chosen format; the rest show a dash
         self.suppress[0] = True
         try:
             for row in self.table.Rows:
-                row["Status"] = u"waiting" if row["Pick"] else u""
-                row["State"] = u""
+                for fmt, p in FMT_PREFIX.items():
+                    todo = bool(row["Pick"]) and fmt in s["formats"]
+                    row[p + "State"] = u"wait" if todo else u""
+                    row[p + "Text"] = u"waiting" if todo else u"–"
+                    row[p + "Tip"] = u""
         finally:
             self.suppress[0] = False
+        self.update_format_columns()
 
         total_files = sum(j["files"] for j in jobs)
         bar = self.f("Progress")
@@ -1504,7 +1523,8 @@ class ExportWindow(object):
         r = self.run
         if r["index"] < len(r["jobs"]):
             j = r["jobs"][r["index"]]
-            self._busy(j["rows"])
+            if j["kind"] == "file":
+                self._busy(j["rows"], j["fmt"])
             self.f("ResultText").Text = u"Job {0} of {1}:  {2}  {3}".format(
                 r["index"] + 1, len(r["jobs"]), core.FORMAT_LABELS[j["fmt"]], j["name"])
 
@@ -1559,8 +1579,11 @@ class ExportWindow(object):
                 r["timings"].append({"fmt": core.FORMAT_LABELS[fmt],
                                      "name": u"start: " + name, "count": len(job_rows),
                                      "seconds": seconds, "ok": True})
+                r["bg_targets"] = j["targets"]
+                self._set_progress(job_rows, fmt, u"wait", u"queued",
+                                   u"Waiting for Revit's background PDF process")
                 r["bg"] = BackgroundCollector(self.doc.Application, r["stage"], j["targets"],
-                                              self._bg_file, self._bg_done)
+                                              self._bg_file, self._bg_done, self._bg_tick)
                 r["bg"].start()
                 self.f("ResultText").Text = u"Revit is writing {0} PDFs in the background...".format(
                     len(job_rows))
@@ -1604,6 +1627,18 @@ class ExportWindow(object):
         self.f("ResultText").Text = u"Background PDFs: {0} of {1} files done".format(
             self.run["done"] + self.run["failed"], self.run["files"])
 
+    def _bg_tick(self, pending, seconds):
+        """Every second while background PDFs are pending: the next one in
+        sheet order gets the amber bar and a live timer (the window isn't
+        blocked here, unlike during a normal export)."""
+        r = self.run
+        if r is None:
+            return
+        for t in r.get("bg_targets", []):
+            if t["key"] in pending:
+                self._busy([t["row"]], "pdf", core.fmt_seconds(seconds))
+                return
+
     def _bg_done(self):
         """BackgroundCollector finished; end the run if the other jobs are done too."""
         r = self.run
@@ -1634,6 +1669,17 @@ class ExportWindow(object):
         self.run = None
         self.handler.step = None
         self._set_busy(False)
+        # stopped early: nothing may stay amber / waiting
+        self.suppress[0] = True
+        try:
+            for row in self.table.Rows:
+                for p in FMT_PREFIX.values():
+                    if row[p + "State"] in (u"wait", u"busy"):
+                        row[p + "State"] = u""
+                        row[p + "Text"] = u"skipped"
+                        row[p + "Tip"] = u"Not exported - the run was stopped"
+        finally:
+            self.suppress[0] = False
         s = r["s"]
         total = time.time() - r["clock"]
         done, failed, failures = r["done"], r["failed"], r["failures"]
